@@ -4,7 +4,7 @@ services:
   - type: web
     name: regent-orderdesk
     runtime: node
-    rootDir: orderdesk-render
+    rootDir: sites/orderdesk-render
     plan: starter            # always-on; the free plan sleeps and the 00:20 Planning PC upload would hit a cold start
     region: singapore        # closest Render region to the asia-southeast1 Firebase
     buildCommand: npm ci --include=dev && npm run build
