@@ -1,0 +1,128 @@
+{
+  "recorded_on": "2026-11-04",
+  "timezone": "Australia/Sydney",
+  "scope": "User authorized website implementation and writes to the supplied Firebase database. Website is the canonical system of record.",
+  "user_described_workflow": {
+    "mailbox_as_supplied": "planning@regentv.com.au",
+    "mailbox_verified": true,
+    "mail_folder_as_supplied": "CRM report",
+    "usual_arrival": "Shortly after local midnight each day",
+    "body_marker": "Hi Planning Team,\n\nPlease find attached the customer sales order report.",
+    "attachment": "Excel customer sales order report",
+    "manual_import": "Copy latest report values only, without formatting, replacing Sheet1 of Updating the schedule in the planning account's OneDrive.",
+    "manual_processing": "Run Creating Updating Sheet, then use the dated Updating worksheet for subsequent work.",
+    "desired_change": "Website becomes the system of record, automatically retrieving reports, applying order updates, displaying daily changes and overdue alerts, and exporting Excel. Excel workflow is business reference, not a UI or execution requirement.",
+    "later_steps": "Create new orders, update spec/signoff/purchase dates and request date, map dealer customers to Stock, and remove cancelled orders from active orders while retaining logs.",
+    "mailbox_verified_address": "planning@regentrv.com.au",
+    "mail_folder_verified": "CRM Report",
+    "native_mail_access_verified": "2026-11-04: Desktop Outlook can read Planning / CRM Report, Sales Order Report (Customer), received 00:07 Sydney, sender donotreply@my300375.mail.c4c.saphybriscloud.cn. This is not Graph/cloud app authorization."
+  },
+  "inspected_workbooks": {
+    "schedule": "C:/Users/Leo.Li/Downloads/Planning Schedule 2025 (3).xlsm",
+    "updater": "C:/Users/Leo.Li/Downloads/Updating the schedule (1).xlsm",
+    "report_example": "C:/Users/Leo.Li/Downloads/Z1D50F1707CB797BB7BD5BD.xlsx"
+  },
+  "report_measurements": {
+    "bytes": 661762,
+    "report_timestamp_text": "2026-10-28 00:05:02 AUSVIC",
+    "sheet_count": 1,
+    "columns": 15,
+    "header_row": 13,
+    "first_data_row": 14,
+    "records_with_chassis": 8917,
+    "distinct_chassis": 8216,
+    "chassis_with_multiple_records": 576,
+    "maximum_records_for_one_chassis": 7,
+    "formula_count": 0
+  },
+  "verified_processing": {
+    "button_macro": "CreateNewSheet",
+    "source": "Sheet2 formulas compare Sheet1 with external Planning Schedule Orderlist, Campervan Schedule SRV/SRM, internal 2024 exclusion list, and Sheet3 dealer mappings.",
+    "outputs": [
+      "Signed-off updates",
+      "New orders",
+      "Cancellations",
+      "Specs sent to dealer"
+    ],
+    "dated_output_name": "Updating - mm-dd-yyyy",
+    "output_values_are_static": true,
+    "macro_updates_external_orderlist": false,
+    "same_date_behavior": "Reuse existing dated sheet; some selectively written columns may retain stale values.",
+    "recalculation_issue": "Macro switches to manual calculation, copies values, and removes angle brackets from Sheet1 F afterwards; source and output can differ.",
+    "preservation_requirements": [
+      "Keep duplicate chassis rows and source order; cancellation rule checks total occurrence count.",
+      "Distinguish blank, No, null, and date sentinel serial 2.",
+      "Use fresh external baseline data, not merely cached Excel formula results.",
+      "Validate migrated business rules against dated Excel outputs and explicitly resolve existing defects."
+    ]
+  },
+  "confirmed_website_business_rules": {
+    "system_of_record": "Website; initial Excel baseline import and subsequent Excel export.",
+    "new_order": "Create an order associated with its dealer. Do not reproduce Excel blank-row slot allocation.",
+    "identity": "Match independent update lists by normalized chassis, never by row alignment.",
+    "production_status": "User clarified 2026-11-04: website must calculate production status itself, not copy Orderlist column D. Implemented raw-source precedence from Orderlist LET formula: normalized chassis in PGI A or Dispatch Special A => Finished; else Production API A->B location mapped through Reference A->B; else Longtree API D nonblank => Van on the sea; else Longtree API C or E nonblank => Production Commenced Longtree; else blank. Workbook import detects five source sheets, persists source snapshot, recalculates all existing orders, and subsequent CRM imports calculate production state for new/matched chassis. 7225 source Orderlist rows independently matched calculated statuses exactly. Current completed 4916, active 1739, cancelled 301; newly detected LRV-230756 is source-finished but absent from Orderlist. Completed status persists on normal CRM updates; cancellation remains authoritative. These are workbook source snapshots, not a connected live production API.",
+    "manual_reconciliation_confirmations_2026_11_04": "SRH-243733, SRH-250033, SRH-250152 are manually added orders absent from CRM, not missed CRM imports. User confirmed SRC-266051 manual Purchase Order Sent blank is an error. Existing signedAt must have purchaseAt; fill a missing purchaseAt from the existing signedAt, preserve existing dates. Newly detected Signed Off fills signedAt and missing purchaseAt using run day. Current website has zero signedAt-without-purchaseAt orders.",
+    "manual_request_dates_2026_11_04": "User confirmed three remaining Request date differences are manual adjustments and asked to add them. Saved SRC-264103=2027-01-01, SRH-254894=2026-02-01, SRT-255616=2026-02-01 in the local website with migration audit events and backup. Existing future CRM concrete-date update rule remains unchanged. Post-adjustment shared active comparison: concrete Request date differences 0; Customer 161 (77 manual Stock/web name, 55 web Stock/manual name or note, 29 both names differ); Dealer 13 retained by design. Excel review output: outputs/01a1a3f4-customer-differences/Customer差异161辆-2026-11-04.xlsx.",
+    "spec_only": "Set Plans Sent to Dealer to the spec event's business date.",
+    "signed_off": "Set Signed Plans Received and Purchase Order Sent to the signoff event's business date. Preserve an existing spec date for Plans Sent to Dealer; otherwise use the signoff date.",
+    "both_same_day_without_prior_spec": "All three dates use that day's event date.",
+    "date_events": "User explicitly confirmed: when a chassis first qualifies for Spec To Dealer or Signed Off and its corresponding date is missing, fill the Sydney calendar date of that processing run. Do not substitute the report date or CRM status-change timestamp. Preserve existing milestone dates. A mismatch against an independently processed manual schedule does not itself prove an error.",
+    "request_date": "Preserve prior-month-first-day conversion EOMONTH(sourceDate,-2)+1; a 1900 sentinel means ASAP. User confirmed on 2026-11-04: a concrete CRM delivery date may update an existing Request date, but ASAP or blank CRM dates must not replace an existing concrete Request date. If no concrete Request date exists, ASAP remains allowed. Historical initialization must include existing Request dates; the 24 audited ASAP mismatches were restored from the supplied latest Planning Schedule (4).",
+    "dealer_updates": "Daily CRM processing updates Customer, not the Dealer of an existing order. Preserve the existing Dealer even if CRM Dealer Code changes. Dealer-code mapping remains available when creating a new order.",
+    "dealer_difference_origin_audit_2026_11_04": "Read-only audit corrected prior blanket statement that all 13 Dealer differences were intended preservation. Dealer mapping comes from Updating the schedule (1).xlsm Sheet3 A Yard No. -> C Planning Schedule Spot; its original formula is Sheet2 J2, nested lookup from Sheet1 E:F to Sheet3 A:C. Current local DB was seeded with Oct26 CRM instead of Planning Orderlist I. Of 13 differences, SRC-263952 initially Geelong was overwritten to ST James by early code on processing date Oct29 (1Z... report); 7 already differed from old Planning (3) at CRM-based initialization: SRC-264438, SRH-264528, SRH-264532, SRH-264533, SRH-264567, SRP-243703, SRT-263234. Other 5 had Snowy Stock in old Planning (3) and Wangaratta in latest (4): SRH-263588, SRH-264548, SRH-264573, SRH-264610, SRH-264658. Code3000 maps to Snowy Stock at Sheet3 row39 (not Customer normalization). Code204669 absent in mapping causes SRP-243703 Pending review. Code3123 -> Traralgon row5,3128 -> Geelong row7,3121 -> ST James row4. Current engine picks first non-CANCELLED chassis record, whereas source VLOOKUP J2 picks first matching row without that filter. Existing Dealer preservation was fixed later but did not repair these stored values. No Dealer values changed during this explanatory audit.",
+    "confirmed_stock_aliases_2026_11_04": [
+      "REGENT RV - PERTH",
+      "REGENT RV - FRANKSTON",
+      "ABCO CARAVAN SERVICES PTY LTD",
+      "LEISURE LION - BUNDABERG",
+      "VANARI CARAVANS - CHRISTCHURCH",
+      "Vanari Christchurch",
+      "Destiny RV Store"
+    ],
+    "customer": "Use Sheet3 dealer-name mappings and aliases to map recognized dealer customers to Stock; preserve unmatched names.",
+    "merchant_customer_rules_2026_11_04": "User explicitly requested autonomous recognition of obvious shop/company names, including Snowy River brands, Caravan/RV businesses and PTY companies, rather than only adding individual aliases. customerName now recognizes dealer-brand prefixes (Snowy River/SnowyRiver, Regent RV, Leisure Lion, Vanari, Destiny RV, Green RV), whole-word Caravan(s)/RV(s), clear PTY company names, known dealer names and reviewed aliases. Preserve personal names, surnames such as Storey/Shires, and identified person-plus-company records. Current correction updated 503 non-cancelled website orders. Of the original 161 Customer difference rows: 67 changed to Stock, 39 personal-name rows preserved, 55 were already Stock. Fresh common-active comparison has 100 text differences (99 from original list plus SRC-265860, whose manual value Destiny RV Att Brett March is normalized to Stock). Saved workbook outputs/01a1a3f4-stock-result/Customer商户归Stock-处理结果-2026-11-04.xlsx has original 161 before/after, remaining 100 differences, and all 503 changes. Dealer, dates, production status and cancelled archives unchanged. 24 engine/API tests passed.",
+    "cancellation": "Remove order from active list but retain cancelled record and daily/historical logs; show cancellation count and details on dashboard alongside new orders.",
+    "cancellation_detection": "User affirmed the explanation of existing filtered Cancellation list. Preserve old duplicate-aware rule as working interpretation; do not cancel solely due to any raw CANCELLED row.",
+    "alerts": "Five calendar days: spec date exists, signed date absent, not completed/cancelled, Sydney local calendar-day difference >=5.",
+    "dashboard": "Daily new orders, changed orders, cancellations, overdue signoffs, Excel-like detail grid and Excel export.",
+    "logs": "Daily and historical business change logs; cancellation must remain traceable.",
+    "manual_dealer_authority_2026_11_04": "User instructed latest manual Planning Schedule (4) is authoritative for all 13 audited Dealer differences. Restored those 13 Dealer values by chassis, added migration audit events and backup. Subsequent simulated CRM preserves all 13. Fresh comparison Dealer differences 0. Date/Customer/production data unchanged."
+  },
+  "open_implementation_questions": [
+    "Selected Planning-PC route: install and verify on the different classic-Outlook computer; deploy website receiver and authoritative data; configure upload access. Microsoft Graph application authorization no longer required for chosen path.",
+    "Configure Firebase authenticated server writes and restricted security rules; currently stored values are application-encrypted."
+  ],
+  "cloud_mail_implementation_2026_11_04": {
+    "user_instruction": "Website must read mailbox while the user computer is off. User says there may already be authorization and will supply credentials later; build implementation first.",
+    "implementation": "Microsoft Graph app-only reader for fixed Planning mailbox/CRM Report folder/sender/subject, real XLSX parser, shared import fingerprint/business rules, atomic ETag saves, dry-run verify UI and manual check, cloud scheduled handler. No send/modify mail calls.",
+    "status": "Implemented locally; credentials not configured; cloud not deployed/authorized/scheduled/tested. MAIL_SYNC_ENABLED stays off until cloud read verification and scheduler configuration. Local comparison mode explicitly disconnected.",
+    "configuration_names": [
+      "MS_GRAPH_TENANT_ID",
+      "MS_GRAPH_CLIENT_ID",
+      "MS_GRAPH_CLIENT_SECRET",
+      "MS_GRAPH_CRM_FOLDER_ID (optional)",
+      "MAIL_SYNC_ENABLED"
+    ],
+    "deployment_notes": "sites/orderdesk/README.md Planning mailbox automation section. Cloud authoritative database migration required separately before enabling; code deploy does not deploy local order state.",
+    "real_file_verification": "2026-11-04 downloaded CRM: 9154 rows, 8437 unique chassis. New parser matches existing imported fingerprint, dry run detects duplicate and changes no orders."
+  },
+  "selected_mail_sync_2026_11_04": {
+    "mode": "planning-pc",
+    "user_decision": "User rejected Microsoft app-authorization setup and supplies a different 24/7 Windows computer running classic Outlook. Read its Planning mailbox and update website.",
+    "target_access": "Different computer; no remote access or target installation supplied yet.",
+    "implementation": "Classic Outlook read-only collector, Windows-user DPAPI protected upload credentials, daily 00:20 interactive scheduled task installer, HTTPS bounded XLSX receiver /api/planning-agent with dedicated token and shared business rules. Graph mode disabled by default. Website shows daily Planning computer health.",
+    "remaining": "Obtain authorized access to target computer, deploy receiver and migrate reconciled authoritative local data, configure website upload/service-access tokens, verify actual Outlook attachment then install and exercise task. No task installed and no live mailbox or production upload verified.",
+    "runbook": "sites/orderdesk/planning-pc/README.txt",
+    "schedule": "User revised: one daily scan at 00:20 Australia/Sydney (DST-aware). No 15-minute repetition, no logon scan, no missed-run catch-up.",
+    "freshness": "Only emails received between scan start minus 30 minutes and scan start, checked by classic Outlook collector, JS agent and website receiver. At 00:20 this is prior-day 23:50 through current-day 00:20. Missing fresh report creates missing marker and does not use old mail or report success.",
+    "delivery_preference": "User requested updated program package only; install and live mailbox test later."
+  },
+  "orderlist_export_2026_11_04": {
+    "request": "Website Excel export must match manual Planning Schedule Orderlist layout.",
+    "implementation": "Orderlist worksheet, exact A:T 20 headers/order; source column widths, header height, fonts, fills, borders, number formats, freeze-first-row and print layout. Original per-chassis cell styles and auxiliary source snapshots in state.orderlistExport. Website fields remain canonical; original auxiliary snapshot used for fields absent from website. Existing visible filtered grid selection/sort retained. Logs export remains separate history log.",
+    "source": "C:/Users/Leo.Li/Downloads/Planning Schedule 2025 (4).xlsm / Orderlist",
+    "sample": "outputs/01a1a3f4-orderlist-export/Planning-Orderlist-2026-11-04.xlsx",
+    "verification": "1739 active orders, 1729 matched original row styles, 10 new rows use template defaults. Header, widths, styles and all Dealer/Customer values independently verified. Preview rendered with Artifact Tool; original full workbook cannot recalculate external [1]2024 references, so reference preview used cached source values. Export is a standalone values snapshot without external workbook formulas or macros. 49 tests, typecheck, PowerShell syntax, HTTP export and production build passed. Native Excel interaction not verified.",
+    "status": "Implemented in local website; production deployment and target PC installation not performed."
+  }
+}

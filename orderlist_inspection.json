@@ -1,0 +1,797 @@
+{
+  "A": {
+    "formulas": 9188,
+    "constants": 1,
+    "plain_samples": [
+      [
+        "A1",
+        "Forecast Production Date"
+      ],
+      [
+        "A1",
+        "Forecast Production Date"
+      ]
+    ],
+    "patterns": [
+      {
+        "n": 9188,
+        "first": [
+          "A2",
+          "LOOKUP(ROW(), Calendar!$L$4:$L$268, Calendar!$C$4:$C$268)",
+          {}
+        ],
+        "last": "A9189"
+      }
+    ]
+  },
+  "B": {
+    "formulas": 0,
+    "constants": 557,
+    "plain_samples": [
+      [
+        "B1",
+        "Request Delivery Date"
+      ],
+      [
+        "B2",
+        "45536"
+      ],
+      [
+        "B70",
+        "45642"
+      ],
+      [
+        "B71",
+        "45643"
+      ],
+      [
+        "B162",
+        "45658"
+      ],
+      [
+        "B7191",
+        "46631"
+      ],
+      [
+        "B8042",
+        "46600"
+      ],
+      [
+        "B8604",
+        "46661"
+      ]
+    ],
+    "patterns": []
+  },
+  "C": {
+    "formulas": 9163,
+    "constants": 6,
+    "plain_samples": [
+      [
+        "C1",
+        "Shipment"
+      ],
+      [
+        "C8040",
+        ""
+      ],
+      [
+        "C8069",
+        ""
+      ],
+      [
+        "C8070",
+        ""
+      ],
+      [
+        "C8324",
+        ""
+      ],
+      [
+        "C8070",
+        ""
+      ],
+      [
+        "C8324",
+        ""
+      ],
+      [
+        "C8325",
+        ""
+      ]
+    ],
+    "patterns": [
+      {
+        "n": 9163,
+        "first": [
+          "C2",
+          "IFERROR(IF(VLOOKUP(G2,'[1]2024'!$B:$P,12,FALSE)=\"\",\n    TEXT(VLOOKUP(G2,'[1]2024'!$B:$P,11,FALSE),\"yyyy/mm/dd\") & \" - Ship No. \" & VLOOKUP(G2,'[1]2024'!$B:$P,2,FALSE),\n    \"0Received\"),\"\")",
+          {}
+        ],
+        "last": "C9189"
+      }
+    ]
+  },
+  "D": {
+    "formulas": 9163,
+    "constants": 6,
+    "plain_samples": [
+      [
+        "D1",
+        "Regent Production"
+      ],
+      [
+        "D8040",
+        ""
+      ],
+      [
+        "D8069",
+        ""
+      ],
+      [
+        "D8070",
+        ""
+      ],
+      [
+        "D8324",
+        ""
+      ],
+      [
+        "D8070",
+        ""
+      ],
+      [
+        "D8324",
+        ""
+      ],
+      [
+        "D8325",
+        ""
+      ]
+    ],
+    "patterns": [
+      {
+        "n": 9163,
+        "first": [
+          "D2",
+          "_xlfn.LET(\n    _xlpm.cleaned_id, SUBSTITUTE(G2, \"-\", \"\"),\n\n    _xlpm.is_finished,\n        OR(\n            ISNUMBER(MATCH(_xlpm.cleaned_id, PGI!A:A, 0)),\n            ISNUMBER(MATCH(_xlpm.cleaned_id, 'Dispatch Special'!A:A, 0))\n        ),\n\n    _xlpm.production_key,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Production API'!A:C, 2, FALSE),\n            \"\"\n        ),\n\n    _xlpm.reference_status,\n        IF(\n            _xlpm.production_key <> \"\",\n            IFERROR(\n                VLOOKUP(_xlpm.production_key, Reference!A:B, 2, FALSE),\n                \"\"\n            ),\n            \"\"\n        ),\n\n    _xlpm.longtree_sea,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Longtree API'!A:D, 4, FALSE),\n            \"\"\n        ),\n\n    _xlpm.longtree_prod_c,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Longtree API'!A:C, 3, FALSE),\n            \"\"\n        ),\n\n    _xlpm.longtree_prod_e,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Longtree API'!A:E, 5, FALSE),\n            \"\"\n        ),\n\n    _xlpm.result,\n        IF(\n            _xlpm.is_finished,\n            \"Finished\",\n            IF(\n                _xlpm.reference_status <> \"\",\n                _xlpm.reference_status,\n                IF(\n                    _xlpm.longtree_sea <> \"\",\n                    \"Van on the sea\",\n                    IF(\n                        OR(_xlpm.longtree_prod_c <> \"\", _xlpm.longtree_prod_e <> \"\"),\n                        \"Production Commenced Longtree\",\n                        \"\"\n                    )\n                )\n            )\n        ),\n\n    _xlpm.result\n)",
+          {}
+        ],
+        "last": "D9189"
+      }
+    ]
+  },
+  "E": {
+    "formulas": 9163,
+    "constants": 6,
+    "plain_samples": [
+      [
+        "E1",
+        "Vin Number"
+      ],
+      [
+        "E8040",
+        ""
+      ],
+      [
+        "E8069",
+        ""
+      ],
+      [
+        "E8070",
+        ""
+      ],
+      [
+        "E8324",
+        ""
+      ],
+      [
+        "E8070",
+        ""
+      ],
+      [
+        "E8324",
+        ""
+      ],
+      [
+        "E8325",
+        ""
+      ]
+    ],
+    "patterns": [
+      {
+        "n": 9163,
+        "first": [
+          "E2",
+          "_xlfn.LET(\n    _xlpm.cleaned_id, SUBSTITUTE(G2, \"-\", \"\"),\n\n    _xlpm.status_finished,\n        IF(\n            OR(\n                ISNUMBER(MATCH(_xlpm.cleaned_id, PGI!A:A, 0)),\n                ISNUMBER(MATCH(_xlpm.cleaned_id, 'Dispatch Special'!A:A, 0))\n            ),\n            \"Finished\",\n            \"\"\n        ),\n\n    _xlpm.prod_col2,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Production API'!A:D, 2, FALSE),\n            \"\"\n        ),\n\n    _xlpm.prod_col3,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Production API'!A:D, 3, FALSE),\n            \"\"\n        ),\n\n    _xlpm.prod_col4_raw,\n        IFERROR(\n            VLOOKUP(_xlpm.cleaned_id, 'Production API'!A:D, 4, FALSE),\n            \"\"\n        ),\n\n    _xlpm.prod_col4,\n        IF(\n            OR(_xlpm.prod_col4_raw=\"\", _xlpm.prod_col4_raw=\"null\"),\n            \"\",\n            TEXT(_xlpm.prod_col4_raw, \"yyyymmdd\")\n        ),\n\n    _xlpm.status_production,\n        IF(\n            _xlpm.prod_col2=\"\",\n            \"\",\n            _xlpm.prod_col2\n            & IF(_xlpm.prod_col3<>\"\", \" - \" & _xlpm.prod_col3, \"\")\n            & IF(_xlpm.prod_col4<>\"\", \" - \" & _xlpm.prod_col4, \"\")\n        ),\n\n    _xlpm.status_longtree,\n        IFERROR(\n            IF(\n                VLOOKUP(_xlpm.cleaned_id, 'Longtree API'!A:D, 4, FALSE) <> \"\",\n                \"Van on the sea\",\n                IF(\n                    OR(\n                        IFERROR(VLOOKUP(_xlpm.cleaned_id, 'Longtree API'!A:C, 3, FALSE), \"\") <> \"\",\n                        IFERROR(VLOOKUP(_xlpm.cleaned_id, 'Longtree API'!A:E, 5, FALSE), \"\") <> \"\"\n                    ),\n                    \"Production Commenced Longtree\",\n                    \"\"\n                )\n            ),\n            \"\"\n        ),\n\n    _xlpm.schedule_status,\n        IF(\n            _xlpm.status_finished<>\"\",\n            _xlpm.status_finished,\n            IF(\n                _xlpm.status_production<>\"\",\n                _xlpm.status_production,\n                _xlpm.status_longtree\n            )\n        ),\n\n    IF(\n        _xlpm.schedule_status<>\"\",\n        _xlpm.schedule_status,\n        _xlfn.XLOOKUP(\n            _xlpm.cleaned_id,\n            SUBSTITUTE(uploadedScheduleBilingual!B:B, \"-\", \"\"),\n            uploadedScheduleBilingual!G:G,\n            \"\"\n        )\n    )\n)",
+          {
+            "t": "array",
+            "ref": "E2"
+          }
+        ],
+        "last": "E9189"
+      }
+    ]
+  },
+  "F": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "F1",
+        "Model Year"
+      ],
+      [
+        "F2",
+        "2023"
+      ],
+      [
+        "F3",
+        "2022"
+      ],
+      [
+        "F4",
+        "2024"
+      ],
+      [
+        "F5",
+        "2024"
+      ],
+      [
+        "F8188",
+        "2027"
+      ],
+      [
+        "F8270",
+        "2027"
+      ],
+      [
+        "F8604",
+        "2027"
+      ]
+    ],
+    "patterns": []
+  },
+  "G": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "G1",
+        "Chassis"
+      ],
+      [
+        "G2",
+        "LRV-240549"
+      ],
+      [
+        "G3",
+        "RRV-230385"
+      ],
+      [
+        "G4",
+        "NGB-240012"
+      ],
+      [
+        "G5",
+        "LRT-230599"
+      ],
+      [
+        "G8188",
+        "SRC-266434"
+      ],
+      [
+        "G8270",
+        "SRC-266435"
+      ],
+      [
+        "G8604",
+        "SRC-266448"
+      ]
+    ],
+    "patterns": []
+  },
+  "H": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "H1",
+        "Model"
+      ],
+      [
+        "H2",
+        "SRC19"
+      ],
+      [
+        "H3",
+        "19'6 Discoverer"
+      ],
+      [
+        "H4",
+        "NGB20"
+      ],
+      [
+        "H5",
+        "SRT18"
+      ],
+      [
+        "H8188",
+        "SRC17"
+      ],
+      [
+        "H8270",
+        "SRC21C"
+      ],
+      [
+        "H8604",
+        "SRC22S"
+      ]
+    ],
+    "patterns": []
+  },
+  "I": {
+    "formulas": 0,
+    "constants": 9188,
+    "plain_samples": [
+      [
+        "I1",
+        "Dealer"
+      ],
+      [
+        "I2",
+        "Auswide"
+      ],
+      [
+        "I3",
+        "Geelong"
+      ],
+      [
+        "I4",
+        "Gympie"
+      ],
+      [
+        "I5",
+        "Forest Glen"
+      ],
+      [
+        "I9187",
+        "Coast To Country"
+      ],
+      [
+        "I9188",
+        "Caravan and Camper WA"
+      ],
+      [
+        "I9189",
+        "Caravan and Camper WA"
+      ]
+    ],
+    "patterns": []
+  },
+  "J": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "J1",
+        "Customer"
+      ],
+      [
+        "J2",
+        "G Townley"
+      ],
+      [
+        "J3",
+        "G Clarke / Stock"
+      ],
+      [
+        "J4",
+        "Stock"
+      ],
+      [
+        "J5",
+        "Stock"
+      ],
+      [
+        "J8188",
+        "Stock"
+      ],
+      [
+        "J8270",
+        "Stock"
+      ],
+      [
+        "J8604",
+        "Richard & Rachel Maile & Keane"
+      ]
+    ],
+    "patterns": []
+  },
+  "K": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "K1",
+        "Order Received Date"
+      ],
+      [
+        "K2",
+        "45425"
+      ],
+      [
+        "K3",
+        "44887"
+      ],
+      [
+        "K4",
+        "45348"
+      ],
+      [
+        "K5",
+        "45281"
+      ],
+      [
+        "K8188",
+        "46321"
+      ],
+      [
+        "K8270",
+        "46321"
+      ],
+      [
+        "K8604",
+        "46321"
+      ]
+    ],
+    "patterns": []
+  },
+  "L": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "L1",
+        "Order Sent to Longtree"
+      ],
+      [
+        "L2",
+        "45436"
+      ],
+      [
+        "L3",
+        "44900"
+      ],
+      [
+        "L4",
+        "45351"
+      ],
+      [
+        "L5",
+        "45281"
+      ],
+      [
+        "L8188",
+        "46321"
+      ],
+      [
+        "L8270",
+        "46321"
+      ],
+      [
+        "L8604",
+        "46321"
+      ]
+    ],
+    "patterns": []
+  },
+  "M": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "M1",
+        "Plans Sent to Dealer"
+      ],
+      [
+        "M2",
+        "45436"
+      ],
+      [
+        "M3",
+        "45344"
+      ],
+      [
+        "M4",
+        "45355"
+      ],
+      [
+        "M5",
+        "45281"
+      ],
+      [
+        "M8188",
+        "46321"
+      ],
+      [
+        "M8270",
+        "46321"
+      ],
+      [
+        "M8604",
+        "46321"
+      ]
+    ],
+    "patterns": []
+  },
+  "N": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "N1",
+        "Signed Plans Received"
+      ],
+      [
+        "N2",
+        "45441"
+      ],
+      [
+        "N3",
+        "45348"
+      ],
+      [
+        "N4",
+        "45358"
+      ],
+      [
+        "N5",
+        "45281"
+      ],
+      [
+        "N8188",
+        "No"
+      ],
+      [
+        "N8270",
+        "No"
+      ],
+      [
+        "N8604",
+        "No"
+      ]
+    ],
+    "patterns": []
+  },
+  "O": {
+    "formulas": 0,
+    "constants": 7226,
+    "plain_samples": [
+      [
+        "O1",
+        "Purchase Order Sent"
+      ],
+      [
+        "O2",
+        "45442"
+      ],
+      [
+        "O3",
+        "45354"
+      ],
+      [
+        "O4",
+        "45428"
+      ],
+      [
+        "O5",
+        "45281"
+      ],
+      [
+        "O8188",
+        "No"
+      ],
+      [
+        "O8270",
+        "No"
+      ],
+      [
+        "O8604",
+        "No"
+      ]
+    ],
+    "patterns": []
+  },
+  "P": {
+    "formulas": 0,
+    "constants": 1766,
+    "plain_samples": [
+      [
+        "P1",
+        "Price Date"
+      ],
+      [
+        "P2",
+        "2023"
+      ],
+      [
+        "P3",
+        "2022-2"
+      ],
+      [
+        "P4",
+        "2024"
+      ],
+      [
+        "P5",
+        "2024"
+      ],
+      [
+        "P5531",
+        "2024"
+      ],
+      [
+        "P5831",
+        "2024"
+      ],
+      [
+        "P5834",
+        "2024"
+      ]
+    ],
+    "patterns": []
+  },
+  "Q": {
+    "formulas": 0,
+    "constants": 535,
+    "plain_samples": [
+      [
+        "Q1",
+        "Index1"
+      ],
+      [
+        "Q2",
+        "1"
+      ],
+      [
+        "Q3",
+        "2"
+      ],
+      [
+        "Q4",
+        "3"
+      ],
+      [
+        "Q5",
+        "4"
+      ],
+      [
+        "Q4331",
+        "null"
+      ],
+      [
+        "Q5520",
+        "null"
+      ],
+      [
+        "Q5634",
+        "null"
+      ]
+    ],
+    "patterns": []
+  },
+  "R": {
+    "formulas": 0,
+    "constants": 257,
+    "plain_samples": [
+      [
+        "R1",
+        "Rank1"
+      ],
+      [
+        "R2",
+        "0+"
+      ],
+      [
+        "R3",
+        "0+"
+      ],
+      [
+        "R4",
+        "0+"
+      ],
+      [
+        "R5",
+        "0+"
+      ],
+      [
+        "R255",
+        "0+"
+      ],
+      [
+        "R256",
+        "0+"
+      ],
+      [
+        "R257",
+        "0+"
+      ]
+    ],
+    "patterns": []
+  },
+  "S": {
+    "formulas": 0,
+    "constants": 257,
+    "plain_samples": [
+      [
+        "S1",
+        "Rank2"
+      ],
+      [
+        "S2",
+        "00+0001"
+      ],
+      [
+        "S3",
+        "00+1326"
+      ],
+      [
+        "S4",
+        "00+1453"
+      ],
+      [
+        "S5",
+        "00+0002"
+      ],
+      [
+        "S255",
+        "00+0251"
+      ],
+      [
+        "S256",
+        "00+0252"
+      ],
+      [
+        "S257",
+        "00+0253"
+      ]
+    ],
+    "patterns": []
+  },
+  "T": {
+    "formulas": 3775,
+    "constants": 2,
+    "plain_samples": [
+      [
+        "T1",
+        "Estimate Semi Received Date"
+      ],
+      [
+        "T2268",
+        "null"
+      ],
+      [
+        "T1",
+        "Estimate Semi Received Date"
+      ],
+      [
+        "T2268",
+        "null"
+      ]
+    ],
+    "patterns": [
+      {
+        "n": 3775,
+        "first": [
+          "T2",
+          "IF(\n  OR(D2=\"Van on the sea\", D2=\"Production Commenced Longtree\"),\n  _xlfn.LET(\n    _xlpm.key, SUBSTITUTE(G2, \"-\", \"\"),\n    _xlpm.valD, IFERROR(VLOOKUP(_xlpm.key, 'Longtree API'!A:H, 4, FALSE), 0),\n    _xlpm.valH, IFERROR(VLOOKUP(_xlpm.key, 'Longtree API'!A:H, 8, FALSE), 0),\n    _xlpm.baseDate, IF(_xlpm.valD=0, IF(_xlpm.valH<TODAY(), TODAY(), _xlpm.valH), _xlpm.valD),\n    _xlpm.resultDate, _xlpm.baseDate + 23,\n    IF(\n      AND(_xlpm.valD=0, _xlpm.valH=0),\n      \"null\",\n      IF(_xlpm.resultDate < TODAY(),\n         TEXT(TODAY() + 1, \"yyyy/mm/dd\"),\n         TEXT(_xlpm.resultDate, \"yyyy/mm/dd\")\n      )\n    )\n  ),\n  \"null\"\n)",
+          {
+            "ca": "1"
+          }
+        ],
+        "last": "T4321"
+      }
+    ]
+  }
+}

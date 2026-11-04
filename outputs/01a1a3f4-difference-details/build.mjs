@@ -1,0 +1,76 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {Workbook,SpreadsheetFile} from '@oai/artifact-tool';
+const data=JSON.parse(await fs.readFile('../../sites/orderdesk/.sites-runtime/difference-detail-data.json','utf8'));
+const wb=Workbook.create();
+const ink='#26374D',blue='#233F64',line='#D7DEE7';
+const overview=wb.worksheets.add('核对概览');
+const req=wb.worksheets.add('交期差异');
+const dealer=wb.worksheets.add('Dealer差异');
+const customer=wb.worksheets.add('Customer差异');
+const lastCol=n=>String.fromCharCode(64+n);
+function base(s,title,subtitle,widths,lastRow){
+ s.showGridLines=false;s.tabColor=blue;
+ s.getRange(`A1:${lastCol(widths.length)}${lastRow}`).format.font={name:'Arial',size:10,color:ink};
+ s.getRange(`A1:${lastCol(widths.length)}${lastRow}`).format.rowHeight=23;
+ s.getRange(`A1:${lastCol(widths.length)}${lastRow}`).format.verticalAlignment='center';
+ widths.forEach((w,i)=>s.getRange(`${lastCol(i+1)}1:${lastCol(i+1)}${lastRow}`).format.columnWidth=w);
+ s.getRange('A2').values=[[title]];s.getRange('A2').format.font={name:'Arial',size:14,bold:true,color:ink};s.getRange('A2').format.rowHeight=29;
+ s.getRange('A3').values=[[subtitle]];s.getRange('A3').format.font={name:'Arial',size:10,color:'#596878'};
+ s.getRange(`A4:${lastCol(widths.length)}4`).format.borders={bottom:{style:'thin',color:line}};
+}
+function table(s,headers,rows,name,start=6){
+ const end=start+rows.length,cols=lastCol(headers.length);
+ s.getRange(`A${start}:${cols}${end}`).values=[headers,...rows];
+ const t=s.tables.add(`A${start}:${cols}${end}`,true,name);t.showBandedRows=true;
+ s.getRange(`A${start}:${cols}${start}`).format={fill:blue,font:{name:'Arial',size:10,bold:true,color:'#FFFFFF'},horizontalAlignment:'center',verticalAlignment:'center',rowHeight:29};
+ s.freezePanes.freezeRows(start);s.freezePanes.freezeColumns(1);
+ return end;
+}
+const typed=v=>/^\d{4}-\d{2}-\d{2}$/.test(v??'')?new Date(v+'T00:00:00Z'):v??'';
+const excelSource='Planning Schedule 2025 (4).xlsm / Orderlist';
+const crmSource='Z1D50F1707CB797BB7BD5BD.xlsx / 2026-11-04 00.05.05';
+const note='范围：双方共有、Excel 未标记 Finished 且网页为 active 的 1,729 辆；差异不等于错误。';
+base(req,'交期差异 · 27 辆',note,[20,17,17,19,17,41,17,17],34);
+table(req,['车架号','Excel 交期','网页交期','CRM 原交期/占位值','转换结果','处理规则','Orderlist 行','CRM 行'],data.requests.map(r=>[r.chassis,typed(r.excel),typed(r.web),r.crmExpectedRaw==='2'?2:typed(r.crmExpected),typed(r.ruleResult),r.category,r.excelRow,r.crmRows]),'RequestDifferences');
+req.getRange('B7:E33').setNumberFormat('yyyy-mm-dd');req.getRange('G7:H33').format.horizontalAlignment='right';
+data.requests.forEach((r,i)=>{if(r.crmExpectedRaw==='2')req.getRange(`D${i+7}`).setNumberFormat('0"（1900占位）"');});
+base(dealer,'Dealer 差异 · 13 辆',note,[20,24,24,18,24,36,17,17],20);
+table(dealer,['车架号','Excel Dealer','网页 Dealer','CRM Dealer Code','代码映射结果','说明','Orderlist 行','CRM 行'],data.dealers.map(r=>[r.chassis,r.excel,r.web,r.crmCode,r.mappedDealer||'未找到',r.mappedDealer?'网页按 CRM Dealer Code 映射':'代码 204669 缺少映射',r.row,r.crmRows]),'DealerDifferences');
+dealer.getRange('D7:D19').setNumberFormat('@');dealer.getRange('G7:H19').format.horizontalAlignment='right';
+const unknown=data.dealers.findIndex(r=>!r.mappedDealer)+7;dealer.getRange(`A${unknown}:H${unknown}`).format.fill='#FFF0C2';
+base(customer,'Customer 差异 · 547 辆',note,[20,49,49,49,42,17,17,63],554);
+table(customer,['车架号','Excel Customer','网页 Customer','选用的 CRM Customer','差异类型','Orderlist 行','CRM 行','同车架号其他非取消 CRM Customer'],data.customers.map(r=>[r.chassis,r.excel,r.web,r.crmCustomer,r.category,r.row,r.crmRows,r.alternativeCustomers.length>1?r.alternativeCustomers.slice(1).join(' / '):'']), 'CustomerDifferences');
+customer.getRange('F7:G553').format.horizontalAlignment='right';
+const visualLength=s=>Array.from(s||'').reduce((n,c)=>n+(c.charCodeAt(0)>255?2:1),0);
+data.customers.forEach((r,i)=>{const lines=Math.ceil(Math.max(...[r.excel,r.web,r.crmCustomer].map(visualLength))/46);if(lines>1){customer.getRange(`B${i+7}:D${i+7}`).format.wrapText=true;customer.getRange(`A${i+7}:H${i+7}`).format.rowHeight=18*lines+7;}});
+const dup=data.customers.findIndex(r=>r.alternativeCustomers.length>1)+7;customer.getRange(`A${dup}:H${dup}`).format.fill='#FFF0C2';
+base(overview,'OrderDesk 与人工排程差异明细','核对日期：2026-11-04（悉尼） · 当前本地网页；本次未修改订单数据。',[42,20,24,38,19,19],33);
+overview.getRange('A6:C10').values=[['项目','车辆数','说明'],['网页缺少的未完成订单',3,'历史 CRM 建库未包含；之后仅补已有订单日期。'],['交期差异',null,'24 辆转为 ASAP；3 辆按 CRM 日期转换。'],['Dealer 差异',null,'12 辆按代码映射；1 辆代码缺少映射。'],['Customer 差异',null,'见明细原值、CRM 值和差异类型。']];
+overview.getRange('B8').formulas=[["=COUNTA('交期差异'!A7:A33)"]];overview.getRange('B9').formulas=[["=COUNTA('Dealer差异'!A7:A19)"]];overview.getRange('B10').formulas=[["=COUNTA('Customer差异'!A7:A553)"]];
+overview.getRange('A6:F6').format={fill:blue,font:{name:'Arial',size:10,bold:true,color:'#FFFFFF'}};
+overview.getRange('A12').values=[['缺失订单的证据']];overview.getRange('A12').format.font.bold=true;
+table(overview,['车架号','Dealer','型号','人工表状态','旧表 Orderlist 行','新表 Orderlist 行'],data.missing.map(r=>[r.chassis,r.latest.values.I,r.latest.values.H,r.latest.values.D,r.old.row,r.latest.row]),'MissingOrders',14);
+overview.freezePanes.unfreeze();
+overview.getRange('A19').values=[['3 辆均在旧、新 Planning Schedule 及已准备的 Excel 基线中，但不在当前本地测试订单库。']];
+overview.getRange('A20').values=[['检查 10/26、10/28、10/29、10/30、11/04 五份 CRM：3 辆均无记录；不在排除名单，也无取消日志。']];
+overview.getRange('A22:C25').values=[['Customer 差异类型','车辆数','解读'],['Excel 为 Stock，网页为客户名称',null,'包含未命中 Stock 别名的经销商名称及实际客户名称。'],['网页为 Stock，Excel 有客户或备注',null,'网页按规则归为 Stock；人工表保留了姓名或备注。'],['双方均有客户文本，内容不同',null,'包含姓名扩写、经销商名称和 Stock 备注等。']];
+['Excel 为 Stock，网页为客户名称','网页为 Stock，Excel 有客户或备注','双方均有客户文本，内容不同'].forEach((c,i)=>overview.getRange(`B${23+i}`).formulas=[[`=COUNTIF('Customer差异'!E7:E553,"${c}")`]]);
+overview.getRange('A22:F22').format={fill:blue,font:{name:'Arial',size:10,bold:true,color:'#FFFFFF'}};
+overview.getRange('A27').values=[['来源：'+excelSource+'；旧表为 Planning Schedule 2025 (3).xlsm / Orderlist。']];
+overview.getRange('A28').values=[['CRM 来源：'+crmSource+'；明细列出原始 Excel 行号，便于定位。']];
+overview.getRange('A29').values=[['网页来源：http://127.0.0.1:5173/api/orders；当前本地测试库；最后报表日期 2026-11-04。']];
+overview.getRange('A30').values=[['规则：交期为 CRM 日期的前一个月1日；1900 占位日期为 ASAP；Customer 按现有别名规则处理。']];
+overview.getRange('A31').values=[['重复非取消 CRM 行采用当前程序的首行规则；SRC-254217 的两条 Customer 不同，已在明细标黄。']];
+overview.getRange('A32').values=[['“与当前规则一致”只验证执行结果，不代表 CRM 与人工排程的业务内容已经核实一致。']];
+for(const s of [req,dealer,customer])s.getRange('A4').values=[['来源：'+excelSource+'；CRM 来源及比较范围见“核对概览”。']];
+wb.recalculate();
+assert.deepEqual(overview.getRange('B8:B10').values.flat(),[27,13,547]);
+assert.deepEqual(overview.getRange('B23:B25').values.flat(),[464,45,38]);
+console.log((await wb.inspect({kind:'table',range:'核对概览!A6:C10',tableMaxRows:5,tableMaxCols:3,maxChars:1600})).ndjson);
+console.log((await wb.inspect({kind:'match',searchTerm:'#REF!|#DIV/0!|#VALUE!|#NAME\\?|#NUM!|#N/A',options:{useRegex:true,maxResults:20},maxChars:1200})).ndjson);
+const result=await SpreadsheetFile.exportXlsx(wb);await result.save('OrderDesk差异明细-2026-11-04.xlsx');
+for(const [s,range,file] of [[overview,'A1:F32','overview'],[req,'A1:H13','request'],[dealer,'A1:H19','dealer'],[customer,'A1:G13','customer']]){
+ const img=await wb.render({sheetName:s.name,range,scale:1,format:'png'});await fs.writeFile(file+'.png',new Uint8Array(await img.arrayBuffer()));
+}
+console.log('Saved workbook and four verification previews.');
