@@ -1,0 +1,2 @@
+# Local backups of nested repository history; never upload these.
+/.local-git-backups/
