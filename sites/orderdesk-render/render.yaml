@@ -1,0 +1,34 @@
+# Render Blueprint: New + → Blueprint → pick this repository.
+# If this folder is not the repository root, keep rootDir as below.
+services:
+  - type: web
+    name: regent-orderdesk
+    runtime: node
+    rootDir: orderdesk-render
+    plan: starter            # always-on; the free plan sleeps and the 00:20 Planning PC upload would hit a cold start
+    region: singapore        # closest Render region to the asia-southeast1 Firebase
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22.13.0"
+      - key: FIREBASE_DATABASE_URL
+        value: https://planningorderdesk-default-rtdb.asia-southeast1.firebasedatabase.app
+      - key: FIREBASE_ROOT
+        value: orderdesk/v2
+      - key: FIREBASE_SERVICE_ACCOUNT   # paste the service-account JSON (or its base64)
+        sync: false
+      - key: APP_PASSWORD               # team sign-in password
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: MAIL_SYNC_MODE
+        value: planning-pc
+      - key: PLANNING_AGENT_TOKEN       # >= 32 random chars, also entered on the Planning PC
+        generateValue: true
+      - key: PLANNING_AGENT_ENABLED
+        value: "false"                  # set to true after the PC's read-only verification passes

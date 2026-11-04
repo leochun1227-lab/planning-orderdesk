@@ -1,11 +1,12 @@
-import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {isSameOrigin} from '@/lib/auth-session.mjs';
+import {getUser} from '@/lib/auth';
 import {readState,writeState} from '@/lib/crypto-store.mjs';
 import {dayInSydney,importProductionSources} from '@/lib/order-engine.mjs';
 import {secret} from '@/lib/runtime';
 export const dynamic='force-dynamic';
 export async function POST(request:Request){
- if(!await getChatGPTUser())return Response.json({error:'请先登录'},{status:401});
- const origin=request.headers.get('origin');if(!origin||origin!==new URL(request.url).origin)return Response.json({error:'请求来源无效'},{status:403});
+ if(!await getUser())return Response.json({error:'请先登录'},{status:401});
+ if(!isSameOrigin(request))return Response.json({error:'请求来源无效'},{status:403});
  try{
   const text=await request.text();if(text.length>10*1024*1024)throw new Error('文件过大');const input=JSON.parse(text);
   const {state,etag}=await readState(secret());if(!state)throw new Error('请先导入初始订单');

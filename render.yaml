@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: planning-orderdesk
+    runtime: node
+    rootDir: sites/orderdesk
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.18.0
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: ORDERDESK_KEY
+        sync: false
+      - key: ORDERDESK_LOGIN_PASSWORD
+        sync: false
+      - key: ORDERDESK_SESSION_SECRET
+        generateValue: true
+      - key: PLANNING_AGENT_TOKEN
+        generateValue: true
+      - key: PLANNING_AGENT_ENABLED
+        value: "false"
+      - key: MAIL_SYNC_MODE
+        value: planning-pc

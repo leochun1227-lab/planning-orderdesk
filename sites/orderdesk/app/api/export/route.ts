@@ -1,11 +1,12 @@
-import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {isSameOrigin} from '@/lib/auth-session.mjs';
+import {getUser} from '@/lib/auth';
 import {readState} from '@/lib/crypto-store.mjs';
 import {secret} from '@/lib/runtime';
 import {buildOrderlist} from '@/lib/orderlist-export.mjs';
 export const dynamic='force-dynamic';
 export async function POST(request:Request){
-  if(!await getChatGPTUser())return Response.json({error:'请先登录'},{status:401});
-  if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'请求来源无效'},{status:403});
+  if(!await getUser())return Response.json({error:'请先登录'},{status:401});
+  if(!isSameOrigin(request))return Response.json({error:'请求来源无效'},{status:403});
   try{
     const text=await request.text();if(text.length>1000000)throw new Error('导出请求过大');
     const {ids}=JSON.parse(text);if(!Array.isArray(ids)||ids.length>30000||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length)throw new Error('导出车辆列表无效');

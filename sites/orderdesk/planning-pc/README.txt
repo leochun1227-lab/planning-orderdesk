@@ -13,10 +13,10 @@ Planning 电脑同步程序 — 待目标电脑安装验证
 1. 将本目录放到该电脑当前用户专用的本地目录，例如 C:\Users\当前用户\Documents\OrderDeskPlanningAgent。不要放公共共享目录。
 2. 网页端先备份并迁移已核对的订单数据，发布含 /api/planning-agent 的代码。当前 localhost 数据不会随代码发布自动迁移。
 3. 服务器配置 MAIL_SYNC_MODE=planning-pc、PLANNING_AGENT_ENABLED=false，并设置随机至少 32 字符的 PLANNING_AGENT_TOKEN；保留原 ORDERDESK_KEY。这个令牌只允许提交 CRM 报告和同步状态，不是 Microsoft 密钥。
-4. 私人 Sites 网站还需要平台提供的服务访问令牌。必须保持网站原访问范围，不通过改为公开来绕过登录。安装人员通过现有 Sites 服务接入方式取得并配置。
+4. Render 网站使用网页团队密码登录；电脑上传只使用独立的 PLANNING_AGENT_TOKEN，不需要团队密码、会话密钥或 Sites 服务访问令牌。
 5. 在 Planning 电脑当前用户的 Windows PowerShell 中执行：
-   .\Configure-Agent.ps1 -SiteUrl "https://实际网页地址" -NodePath "C:\实际路径\node.exe" -PrivateSites
-   普通非 Sites 平台不需要 -PrivateSites。提示输入的令牌不会回显，并使用当前 Windows 用户的 DPAPI 加密保存。不要把令牌贴到聊天中。
+   .\Configure-Agent.ps1 -SiteUrl "https://实际Render网页地址" -NodePath "C:\实际路径\node.exe"
+   Render 不加 -PrivateSites。提示输入服务器相同的 PLANNING_AGENT_TOKEN，输入不会回显，并使用当前 Windows 用户的 DPAPI 加密保存。不要把令牌贴到聊天中。已有配置迁移到 Render 时，保留 agentTokenProtected（令牌不变时），将 siteUrl 改为 Render 地址，并清空 siteTokenProtected；配置文件必须留在原 Windows 用户的电脑上。
 6. 执行 .\Run-Agent.ps1 -VerifyOnly。必须从真实 Outlook 找到至少一份报告，并与网页现有日期、条数、去重结果核对。此步骤不改订单。
 7. 验证通过后，服务器设置 PLANNING_AGENT_ENABLED=true，再执行 .\Install-Task.ps1。电脑时区必须是 Sydney（AUS Eastern Standard Time），任务每天 00:20 运行一次，自动跟随夏令时。无登录触发、无漏跑补抓、无周期重试；不保存 Windows 密码，不以 SYSTEM 账户运行。旧版任务若已安装，需要由安装人员修改为此设置，不能保留旧的 15 分钟触发器。
 8. 查看第一次定时运行的 last-run.json，并在网页确认最近成功时间、导入记录和订单结果。任务名：OrderDesk Planning CRM Reader。
@@ -35,7 +35,7 @@ Planning 电脑同步程序 — 待目标电脑安装验证
 常见处理
 - 找不到 Planning 或出现多个匹配：由安装人员确认 Outlook StoreId，再配置 StoreId。不能随意选择另一个邮箱。
 - 公司策略禁止脚本、Outlook 提示授权或要求重新登录：由用户/管理员处理，然后重新试读；不要关闭安全保护。
-- HTTP 401/403 或跳转：检查网页专用令牌及私人网站服务访问配置。
+- HTTP 401/403 或跳转：检查实际 Render 地址和 PLANNING_AGENT_TOKEN。电脑接口不使用网页登录 Cookie，不能拿团队密码替代上传令牌。
 - HTTP 400/409：检查接收时间窗口、服务器启用开关、报表格式和并发更新；不会退回抓旧邮件。需要补录时在网页手动导入，保留相同去重规则。
 - 暂停任务可在 Windows 任务计划程序禁用 OrderDesk Planning CRM Reader，也可将服务器 PLANNING_AGENT_ENABLED 设为 false。
 
