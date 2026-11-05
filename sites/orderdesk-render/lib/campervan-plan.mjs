@@ -29,17 +29,41 @@ export function buildCampervanPlan(motorhomeSchedule, campervanSchedule) {
   return plan;
 }
 
-/** Cached fetch of the Portal plan (public read). */
-export function createCampervanPlanSource({ url = PORTAL_DATABASE_URL, ttlMs = 15 * 60 * 1000, fetcher = fetch } = {}) {
+// The same nine nodes the Portal's production-planning board subscribes to (useProductionBoardData.ts).
+export const PORTAL_BOARD_SOURCES = [
+  ['motorhome', 'motorhomeSchedule'], ['schedule', 'schedule'], ['campers', 'campervanSchedule'], ['dateTrack', 'dateTrack'], ['datetrack', 'datetrack'],
+  ['uploaded', 'planningTargets/uploadedScheduleBilingual'], ['preferences', 'motorhomeSchedulePreferences'], ['production', 'production status'], ['pgi', 'pgirecord'],
+];
+
+/** Run the Portal's own board code (vendor/portal) and overlay its SRV/SRM dates on the plan. */
+export function applyPortalBoard(plan, board) {
+  const out = { ...plan };
+  for (const row of board.rows || []) {
+    const id = normalizeChassis(row.chassis); if (!CAMPERVAN.test(id)) continue;
+    out[id] = { ...(out[id] || {}), forecastDate: day(row.auPlanStart) || null, expectedStart: day(row.auStart) || null, actualStart: day(row.auActual) || null,
+      boardGroup: row.group, boardStatus: row.production?.status || row.status || '', source: 'portal-board' };
+  }
+  return out;
+}
+
+/** Cached fetch of the Portal data (public read) + the Portal's own scheduling code. */
+export function createCampervanPlanSource({ url = PORTAL_DATABASE_URL, ttlMs = 15 * 60 * 1000, fetcher = fetch, board = loadPortalBoard() } = {}) {
   let cache = null, inflight = null;
+  const base = url.replace(/\/+$/, '');
   async function get(path) {
-    const r = await fetcher(`${url.replace(/\/+$/, '')}/${path}.json`, { signal: AbortSignal.timeout(60000) });
+    const r = await fetcher(`${base}/${path.split('/').map(encodeURIComponent).join('/')}.json`, { signal: AbortSignal.timeout(90000) });
     if (!r.ok) throw new Error(`Portal ${path} ${r.status}`);
     return r.json();
   }
   async function load() {
-    const [mh, camper] = await Promise.all([get('motorhomeSchedule'), get('campervanSchedule')]);
-    cache = { at: new Date().toISOString(), portalUpdatedAt: mh?.updatedAt || null, plan: buildCampervanPlan(mh, camper) };
+    const raw = Object.fromEntries(await Promise.all(PORTAL_BOARD_SOURCES.map(async ([name, path]) => [name, await get(path)])));
+    let plan = buildCampervanPlan(raw.motorhome, raw.campers), boardError = null;
+    try {
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());
+      const mod = await board;
+      plan = applyPortalBoard(plan, mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today));
+    } catch (e) { boardError = e instanceof Error ? e.message : String(e); }
+    cache = { at: new Date().toISOString(), portalUpdatedAt: raw.motorhome?.updatedAt || null, plan, ...(boardError ? { boardError } : {}) };
     return cache;
   }
   return {
@@ -49,4 +73,9 @@ export function createCampervanPlanSource({ url = PORTAL_DATABASE_URL, ttlMs = 1
       try { return await inflight; } catch (e) { if (cache) return { ...cache, stale: true, error: e.message }; throw e; }
     },
   };
+}
+
+export async function loadPortalBoard() {
+  const { createRequire } = await import('node:module');
+  return createRequire(import.meta.url)('../vendor/portal/portal-board.cjs');
 }

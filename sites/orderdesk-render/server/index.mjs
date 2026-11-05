@@ -1,3 +1,5 @@
+// The Portal's scheduling code works in local time; run the server on Sydney time.
+process.env.TZ ||= 'Australia/Sydney';
 import { serve } from '@hono/node-server';
 import { createFirebase } from './firebase.mjs';
 import { createStore } from './store.mjs';

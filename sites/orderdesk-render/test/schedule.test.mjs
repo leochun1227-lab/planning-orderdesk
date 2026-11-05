@@ -107,3 +107,18 @@ test('campervan plan prefers the Portal saved schedule, falls back to campervanS
   assert.equal(plan.SRV250001.forecastDate, '2025-07-01'); assert.equal(plan.SRV250001.productionStatus, 'Finished');
   assert.equal(plan.SRM266702.forecastDate, null); assert.equal(plan.SRM266702.source, 'queue');
 });
+
+test('Portal board dates override the saved schedule for SRV/SRM', async () => {
+  const { applyPortalBoard } = await import('../lib/campervan-plan.mjs');
+  const plan = applyPortalBoard({ SRM263741: { forecastDate: '2026-11-02', source: 'savedSchedule' } },
+    { rows: [{ chassis: 'SRM263741', auPlanStart: '2026-10-12', auStart: '2026-10-14', auActual: '2026-10-14', group: 'au', status: 'Production' }, { chassis: 'SRC264000', auPlanStart: '2026-01-01' }] });
+  assert.equal(plan.SRM263741.forecastDate, '2026-10-12'); assert.equal(plan.SRM263741.actualStart, '2026-10-14'); assert.equal(plan.SRM263741.source, 'portal-board');
+  assert.equal(plan.SRC264000, undefined);
+});
+
+test('the bundled Portal board code loads and runs on empty data', async () => {
+  const { loadPortalBoard } = await import('../lib/campervan-plan.mjs');
+  const m = await loadPortalBoard();
+  const vehicles = m.boardVehiclesFromSources({}, '2026-11-05');
+  assert.ok(Array.isArray(m.buildProductionBoard(vehicles, m.DEFAULT_BOARD_SETTINGS, '2026-11-05').rows));
+});
