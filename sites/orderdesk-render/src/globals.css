@@ -275,3 +275,21 @@ body{background:#eef1f6;font-size:14px}
 .camper-badge{margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.4px;color:#fff;background:#6741d9;border-radius:3px;padding:1px 4px}
 .camper-date{color:#5f3dc4;font-weight:600}
 .camper-box{display:flex;flex-direction:column;gap:4px;background:#f3f0ff;border:1px solid #d0bfff;border-radius:7px;padding:10px 12px;margin:14px 0 0;font-size:14px}.camper-box strong{color:#5f3dc4;font-size:13px}
+/* Schedule page = daily landing page (overview merged in, 2026-11-06) */
+.schedule-daybar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 12px;background:#fff;border-bottom:1px solid #e3e7ee}
+.day-date{display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid #d3d9e3;border-radius:6px;color:#4a5870;background:#fff}
+.day-date input{border:0;font:inherit;font-size:13.5px;color:#1d2433;background:transparent}
+.day-chips{display:flex;flex-wrap:wrap;gap:6px}
+.day-chip{display:flex;align-items:center;gap:7px;height:32px;border:1px solid #d3d9e3;border-radius:6px;background:#fff;padding:0 10px 0 4px;font-size:13px;color:#33415a}
+.day-chip b{min-width:28px;height:24px;border-radius:4px;display:grid;place-items:center;font-size:14px;font-weight:800;color:#fff;background:#1f3352;padding:0 5px}
+.day-chip.new b{background:#2f5be0}.day-chip.changed b{background:#7048e8}.day-chip.cancelled b{background:#c92a2a}
+.day-chip.zero{opacity:.55}.day-chip.on{border-color:#1f4fbf;box-shadow:0 0 0 2px #2f5be033;font-weight:700;color:#1f4fbf}
+.report-stamp.small{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:#61718a}.report-stamp.small strong{color:#1d2433}
+.filter-note{display:flex;align-items:center;gap:12px;padding:6px 12px;background:#fff8db;border-bottom:1px solid #f3e3a1;font-size:12.5px;color:#5c4a00}
+.filter-note button{border:0;background:none;color:#1f4fbf;font-weight:700;text-decoration:underline;padding:0;font-size:12.5px}
+.row-kind{font-size:10.5px;font-weight:700;border-radius:3px;padding:1px 4px;color:#fff;background:#8a96a8}
+.row-kind.campervan{background:#6741d9}.row-kind.pending{background:#5b4bd1}.row-kind.cancelled{background:#c92a2a}
+.chg{font-size:12px;font-weight:600}.chg-new{color:#1f4fbf}.chg-changed{color:#6741d9}.chg-cancelled{color:#c92a2a}
+.schedule-grid .cancelled-row .ag-cell{color:#a3adbb;text-decoration:line-through}
+.xl-link.cancelled{color:#c92a2a}
+.schedule-grid{height:calc(100vh - 250px)}

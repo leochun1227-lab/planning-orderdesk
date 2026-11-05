@@ -15,6 +15,7 @@ export type ScheduleRow = {
   mismatch: boolean;          // B column rule
   weekStart: boolean;         // first row of a production week
   finished: boolean;
+  kind?: 'campervan' | 'pending' | 'cancelled' | 'other';   // set on rows that are not Orderlist rows
 };
 
 export function buildSchedule(data: any, today: string): ScheduleRow[] {
@@ -34,6 +35,20 @@ export function buildSchedule(data: any, today: string): ScheduleRow[] {
       weekStart, finished: order?.productionStatus === 'Finished' || order?.status === 'completed',
     };
   });
+}
+
+/** Orders that have no Orderlist row (campervans, not placed, cancelled), as table rows. */
+export function buildExtraRows(data: any, plan: Record<string, any> | undefined, today: string): ScheduleRow[] {
+  if (!data?.orders) return [];
+  const inRows = new Set((data.schedule?.rows || []).map((r: [string | null]) => r[0]).filter(Boolean));
+  const pending = new Set(data.schedule?.pending || []);
+  return data.orders.filter((o: Order) => !inRows.has(o.id)).map((o: Order) => {
+    const camper = o.group === 'campervan' || /^SR[VM]/.test(String(o.id));
+    const kind = o.status === 'cancelled' ? 'cancelled' : camper ? 'campervan' : pending.has(o.id) ? 'pending' : 'other';
+    const forecastDate = camper ? (plan?.[o.id]?.forecastDate ?? o.forecastDate ?? null) : o.forecastDate ?? null;
+    return { id: o.id, excelRow: 0, forecastDate, dealer: o.dealer, order: o, alert: null, due: false, mismatch: false, weekStart: false,
+      finished: o.status === 'completed' || o.productionStatus === 'Finished', kind } as ScheduleRow;
+  }).sort((a: ScheduleRow, b: ScheduleRow) => String(a.forecastDate || '9999').localeCompare(String(b.forecastDate || '9999')) || String(a.order?.chassis).localeCompare(String(b.order?.chassis)));
 }
 
 export type ActionCounts = Record<AlertKey | 'overdue' | 'pending', number>;
