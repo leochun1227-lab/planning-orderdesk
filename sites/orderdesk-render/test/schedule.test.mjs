@@ -88,3 +88,22 @@ test('a manually kept customer is not overwritten by CRM, but the CRM text is st
   assert.equal(r.state.orders.SRH263605.crmCustomer, 'REGENT RV - FRANKSTON');
   assert.equal(r.state.orders.SRH263605.specAt, '2026-11-05');
 });
+
+test('campervans never take Orderlist slots or go to pending', () => {
+  const prev = base();
+  const next = { ...prev, orders: { ...prev.orders, SRM266702: { id: 'SRM266702', chassis: 'SRM-266702', dealer: 'Geelong', status: 'active' } } };
+  const out = reconcileSchedule(prev, next);
+  assert.equal(out, next);
+  assert.ok(out.schedule.rows.every(r => r.chassis !== 'SRM266702'));
+});
+
+test('campervan plan prefers the Portal saved schedule, falls back to campervanSchedule', async () => {
+  const { buildCampervanPlan } = await import('../lib/campervan-plan.mjs');
+  const plan = buildCampervanPlan(
+    { orders: [{ id: 'o1', chassis: 'SRM263711', model: 'SRM22.1', dealer: 'Forest Glen', signedOffDate: '2026-03-10', productLine: 'SRM' }, { id: 'o2', chassis: 'SRM266702', model: 'SRM 25.1 - Fiat', signedOffDate: '2026-11-04' }],
+      plans: { savedSchedule: { SRM: [{ orderId: 'o1', date: '2026-06-01', week: 1 }] } } },
+    [{ chassisNumber: 'SRM263711', forecastProductionDate: '2026-06-05', regentProduction: '' }, { chassisNumber: 'SRV250001', forecastProductionDate: '2025-07-01', regentProduction: 'Finished' }]);
+  assert.equal(plan.SRM263711.forecastDate, '2026-06-01'); assert.equal(plan.SRM263711.source, 'savedSchedule');
+  assert.equal(plan.SRV250001.forecastDate, '2025-07-01'); assert.equal(plan.SRV250001.productionStatus, 'Finished');
+  assert.equal(plan.SRM266702.forecastDate, null); assert.equal(plan.SRM266702.source, 'queue');
+});

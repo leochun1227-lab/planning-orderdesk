@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { applyReport, dayInSydney, reportFingerprint, importProductionSources } from '../lib/order-engine.mjs';
 import { buildOrderlist } from '../lib/orderlist-export.mjs';
 import { forecastResolver } from '../lib/schedule.mjs';
+import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { handlePlanningAgent, planningAgentStatus } from '../lib/planning-agent.mjs';
 import { syncMail, mailConfig, mailStatus } from '../lib/mail-sync.mjs';
 import { MailSyncError } from '../lib/outlook-report.mjs';
@@ -70,6 +71,12 @@ export function createApp({ store, auth, env = process.env }) {
 
   app.get('/api/session', c => json({ user: auth.user(c.req.raw), store: store.info() }));
   app.get('/api/revision', async c => json({ revision: await store.revision() }));
+  // SRV/SRM planned dates, read-only from the Dealer Portal (cached 15 minutes).
+  const campervanPlan = createCampervanPlanSource({ url: env.PORTAL_DATABASE_URL || undefined });
+  app.get('/api/campervan-plan', async () => {
+    try { return json(await campervanPlan.current()); }
+    catch (e) { return json({ error: message(e, 'Dealer Portal 排产暂时读取不到'), plan: {} }, 502); }
+  });
 
   app.get('/api/orders', async c => {
     try {

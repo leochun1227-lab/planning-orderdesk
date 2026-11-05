@@ -56,7 +56,7 @@ for (const r of ps.rows) {
   if (r.A && A !== r.A) throw new Error(`Forecast mismatch at row ${r.excelRow}: Excel ${r.A}, calculated ${A}`);
   orders[id] = {
     ...old,
-    id, chassis: displayChassis(id), slotRow: r.excelRow,
+    id, chassis: r.G.trim(), slotRow: r.excelRow,             // keep the Orderlist's own chassis text (e.g. NG-240289)
     forecastDate: A, requestDate: text(r.B), shipment: text(r.C), productionStatus: r.D || '', vinNumber: text(r.E),
     modelYear: text(r.F) || '', model: r.H || '', dealer: r.I || '', customer: r.J || '',
     receivedAt: day(r.K), sentLongtreeAt: day(r.L), specAt: day(r.M), signedAt: day(r.N), purchaseAt: day(r.O),

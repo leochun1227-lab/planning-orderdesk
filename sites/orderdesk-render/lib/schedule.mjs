@@ -13,6 +13,9 @@
 //     rows below do not move up.
 import { normalizeChassis } from './order-engine.mjs';
 
+// SRV/SRM campervans are scheduled in the Dealer Portal, never in Orderlist slots.
+const isCampervanId = id => /^SR[VM]/.test(String(id));
+
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 
 /**
@@ -104,6 +107,7 @@ export function reconcileSchedule(prev, next, { now = new Date().toISOString() }
       }
       continue;
     }
+    if (isCampervanId(id)) { if (pending.delete(id)) changed = true; continue; }
     const isNewOrder = !before && order.status === 'active';
     if (at === undefined && isNewOrder && !pending.has(id)) {
       const slot = rows.findIndex(r => !r.chassis && r.dealer === order.dealer);

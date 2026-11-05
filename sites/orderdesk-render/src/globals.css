@@ -272,3 +272,6 @@ body{background:#eef1f6;font-size:14px}
 .user-block a{color:#8ba0c1;display:flex}.user-block a:hover{color:#fff}
 @media(max-width:850px){.action-cards{grid-template-columns:1fr 1fr}.schedule-toolbar .search{width:100%}}
 .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+.camper-badge{margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.4px;color:#fff;background:#6741d9;border-radius:3px;padding:1px 4px}
+.camper-date{color:#5f3dc4;font-weight:600}
+.camper-box{display:flex;flex-direction:column;gap:4px;background:#f3f0ff;border:1px solid #d0bfff;border-radius:7px;padding:10px 12px;margin:14px 0 0;font-size:14px}.camper-box strong{color:#5f3dc4;font-size:13px}
