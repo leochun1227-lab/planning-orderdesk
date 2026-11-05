@@ -61,9 +61,14 @@ export function applyReport(state,records,{batchId,fileName,businessDate,reportD
     if(production)update('productionStatus',production(key));
     update('status',statusFromProduction(o.productionStatus,o.status));
     // customerManual: Planning's own customer record (kept at initialisation, 2026-11-05) is not overwritten by CRM.
-    if(!isNew){if(!o.customerManual)update('customer',customerName(r.customer,refs));if(r.description){update('modelYear',r.description.slice(0,4));update('model',r.description.slice(5));}}
+    if(!isNew){if(!o.customerManual)update('customer',customerName(r.customer,refs));if(r.description){const crmYear=r.description.slice(0,4),crmModel=r.description.slice(5);
+      // Model year/model follow the CRM only when the CRM value itself changes (2026-11-05): a value Planning
+      // corrected by hand stays until the report says something new. First sighting only records the CRM value.
+      if(o.crmModelYear!==undefined&&o.crmModelYear!==null&&o.crmModelYear!==crmYear)update('modelYear',crmYear);
+      if(o.crmModel!==undefined&&o.crmModel!==null&&o.crmModel!==crmModel)update('model',crmModel);}}
     // Keep the CRM's own customer text so a 'Stock' classification can be checked; not a business field.
     const crmCustomer=String(r.customer??'').trim();let touched=false;if(o.crmCustomer!==crmCustomer){o.crmCustomer=crmCustomer;touched=true;}
+    if(r.description){const y=r.description.slice(0,4),m=r.description.slice(5);if(o.crmModelYear!==y){o.crmModelYear=y;touched=true;}if(o.crmModel!==m){o.crmModel=m;touched=true;}}
     const req=requestDay(r.expectedDate),existingRequest=toDay(o.requestDate);
     if(req&&(req!=='ASAP'||!existingRequest||existingRequest==='ASAP'))update('requestDate',req);
     const hasSpec=active.some(r=>r.quoteStatus==='FACTORY DRAWN');const hasSigned=active.some(r=>r.quoteStatus==='BUYER ORDERED');

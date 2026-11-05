@@ -43,7 +43,10 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     const q = filter.query.toLowerCase().replace(/-/g, '');
     const all = [...rows, ...extras];
     let list: ScheduleRow[];
-    if (filter.day) list = all.filter(r => r.order && day.ids[filter.day!].has(r.order.id));
+    const matches = (r: ScheduleRow) => { const o = r.order; return !!o && [o.chassis, o.customer, o.crmCustomer, o.model].some(v => String(v || '').toLowerCase().replace(/-/g, '').includes(q)); };
+    // A search always looks through every vehicle (Orderlist rows, campervans, not placed, cancelled).
+    if (q) list = all.filter(matches);
+    else if (filter.day) list = all.filter(r => r.order && day.ids[filter.day!].has(r.order.id));
     else if (filter.alert === 'overdue') list = all.filter(r => r.order && isOverdue(r.order, today));
     else if (filter.alert === 'pending') list = extras.filter(r => r.kind === 'pending');
     else if (filter.scope === 'campervan') list = extras.filter(r => r.kind === 'campervan' && r.order?.status === 'active');
@@ -55,7 +58,6 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     }
     return list.filter(r => {
       if (filter.dealer && r.dealer !== filter.dealer) return false;
-      if (q) { const o = r.order; if (!o) return false; if (![o.chassis, o.customer, o.crmCustomer, o.model].some(v => String(v || '').toLowerCase().replace(/-/g, '').includes(q))) return false; }
       return true;
     });
   }, [rows, extras, filter, day, today]);
@@ -142,12 +144,13 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
       <span className="count-chip"><CalendarRange size={14} /> {visible.length.toLocaleString()} {zh ? '行' : 'rows'}</span>
       <Button variant="outline" className="action slim" disabled={exporting} onClick={() => void exportExcel()}><ArrowDownToLine size={16} />{exporting ? (zh ? '导出中' : 'Exporting') : (zh ? '导出 Excel' : 'Export Excel')}</Button>
     </div>
-    {(filter.day || filter.alert === 'overdue' || filter.alert === 'pending' || filter.scope === 'campervan') && <div className="filter-note">
-      {filter.day ? (zh ? `${fmt(date)} 的变化，包括取消和 Campervan 订单。` : `Changes on ${fmt(date)}, including cancelled and campervan orders.`)
+    {(filter.query || filter.day || filter.alert === 'overdue' || filter.alert === 'pending' || filter.scope === 'campervan') && <div className="filter-note">
+      {filter.query ? (zh ? `在全部车里搜索「${filter.query}」：包括 Orderlist、Campervan、待排位和已取消的车。` : `Searching all vehicles for "${filter.query}" (Orderlist, campervans, not placed, cancelled).`)
+        : filter.day ? (zh ? `${fmt(date)} 的变化，包括取消和 Campervan 订单。` : `Changes on ${fmt(date)}, including cancelled and campervan orders.`)
         : filter.scope === 'campervan' && !filter.alert ? (zh ? `SRV / SRM 不占 Orderlist 空位；预计生产为 Dealer Portal 的澳洲计划上线${campervanSource ? `（${campervanSource}）` : ''}。` : 'SRV / SRM do not use Orderlist slots; dates are the Dealer Portal AU planned start.')
         : filter.alert === 'overdue' ? (zh ? '所有发图满 5 天仍未签字的车（含 Campervan）。' : 'All orders with plans sent ≥5 days and unsigned (incl. campervans).')
         : (zh ? '经销商没有空位、或不在排产表里的在排订单。' : 'Active orders without a dealer slot / not in the schedule.')}
-      <button onClick={() => set({ day: null, alert: null, scope: 'open' })}>{zh ? '回到在排' : 'Back to open'}</button></div>}
+      <button onClick={() => set({ day: null, alert: null, scope: 'open', query: '' })}>{zh ? '回到在排' : 'Back to open'}</button></div>}
     {error && <div className="message error compact-msg">{error}</div>}
     <div className="schedule-grid">
       <AgGridReact<ScheduleRow> ref={grid} theme={gridTheme} rowData={visible} columnDefs={columns} getRowId={p => p.data.id}

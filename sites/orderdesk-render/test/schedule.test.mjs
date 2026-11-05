@@ -122,3 +122,17 @@ test('the bundled Portal board code loads and runs on empty data', async () => {
   const vehicles = m.boardVehiclesFromSources({}, '2026-11-05');
   assert.ok(Array.isArray(m.buildProductionBoard(vehicles, m.DEFAULT_BOARD_SETTINGS, '2026-11-05').rows));
 });
+
+test('model year follows the CRM only when the CRM value changes', async () => {
+  const { applyReport } = await import('../lib/order-engine.mjs');
+  const opts = d => ({ batchId: 'b' + d, fileName: 'f', businessDate: d, reportDate: d, now: d + 'T00:20:00Z' });
+  const rec = desc => ({ chassis: 'SRC255901', quoteStatus: 'BUYER ORDERED', description: desc, dealerCode: '1', customer: 'Stock', expectedDate: 'ASAP', sourceRow: 14 });
+  let state = { orders: { SRC255901: { id: 'SRC255901', chassis: 'SRC-255901', dealer: 'Slacks Creek', modelYear: '2026', model: 'SRC17', status: 'completed', specAt: '2023-01-01', signedAt: '2023-01-02', purchaseAt: '2023-01-02' } }, events: {}, imports: {}, meta: {}, refs: { dealers: {}, dealerNames: [], excluded: [] } };
+  state = applyReport(state, [rec('2023 SRC17')], opts('2026-11-05')).state;          // first sighting: keep Planning's 2026
+  assert.equal(state.orders.SRC255901.modelYear, '2026'); assert.equal(state.orders.SRC255901.crmModelYear, '2023');
+  state = applyReport(state, [rec('2023 SRC17')], opts('2026-11-06')).state;          // unchanged CRM: still 2026
+  assert.equal(state.orders.SRC255901.modelYear, '2026');
+  const r = applyReport(state, [rec('2027 SRC17')], opts('2026-11-07'));              // CRM changes: CRM wins
+  assert.equal(r.state.orders.SRC255901.modelYear, '2027');
+  assert.ok(Object.values(r.state.events).some(e => e.changes.some(c => c.field === 'modelYear' && c.after === '2027')));
+});
