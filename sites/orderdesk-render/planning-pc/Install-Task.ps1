@@ -5,7 +5,10 @@ if(-not(Test-Path -LiteralPath $configPath)){throw 'Configure this computer firs
 $resultPath=Join-Path $PSScriptRoot 'last-run.json'
 if(-not(Test-Path -LiteralPath $resultPath)){throw 'Run verification on this computer first'}
 $result=Get-Content -LiteralPath $resultPath -Raw|ConvertFrom-Json
-if(-not $result.ok -or -not $result.verifyOnly -or $result.matchedMessages -lt 1){throw 'A successful read-only test with an actual CRM attachment is required first'}
+# The read-only test proves Outlook mailbox/folder access and the website token. It only sees mail received in the
+# previous 30 minutes, so outside 00:05-00:35 it normally finds no report; that is accepted, an error is not.
+if(-not $result.verifyOnly -or $result.error){throw 'Run .\Run-Agent.ps1 -VerifyOnly first; it must finish without an error'}
+if($result.matchedMessages -lt 1){Write-Warning 'Verification found no report in the last 30 minutes (normal outside 00:05-00:35). Check last-run.json and the website after the first 00:20 run.'}
 $taskName='OrderDesk Planning CRM Reader'
 if(Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue){throw 'Task already exists. Do not install a second copy.'}
 $user=[Security.Principal.WindowsIdentity]::GetCurrent().Name

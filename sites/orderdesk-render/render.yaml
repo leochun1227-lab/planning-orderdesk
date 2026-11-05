@@ -1,5 +1,5 @@
 # Render Blueprint: New + → Blueprint → pick this repository.
-# If this folder is not the repository root, keep rootDir as below.
+# Blueprint Path in Render: sites/orderdesk-render/render.yaml
 services:
   - type: web
     name: regent-orderdesk

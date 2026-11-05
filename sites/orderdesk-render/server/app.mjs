@@ -10,6 +10,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyReport, dayInSydney, reportFingerprint, importProductionSources } from '../lib/order-engine.mjs';
 import { buildOrderlist } from '../lib/orderlist-export.mjs';
+import { forecastResolver } from '../lib/schedule.mjs';
 import { handlePlanningAgent, planningAgentStatus } from '../lib/planning-agent.mjs';
 import { syncMail, mailConfig, mailStatus } from '../lib/mail-sync.mjs';
 import { MailSyncError } from '../lib/outlook-report.mjs';
@@ -115,7 +116,14 @@ export function createApp({ store, auth, env = process.env }) {
       const text = await c.req.text(); if (text.length > 1000000) throw new Error('导出请求过大');
       const { ids } = JSON.parse(text); if (!Array.isArray(ids) || ids.length > 30000 || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) throw new Error('导出车辆列表无效');
       const { state } = await store.readState(); if (!state) throw new Error('订单数据尚未准备');
-      const orders = ids.map(id => state.orders[id]); if (orders.some(o => !o)) throw new Error('订单已变化，请刷新后再导出');
+      // 'slot:<excel row>' exports a reserved empty Orderlist row (dealer + forecast date only).
+      const forecast = forecastResolver(state.calendar);
+      const orders = ids.map(id => {
+        const slot = /^slot:(\d+)$/.exec(id);
+        if (slot) { const row = state.schedule?.rows?.[Number(slot[1]) - 2]; return row && !row.chassis ? { slot: true, chassis: '', dealer: row.dealer, forecastDate: forecast(Number(slot[1])) } : null; }
+        return state.orders[id];
+      });
+      if (orders.some(o => !o)) throw new Error('订单已变化，请刷新后再导出');
       const bytes = await buildOrderlist(orders, state.orderlistExport || {});
       return new Response(Uint8Array.from(bytes).buffer, { headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="Planning-Orderlist.xlsx"', ...noStore } });
     } catch (e) { return json({ error: message(e, '导出失败') }, 400); }

@@ -19,6 +19,7 @@
 // "数据已被更新，请刷新后重试" error as before.
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { reconcileSchedule } from '../lib/schedule.mjs';
 
 export const COLLECTIONS = ['orders', 'events', 'imports'];
 const RECORD_KEYS = new Set([...COLLECTIONS, 'meta']);
@@ -136,6 +137,9 @@ export function createStore(firebase, { root = 'orderdesk/v2' } = {}) {
       const remote = await remoteRevision();
       if (etag !== undefined && etag !== null && String(remote) !== String(etag)) throw new Error(STALE_MESSAGE);
       if (!cache || cache.revision !== remote) await load();
+      // Slot rules (new order -> dealer's earliest empty slot, cancellation frees its row)
+      // apply to every save, whichever path produced it.
+      next = reconcileSchedule(cache.state, next);
       const { updates, nextPrints, changed } = diff(next, cache.prints);
       if (!changed && cache.state) return { revision: remote, changed: 0 };
       const revision = remote + 1, savedAt = new Date().toISOString();
@@ -156,8 +160,9 @@ export function createStore(firebase, { root = 'orderdesk/v2' } = {}) {
     const c = await current();
     if (!c.state) return null;
     if (!payloadCache || payloadCache.revision !== c.revision) {
-      const { orders = {}, events = {}, imports = {}, meta = {} } = c.state;
-      payloadCache = { revision: c.revision, body: JSON.stringify({ orders: Object.values(orders), events: Object.values(events), imports: Object.values(imports), meta, revision: c.revision }) };
+      const { orders = {}, events = {}, imports = {}, meta = {}, schedule = null, calendar = null } = c.state;
+      const sched = schedule ? { rows: schedule.rows.map(r => [r.chassis, r.dealer]), pending: schedule.pending || [], source: schedule.source || null } : null;
+      payloadCache = { revision: c.revision, body: JSON.stringify({ orders: Object.values(orders), events: Object.values(events), imports: Object.values(imports), meta, schedule: sched, calendar, revision: c.revision }) };
     }
     return payloadCache;
   }

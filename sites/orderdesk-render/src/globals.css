@@ -210,3 +210,65 @@ html[lang="en"] .compact .metric-label>span:first-child{min-height:0}
 @media(min-width:1500px){.compact .order-grid{height:max(420px,calc(100dvh - 320px))}}
 @media(max-width:850px){.compact .topbar-actions{width:auto}.compact .breadcrumb{display:none}.compact .metric{grid-template-columns:1fr;gap:6px;min-height:78px;padding:9px 11px}.compact .metric-value{font-size:29px}.compact .metric-icon{display:none}.compact .order-grid{height:max(350px,calc(100dvh - 340px))}}
 @media(max-width:600px){.compact .sidebar{width:50px;flex-basis:50px;padding:16px 4px 0}.compact .main{margin-left:50px}.compact .brand-mark{font-size:34px;width:29px}.compact .workspace{padding:12px 9px}.compact .topbar{height:auto;min-height:48px;padding:7px 9px;align-items:center;gap:8px}.compact .topbar-actions{gap:8px;justify-content:flex-end;flex:1}.compact .sync-status{font-size:14px}.compact .page-header{flex-direction:row;align-items:center;flex-wrap:wrap}.compact .page-header h1{font-size:23px}.compact .header-actions{width:auto}.compact .header-actions .action{flex:initial}.compact .date-row{gap:8px}.compact .metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.compact .metric{grid-template-columns:1fr auto;min-height:57px;gap:7px}.compact .panel-heading{flex-direction:row;align-items:center;flex-wrap:wrap}.compact .panel-heading .table-tabs{width:auto;flex-wrap:wrap}.compact .table-toolbar{flex-wrap:wrap}.compact .search{width:100%;flex-basis:100%}.compact .workspace-footer{gap:6px}.compact .order-grid{height:440px}.compact.nav-expanded .sidebar{z-index:30;box-shadow:8px 0 30px #17243d18}.compact.nav-expanded .main{margin-left:50px}}
+
+/* ===== 2026-11 redesign: denser, Excel-like emphasis ===== */
+body{background:#eef1f6;font-size:14px}
+.topbar{height:56px;padding:0 24px}
+.workspace{padding:18px 24px 14px;max-width:none}
+.page-header{margin-bottom:14px}.page-header h1{font-size:24px;letter-spacing:-.4px;line-height:1.25}.eyebrow{font-size:11.5px;margin-bottom:2px;letter-spacing:1.4px}
+.action{height:36px;font-size:13.5px}.action.slim{height:32px;padding:0 12px}
+.date-row{margin-bottom:12px}
+.section-label{display:flex;align-items:baseline;gap:10px;font-size:13px;font-weight:700;letter-spacing:.6px;color:#33415a;text-transform:uppercase;margin:4px 0 8px}
+.section-label span{font-weight:400;text-transform:none;letter-spacing:0;color:#8794a8;font-size:12.5px}
+/* Needs-attention cards: colour block carries the count, like the Excel cell colour */
+.action-panel{margin-bottom:16px}
+.action-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.action-card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #d9dee7;border-radius:8px;padding:8px 10px 8px 8px;text-align:left;box-shadow:0 1px 2px #14243b08}
+.action-card:hover{border-color:#2f5be0;box-shadow:0 3px 12px #14243b14}
+.action-card .swatch{min-width:64px;height:46px;border-radius:6px;display:grid;place-items:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.action-card .action-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.action-card strong{font-size:14px;color:#1d2433}.action-card small{font-size:12px;color:#7a879b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.action-card>svg{color:#9aa6b8}
+.action-card.zero{opacity:.55}.action-card.zero .swatch{filter:saturate(.35)}
+/* Daily change metrics: compact strip instead of giant tiles */
+.metrics{gap:10px;margin-bottom:14px}
+.metric{padding:10px 14px 9px;border-radius:8px;display:grid;grid-template-columns:1fr auto;align-items:center;row-gap:2px}
+.metric:after{top:12px;height:26px}
+.metric-label{font-size:13px}.metric-icon{width:26px;height:26px;border-radius:6px}.metric-icon svg{width:15px}
+.metric-value{font-size:28px;margin:0;grid-row:span 2;letter-spacing:-1px}.metric-value>svg{display:none}
+.metric-bottom{border:0;padding:0;font-size:12px}
+.panel-heading{padding:12px 16px}.panel-heading h2{font-size:16px}
+.table-toolbar{padding:0 16px 12px}
+.search,.dealer-filter{height:34px}
+.order-grid{height:calc(100vh - 420px);min-height:420px}
+.ag-header-cell-text{color:#fff;font-weight:700}
+.chassis-link{font-size:13px;color:#1f4fbf}
+.pill{font-size:12.5px;padding:2px 7px;border-radius:4px;font-weight:600}
+.pill.danger{color:#fff;background:#d9480f}.pill.warning{color:#5c4300;background:#ffe066}.pill.success{color:#fff;background:#2b8a3e}.pill.info{color:#fff;background:#1c7ed6}
+.xl-stock{display:flex;flex-direction:column;line-height:1.1;justify-content:center}.xl-stock small{color:#8a96a8;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ag-row .xl-stock{flex-direction:row;align-items:baseline;gap:6px}
+/* Schedule (Orderlist) */
+.schedule-panel{border-radius:8px}
+.schedule-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #d9dee7;background:#f8fafc}
+.seg{display:flex;padding:2px;background:#e6eaf1;border-radius:6px}
+.seg button{border:0;background:transparent;padding:5px 10px;border-radius:4px;font-size:13px;color:#4a5870}
+.seg button[aria-pressed="true"]{background:#fff;color:#1f4fbf;font-weight:700;box-shadow:0 1px 3px #14243b1a}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:6px;border:1px solid #d3d9e3;background:#fff;border-radius:999px;padding:2px 10px 2px 2px;font-size:12.5px;color:#33415a}
+.chip i{font-style:normal;min-width:30px;height:22px;border-radius:999px;display:grid;place-items:center;font-weight:800;font-size:12px;padding:0 6px;border:1px solid #0000001a}
+.chip.on{border-color:#1f4fbf;box-shadow:0 0 0 2px #2f5be033;color:#1f4fbf;font-weight:700}
+.schedule-toolbar .search{width:240px;min-width:160px;height:32px}.schedule-toolbar .dealer-filter{height:32px}
+.schedule-toolbar .count-chip{display:flex;align-items:center;gap:5px;margin-left:auto}
+.schedule-grid{height:calc(100vh - 205px);min-height:480px}
+.schedule-grid .week-start{border-top:2px solid #6b7c99!important}
+.schedule-grid .slot-row{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#f4f6fa 6px,#f4f6fa 12px)}
+.schedule-grid .finished-row .ag-cell{color:#8a96a8}
+.xl-rownum{color:#8a96a8;font-size:11.5px;background:#f4f6fa}
+.xl-no{color:#b0b9c6}
+.xl-finished{color:#2b8a3e;font-weight:600}
+.xl-link{border:0;background:none;padding:0;color:#1f4fbf;font-weight:700;font-size:12.5px;text-decoration:underline;text-decoration-color:#1f4fbf40;text-underline-offset:3px}
+.xl-slot{color:#9aa6b8;font-style:italic}
+.compact-msg{margin:8px 12px;padding:8px 12px}
+.user-block a{color:#8ba0c1;display:flex}.user-block a:hover{color:#fff}
+@media(max-width:850px){.action-cards{grid-template-columns:1fr 1fr}.schedule-toolbar .search{width:100%}}
+.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}

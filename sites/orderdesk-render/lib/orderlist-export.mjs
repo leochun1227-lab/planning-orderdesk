@@ -7,6 +7,8 @@ const col=n=>String.fromCharCode(64+n);
 const serial=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)?(Date.parse(v+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000:v;
 const defined=(v,fallback)=>v===undefined||v===null||v===''?fallback:v;
 export function orderlistValues(order,presentation={}){
+  // A reserved empty slot: only its forecast date (A) and dealer (I), like the Orderlist.
+  if(order.slot)return [serial(order.forecastDate),null,null,'',null,'','','',order.dealer||'',...Array(11).fill(null)];
   const a=presentation.aux||{},empty=presentation.emptyDateLabels||{};
   return [serial(defined(order.forecastDate,a.A??null)),serial(defined(order.requestDate,empty.B??null)),defined(order.shipment,a.C??null),order.productionStatus||'',defined(order.vinNumber,a.E??null),/^\d+$/.test(order.modelYear||'')?Number(order.modelYear):order.modelYear||'',order.chassis,order.model||'',order.dealer||'',order.customer||'',serial(defined(order.receivedAt,empty.K??null)),serial(defined(order.sentLongtreeAt,empty.L??null)),serial(defined(order.specAt,empty.M??'No')),serial(defined(order.signedAt,empty.N??'No')),serial(defined(order.purchaseAt,empty.O??'No')),defined(order.priceVersion,a.P??null),defined(order.index1,a.Q??null),defined(order.rank1,a.R??null),defined(order.rank2,a.S??null),serial(defined(order.estimatedSemiReceivedAt,a.T??null))];
 }

@@ -34,7 +34,7 @@ Firebase 不保存 `null` 和空数组，所以这类值会被写成 `"%%null"`�
 1. **Firebase 服务账号**：Firebase 控制台 → 项目设置 → 服务账号 → 生成新的私钥，下载 JSON 文件。
 2. **锁定数据库规则**：Realtime Database → 规则，粘贴 `database.rules.json`（全部拒绝）后发布。服务端用服务账号访问，不受规则限制；外部无法读写。
    > 目前这个库是公开读写的，任何人都能删数据，请尽快锁定。
-3. Render → **New → Blueprint**，选这个仓库，它会读取 `render.yaml`。按提示填写：
+3. Render → **New → Blueprint**，选这个仓库，**Blueprint Path 填 `orderdesk-render/render.yaml`**（仓库根目录的 render.yaml 是另一个版本）。按提示填写：
    - `FIREBASE_SERVICE_ACCOUNT`：粘贴整个 JSON
    - `APP_PASSWORD`：团队登录密码
    - `SESSION_SECRET`、`PLANNING_AGENT_TOKEN` 会自动生成

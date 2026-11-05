@@ -1,0 +1,90 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { forecastResolver, reconcileSchedule, recomputeCalendar, scheduleView } from '../lib/schedule.mjs';
+import { alertFor, excelCells, dueUnsigned, dealerColor, requestMismatch } from '../lib/schedule-colors.mjs';
+const calendar = JSON.parse(readFileSync(new URL('./fixtures/calendar.json', import.meta.url)));
+const expected = JSON.parse(readFileSync(new URL('./fixtures/orderlist-forecast.json', import.meta.url)));
+
+test('forecast dates equal Planning Schedule (4) column A for all 8,947 rows', () => {
+  const f = forecastResolver(calendar);
+  const bad = expected.map((a, i) => [i + 2, a, f(i + 2)]).filter(([, a, b]) => a !== b);
+  assert.deepEqual(bad, []);
+});
+
+test('recomputing the calendar reproduces Excel J and L from row 64 on', () => {
+  const again = recomputeCalendar(calendar);
+  const diff = again.weeks.filter((w, i) => w.row >= 64 && (w.start ?? null) !== (calendar.weeks[i].start ?? null));
+  assert.deepEqual(diff.map(w => w.row), []);
+});
+
+const base = () => ({
+  calendar,
+  schedule: { rows: [{ chassis: 'SRC1', dealer: 'Geelong' }, { chassis: null, dealer: 'Forest Glen' }, { chassis: null, dealer: 'Geelong' }, { chassis: null, dealer: 'Geelong' }], pending: [] },
+  orders: { SRC1: { id: 'SRC1', chassis: 'SRC-1', dealer: 'Geelong', status: 'active' } }, events: {},
+});
+
+test('new order takes its dealer\'s earliest empty slot and gets that row\'s forecast date', () => {
+  const prev = base();
+  const next = { ...prev, orders: { ...prev.orders, SRC2: { id: 'SRC2', chassis: 'SRC-2', dealer: 'Geelong', status: 'active', receivedAt: '2026-11-05' } } };
+  const out = reconcileSchedule(prev, next, { now: '2026-11-05T00:20:00Z' });
+  assert.equal(out.schedule.rows[2].chassis, 'SRC2');
+  assert.equal(out.schedule.rows[3].chassis, null);
+  assert.equal(out.orders.SRC2.slotRow, 4);
+  assert.equal(out.orders.SRC2.forecastDate, forecastResolver(calendar)(4));
+  assert.ok(Object.values(out.events).some(e => e.scheduleAction === 'assigned'));
+  // Idempotent: saving again changes nothing.
+  assert.equal(reconcileSchedule(out, out), out);
+});
+
+test('dealer without an empty slot goes to pending; cancellation clears the row without shifting', () => {
+  const prev = base();
+  const next = { ...prev, orders: { ...prev.orders, SRC9: { id: 'SRC9', chassis: 'SRC-9', dealer: 'Snowy Stock', status: 'active' } } };
+  const out = reconcileSchedule(prev, next);
+  assert.deepEqual(out.schedule.pending, ['SRC9']);
+  const cancelled = { ...out, orders: { ...out.orders, SRC1: { ...out.orders.SRC1, status: 'cancelled', cancelledAt: '2026-11-05' } } };
+  const after = reconcileSchedule(out, cancelled);
+  assert.deepEqual(after.schedule.rows.map(r => r.chassis), [null, null, null, null]);
+  assert.deepEqual(after.schedule.rows.map(r => r.dealer), ['Geelong', 'Forest Glen', 'Geelong', 'Geelong']);
+  // The freed Geelong row is now the earliest Geelong slot.
+  const again = reconcileSchedule(after, { ...after, orders: { ...after.orders, SRC3: { id: 'SRC3', chassis: 'SRC-3', dealer: 'Geelong', status: 'active' } } });
+  assert.equal(again.schedule.rows[0].chassis, 'SRC3');
+});
+
+test('column A colours follow the Excel rule order', () => {
+  const today = '2026-11-05';
+  const order = o => excelCells({ forecastDate: '2027-01-11', order: { receivedAt: '2026-10-01', sentLongtreeAt: '2026-10-01', customer: 'Jane Doe', requestDate: '2027-02-01', ...o } });
+  assert.equal(alertFor(excelCells({ forecastDate: '2027-01-11', order: null }), today), 'red');            // empty slot soon
+  assert.equal(alertFor(excelCells({ forecastDate: '2027-09-06', order: null }), today), null);              // empty slot far away
+  assert.equal(alertFor(order({}), today), 'yellow');                                                         // plans not sent
+  assert.equal(alertFor(order({ specAt: '2026-10-02' }), today), 'lightBlue');                                // waiting signature
+  assert.equal(alertFor(order({ specAt: '2026-10-02', signedAt: '2026-10-05', purchaseAt: '2026-10-05' }), today), null);
+  assert.equal(alertFor(order({ specAt: '2026-10-02', signedAt: '2026-10-05', requestDate: 'ASAP' }), today), 'greyNoRequest');
+  assert.equal(alertFor(order({ specAt: '2026-10-02', signedAt: '2026-10-05', customer: 'Stock' }), today), 'grey');
+  assert.ok(dueUnsigned(order({}), today));
+  assert.ok(!dueUnsigned(order({ requestDate: 'ASAP' }), today));
+  assert.ok(requestMismatch({ ...order({}), D: 'Production Commenced Longtree', B: '2027-04-01' }));
+  assert.deepEqual(dealerColor('auswide'), { background: '#FFFF00', color: '#000' });
+});
+
+test('schedule view lists every row with its forecast date', () => {
+  const v = scheduleView(base());
+  assert.equal(v.length, 4); assert.equal(v[0].order.id, 'SRC1'); assert.equal(v[1].order, null); assert.equal(v[1].excelRow, 3);
+});
+
+test('campervan prefixes are not created as caravan orders (Campervan Schedule)', async () => {
+  const { applyReport } = await import('../lib/order-engine.mjs');
+  const state = { orders: {}, events: {}, imports: {}, meta: {}, refs: { dealers: { '1': 'Geelong' }, dealerNames: [], excluded: [], excludedPrefixes: ['SRV', 'SRM'] } };
+  const rec = chassis => ({ chassis, quoteStatus: 'BUYER ORDERED', description: '2027 SRC16', dealerCode: '1', customer: 'A Person', expectedDate: 'ASAP', sourceRow: 14 });
+  const r = applyReport(state, [rec('SRM266702'), rec('SRV266624'), rec('SRC266999')], { batchId: 'b', fileName: 'f', businessDate: '2026-11-05', reportDate: '2026-11-05', now: '2026-11-05T00:20:00Z' });
+  assert.deepEqual(Object.keys(r.state.orders), ['SRC266999']);
+});
+
+test('a manually kept customer is not overwritten by CRM, but the CRM text is still recorded', async () => {
+  const { applyReport } = await import('../lib/order-engine.mjs');
+  const state = { orders: { SRH263605: { id: 'SRH263605', chassis: 'SRH-263605', dealer: 'Frankston', customer: 'Robert Raymer', customerManual: true, status: 'active', specAt: null, signedAt: null, purchaseAt: null } }, events: {}, imports: {}, meta: {}, refs: { dealers: {}, dealerNames: [], excluded: [] } };
+  const r = applyReport(state, [{ chassis: 'SRH263605', quoteStatus: 'FACTORY DRAWN', description: '2026 SRH16', dealerCode: '1', customer: 'REGENT RV - FRANKSTON', expectedDate: 'ASAP', sourceRow: 14 }], { batchId: 'b', fileName: 'f', businessDate: '2026-11-05', reportDate: '2026-11-05', now: '2026-11-05T00:20:00Z' });
+  assert.equal(r.state.orders.SRH263605.customer, 'Robert Raymer');
+  assert.equal(r.state.orders.SRH263605.crmCustomer, 'REGENT RV - FRANKSTON');
+  assert.equal(r.state.orders.SRH263605.specAt, '2026-11-05');
+});

@@ -45,11 +45,13 @@ export function applyReport(state,records,{batchId,fileName,businessDate,reportD
   const production=state.productionSources?createProductionResolver(state.productionSources):null;
   const grouped=new Map();for(const r of records){const k=normalizeChassis(r.chassis);if(!k||!r.quoteStatus)continue;if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(r);}
   const excluded=new Set(refs.excluded||[]);let count=0;
+  // Campervans (SRV/SRM) live in the separate Campervan Schedule; Updating the schedule never lists them as new orders.
+  const excludedPrefixes=(refs.excludedPrefixes||[]).map(p=>String(p).toUpperCase());
   const summary={id:batchId,fileName,businessDate,reportDate:reportDate||businessDate,processedAt:now,rows:records.length,newCount:0,changedCount:0,cancelledCount:0,reviewCount:0};
   for(const [key,rs] of grouped){
     const old=orders[key];const isCancel=rs.length===1&&rs[0].quoteStatus==='CANCELLED';
     if(isCancel){if(old&&old.status!=='cancelled'){orders[key]={...old,status:'cancelled',cancelledAt:businessDate,updatedAt:now};const id=`${batchId}_${count++}`;events[id]={id,orderId:key,chassis:old.chassis,dealer:old.dealer,type:'cancelled',date:businessDate,at:now,batchId,changes:[{field:'status',before:old.status,after:'cancelled'}],snapshot:{...old},sourceRows:rs.map(r=>r.sourceRow)};summary.cancelledCount++;}continue;}
-    if(excluded.has(key))continue;
+    if(excluded.has(key)||(!old&&excludedPrefixes.some(p=>key.startsWith(p))))continue;
     const active=rs.filter(r=>r.quoteStatus!=='CANCELLED');if(!active.length)continue;const r=active[0];
     if(old?.status==='cancelled'){summary.reviewCount++;continue;}
     const isNew=!old;const dealer=isNew?(refs.dealers?.[r.dealerCode]||''):(old.dealer||'');
@@ -58,13 +60,17 @@ export function applyReport(state,records,{batchId,fileName,businessDate,reportD
     const changes=[];const update=(field,value)=>{if((o[field]??null)!==(value??null)){changes.push({field,before:o[field]??null,after:value??null});o[field]=value;}};
     if(production)update('productionStatus',production(key));
     update('status',statusFromProduction(o.productionStatus,o.status));
-    if(!isNew){update('customer',customerName(r.customer,refs));if(r.description){update('modelYear',r.description.slice(0,4));update('model',r.description.slice(5));}}
+    // customerManual: Planning's own customer record (kept at initialisation, 2026-11-05) is not overwritten by CRM.
+    if(!isNew){if(!o.customerManual)update('customer',customerName(r.customer,refs));if(r.description){update('modelYear',r.description.slice(0,4));update('model',r.description.slice(5));}}
+    // Keep the CRM's own customer text so a 'Stock' classification can be checked; not a business field.
+    const crmCustomer=String(r.customer??'').trim();let touched=false;if(o.crmCustomer!==crmCustomer){o.crmCustomer=crmCustomer;touched=true;}
     const req=requestDay(r.expectedDate),existingRequest=toDay(o.requestDate);
     if(req&&(req!=='ASAP'||!existingRequest||existingRequest==='ASAP'))update('requestDate',req);
     const hasSpec=active.some(r=>r.quoteStatus==='FACTORY DRAWN');const hasSigned=active.some(r=>r.quoteStatus==='BUYER ORDERED');
     if(hasSpec&&!o.specAt)update('specAt',businessDate);
     if(hasSigned&&!o.signedAt){if(!o.specAt)update('specAt',businessDate);update('signedAt',businessDate);}
     if(o.signedAt&&!o.purchaseAt)update('purchaseAt',o.signedAt);
+    if(!isNew&&!changes.length&&touched)orders[key]=o;
     if(isNew||changes.length){o.updatedAt=now;orders[key]=o;const id=`${batchId}_${count++}`;events[id]={id,orderId:key,chassis:o.chassis,dealer:o.dealer,type:isNew?'new':'changed',date:businessDate,at:now,batchId,changes,sourceRows:rs.map(r=>r.sourceRow)};if(isNew)summary.newCount++;else summary.changedCount++;}
   }
   return {state:{...state,orders,events,imports:{...state.imports,[batchId]:summary},meta:{...state.meta,lastImport:summary,updatedAt:now}},summary,duplicate:false};
