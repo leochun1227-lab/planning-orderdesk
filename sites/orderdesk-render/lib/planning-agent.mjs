@@ -1,12 +1,12 @@
 import {applyReport,dayInSydney,reportFingerprint} from './order-engine.mjs';
 import {parseCrmWorkbook} from './crm-workbook.mjs';
 import {MAIL_TARGET,MAX_ATTACHMENT_BYTES} from './outlook-report.mjs';
-import {isFreshMail,MAIL_WINDOW_MS} from '../planning-pc/schedule.mjs';
+import {isFreshMail,mailWindow} from '../planning-pc/schedule.mjs';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
 export function planningAgentStatus(env={},state={},now=new Date()){
   const saved=state.meta?.planningAgent||{};
   const expectedDay=dayInSydney(new Date(now.getTime()-30*60*1000));
-  return {mode:'planning-pc',target:MAIL_TARGET,schedule:'00:20 Australia/Sydney',windowMinutes:30,configured:typeof env.PLANNING_AGENT_TOKEN==='string'&&env.PLANNING_AGENT_TOKEN.length>=32,enabled:env.PLANNING_AGENT_ENABLED==='true',lastCheckedAt:saved.lastCheckedAt||null,lastSuccessAt:saved.lastSuccessAt||null,lastError:saved.lastError||null,lastRun:saved.lastRun||null,stale:!!saved.lastSuccessAt&&dayInSydney(new Date(saved.lastSuccessAt))<expectedDay};
+  return {mode:'planning-pc',target:MAIL_TARGET,schedule:'00:20 Australia/Sydney',window:'Inbox + CRM Report, 00:00 to the scan',windowMinutes:20,configured:typeof env.PLANNING_AGENT_TOKEN==='string'&&env.PLANNING_AGENT_TOKEN.length>=32,enabled:env.PLANNING_AGENT_ENABLED==='true',lastCheckedAt:saved.lastCheckedAt||null,lastSuccessAt:saved.lastSuccessAt||null,lastError:saved.lastError||null,lastRun:saved.lastRun||null,stale:!!saved.lastSuccessAt&&dayInSydney(new Date(saved.lastSuccessAt))<expectedDay};
 }
 async function authorized(request,token){
   if(typeof token!=='string'||token.length<32)return false;
@@ -30,15 +30,15 @@ export async function handlePlanningAgent(request,{env={},read,write,parse=parse
   if(!['plan','verify'].includes(action)&&env.PLANNING_AGENT_ENABLED!=='true')return json({error:'Planning computer import is not enabled'},409);
   try{
     const {state,etag}=await read();if(!state)return json({error:'Initial order data required'},409);
-    if(action==='plan')return json({lastReportDate:state.meta?.lastReportDate||dayInSydney(now),windowStartUtc:new Date(now.getTime()-MAIL_WINDOW_MS).toISOString(),windowEndUtc:now.toISOString(),target:MAIL_TARGET,enabled:env.PLANNING_AGENT_ENABLED==='true'});
+    if(action==='plan')return json({lastReportDate:state.meta?.lastReportDate||dayInSydney(now),...mailWindow(now),target:MAIL_TARGET,enabled:env.PLANNING_AGENT_ENABLED==='true'});
     const at=now.toISOString(),prior=state.meta?.planningAgent||{};
     if(action==='heartbeat'||action==='error'||action==='missing'){
-      const marker=action==='heartbeat'?{lastCheckedAt:at,lastSuccessAt:at,lastError:null}:{lastCheckedAt:at,lastError:action==='missing'?'00:20 检查未收到近 30 分钟内的 CRM 报告，未使用旧邮件':'Planning 电脑读取或上传失败，请检查电脑端日志'};
+      const marker=action==='heartbeat'?{lastCheckedAt:at,lastSuccessAt:at,lastError:null}:{lastCheckedAt:at,lastError:action==='missing'?'00:20 检查未收到当天 00:00 之后的 CRM 报告（Inbox 和 CRM Report 都找过），未使用旧邮件':'Planning 电脑读取或上传失败，请检查电脑端日志'};
       await write({...state,meta:{...state.meta,planningAgent:{...prior,...marker}}},etag);return json({ok:true});
     }
     const scan=request.headers.get('x-scan-started-at'),received=request.headers.get('x-mail-received-at');
     const scanMs=Date.parse(scan||'');
-    if(!Number.isFinite(scanMs)||scanMs>now.getTime()||now.getTime()-scanMs>12*60*1000||!isFreshMail(received,new Date(scanMs-MAIL_WINDOW_MS).toISOString(),scan))return json({error:'Only mail received within the scan\'s preceding 30 minutes is accepted'},400);
+    if(!Number.isFinite(scanMs)||scanMs>now.getTime()||now.getTime()-scanMs>12*60*1000||!isFreshMail(received,mailWindow(new Date(scanMs)).windowStartUtc,new Date(scanMs).toISOString()))return json({error:'Only mail received between 00:00 and the scan (at most 30 minutes) is accepted'},400);
     const report=await parse(await readBytes(request));
     if(report.reportDate>dayInSydney(now))return json({error:'Future report rejected'},400);
     const id=await reportFingerprint(report.records,report.reportDate);

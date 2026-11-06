@@ -1,11 +1,11 @@
 Planning 电脑每日自动读取 CRM 报告（Render 版网站）
 
-作用：每天悉尼时间 00:20，读取经典版 Outlook 中 planning@regentrv.com.au › CRM Report 文件夹里
-近 30 分钟收到的 "Sales Order Report (Customer)" 邮件附件，上传到网站并自动更新订单。只读邮件，不发、不删、不改已读。
+作用：每天悉尼时间 00:20，读取经典版 Outlook 中 planning@regentrv.com.au 的 Inbox（收件箱）和 CRM Report 文件夹里
+当天 00:00 之后收到的 "Sales Order Report (Customer)" 邮件附件，上传到网站并自动更新订单。只读邮件，不发、不删、不改已读。
 
 一、电脑条件
  1. Windows，时区：(UTC+10:00) Canberra, Melbourne, Sydney。
- 2. 经典版 Outlook（不是新版 Outlook），已登录并能看到 Planning 邮箱的 CRM Report 文件夹。
+ 2. 经典版 Outlook（不是新版 Outlook），已登录并能看到 Planning 邮箱的收件箱（不再需要 Outlook 规则把邮件移进 CRM Report）。
  3. 安装 Node.js 22 LTS 或更新版本（https://nodejs.org）。
  4. 每天 00:20 电脑必须开机、联网，用同一个 Windows 用户保持登录（可以锁屏，不能注销）。
     电源选项里允许"唤醒定时器"，或者干脆设置为不睡眠。

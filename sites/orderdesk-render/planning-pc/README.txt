@@ -1,11 +1,11 @@
 Planning 电脑同步程序 — 待目标电脑安装验证
 
-使用这台电脑的经典版 Outlook，读取 Planning / CRM Report 中指定发件人和标题的 Excel 报告，再上传网页。无需 Microsoft 应用注册、租户 ID 或 Microsoft 应用密钥。
+使用这台电脑的经典版 Outlook，读取 Planning 的 Inbox（收件箱）和 CRM Report 中指定发件人和标题的 Excel 报告，再上传网页。无需 Microsoft 应用注册、租户 ID 或 Microsoft 应用密钥。
 当前交付是程序包；尚未在另一台 Planning 电脑安装，尚未发布网页接收接口或配置生产连接。
 
 运行条件
 - Windows 电脑保持开机、联网，使用有 Planning 邮箱访问权的同一个 Windows 用户保持登录。不要注销；重启后需要重新登录。
-- 已安装、登录并配置经典版 Outlook，Planning 邮箱及 CRM Report 文件夹能读取。新版 Outlook 不适用。
+- 已安装、登录并配置经典版 Outlook，Planning 邮箱的收件箱能读取（CRM Report 文件夹可有可无）。新版 Outlook 不适用。
 - Node.js 22.13 或更新版本。使用 Windows PowerShell 5.1 执行下面的配置脚本。
 - 企业脚本策略和 Outlook 自动化访问策略允许此程序；如遇安全提示，由实际用户或管理员处理，不修改策略绕过提示。
 
@@ -23,14 +23,14 @@ Planning 电脑同步程序 — 待目标电脑安装验证
 
 程序行为
 - 只读取邮件及下载附件，不发邮件、不删邮件、不改已读状态，不关闭用户的 Outlook。
-- 固定邮箱 planning@regentrv.com.au、文件夹 CRM Report、标题 Sales Order Report (Customer)、发件人 donotreply@my300375.mail.c4c.saphybriscloud.cn。
-- 只接收本次检查开始前 30 分钟到检查开始时收到的邮件。00:20 的窗口是前一天 23:50 至当天 00:20。电脑端和网页端都检查接收时间。不会用旧邮件补足；没有新报告时记录“未收到”，不报同步成功。
+- 固定邮箱 planning@regentrv.com.au、文件夹 Inbox + CRM Report（同一封邮件只算一次）、标题 Sales Order Report (Customer)、发件人 donotreply@my300375.mail.c4c.saphybriscloud.cn。
+- 只接收当天 00:00 到检查开始时收到的邮件（最长 30 分钟）。00:20 的窗口是当天 00:00 至 00:20；任务晚几分钟启动（00:20-00:29）也照常运行。电脑端和网页端都检查接收时间。不会用旧邮件补足；没有新报告时记录“未收到”，不报同步成功。
 - 按附件内部报告日期排序，先校验所有附件再依次导入；重复内容不重复更新。报告日期不能替代邮件接收时间来通过新鲜度检查。
 - 沿用网页 Dealer 保留、Customer 归类、历史日期保护、Request date、完成和取消规则。
 - 上传令牌只能访问该程序专用接口；数据库加密密钥留在网页服务器，不发给 Planning 电脑。
 - 每次找到新鲜报告并完整处理后才上报成功；失败或没收到报告不伪报成功。每日 00:30 后仍没有当日成功记录时，网页提示未按时同步。
 - 日志在 last-run.json。每次运行的临时附件只保存在本目录下 .runs 中，结束后清理本次目录。
-- 一个报告作为一个原子提交；批次中途失败时之前已成功的报告保留，已过 30 分钟的邮件不会在之后自动补抓。
+- 一个报告作为一个原子提交；批次中途失败时之前已成功的报告保留，窗口之外的邮件不会在之后自动补抓。
 
 常见处理
 - 找不到 Planning 或出现多个匹配：由安装人员确认 Outlook StoreId，再配置 StoreId。不能随意选择另一个邮箱。

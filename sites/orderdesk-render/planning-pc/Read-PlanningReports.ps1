@@ -2,11 +2,13 @@ param([Parameter(Mandatory=$true)][string]$SinceUtc,[Parameter(Mandatory=$true)]
 $ErrorActionPreference='Stop'
 $mailbox='planning@regentrv.com.au'
 $folderName='CRM Report'
+$folderLabel='Inbox + CRM Report'
 $sender='donotreply@my300375.mail.c4c.saphybriscloud.cn'
 $subject='Sales Order Report (Customer)'
 $since=[DateTimeOffset]::Parse($SinceUtc).UtcDateTime
 $until=[DateTimeOffset]::Parse($UntilUtc).UtcDateTime
-if(($until-$since).TotalMinutes -ne 30){throw 'Exactly a 30-minute receive window is required'}
+$minutes=($until-$since).TotalMinutes
+if($minutes -lt 0 -or $minutes -gt 30){throw 'The receive window must be 0-30 minutes (00:00 to the scan)'}
 $output=[IO.Path]::GetFullPath($OutputDirectory)
 if(-not(Test-Path -LiteralPath $output -PathType Container)){throw 'Output directory does not exist'}
 $app=$null
@@ -25,19 +27,25 @@ try {
   if($session.Offline){throw 'Outlook is offline'}
   $queue=New-Object 'System.Collections.Generic.Queue[object]'
   $queue.Enqueue($selected[0].GetRootFolder())
-  $matches=New-Object 'System.Collections.Generic.List[object]'
+  $crmFolders=New-Object 'System.Collections.Generic.List[object]'
   $visited=0
   while($queue.Count -gt 0){
     if(++$visited -gt 1000){throw 'Folder scan limit exceeded'}
     $current=$queue.Dequeue()
-    if($current.Name -ieq $folderName){$matches.Add($current)}
+    if($current.Name -ieq $folderName){$crmFolders.Add($current)}
     foreach($child in $current.Folders){$queue.Enqueue($child)}
   }
-  if($matches.Count -ne 1){throw 'CRM Report folder is missing or ambiguous'}
-  $items=$matches[0].Items
-  $items.Sort('[ReceivedTime]',$true)
+  if($crmFolders.Count -gt 1){throw 'CRM Report folder is ambiguous'}
+  # The nightly report lands in the Inbox first; a rule may or may not have moved it to CRM Report yet.
+  $folders=New-Object 'System.Collections.Generic.List[object]'
+  $folders.Add($selected[0].GetDefaultFolder(6))
+  foreach($folder in $crmFolders){$folders.Add($folder)}
+  $seen=New-Object 'System.Collections.Generic.HashSet[string]'
   $reports=New-Object 'System.Collections.Generic.List[object]'
   $scanned=0
+  foreach($folder in $folders){
+  $items=$folder.Items
+  $items.Sort('[ReceivedTime]',$true)
   foreach($item in $items){
     if(++$scanned -gt 10000){throw 'Message scan limit exceeded'}
     if($item.Class -ne 43){continue}
@@ -48,6 +56,7 @@ try {
     $address=$item.SenderEmailAddress
     if($item.SenderEmailType -eq 'EX'){$exchangeUser=$item.Sender.GetExchangeUser();if($exchangeUser){$address=$exchangeUser.PrimarySmtpAddress}}
     if($address -ine $sender){continue}
+    if(-not $seen.Add($item.EntryID)){continue}
     $files=@($item.Attachments | Where-Object {$_.Type -eq 1 -and $_.FileName -match '\.xlsx$'})
     if($files.Count -ne 1){throw 'A CRM email has no unique XLSX attachment'}
     if($files[0].Size -gt 10485760){throw 'CRM attachment exceeds 10 MB'}
@@ -56,9 +65,10 @@ try {
     try{$id=([BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($item.EntryID)))).Replace('-','').ToLowerInvariant()}finally{$hash.Dispose()}
     $path=Join-Path $output ($id+'.xlsx')
     $files[0].SaveAsFile($path)
-    $reports.Add([PSCustomObject]@{file=$id+'.xlsx';receivedAt=$received.ToString('o')})
+    $reports.Add([PSCustomObject]@{file=$id+'.xlsx';receivedAt=$received.ToString('o');folder=$folder.Name})
   }
-  $manifest=[PSCustomObject]@{mailbox=$mailbox;folder=$folderName;reports=@($reports.ToArray());checkedAt=[DateTime]::UtcNow.ToString('o')}
+  }
+  $manifest=[PSCustomObject]@{mailbox=$mailbox;folder=$folderLabel;reports=@($reports.ToArray());checkedAt=[DateTime]::UtcNow.ToString('o')}
   [IO.File]::WriteAllText((Join-Path $output 'manifest.json'),($manifest|ConvertTo-Json -Depth 5),(New-Object Text.UTF8Encoding($false)))
 } catch {
   [Console]::Error.WriteLine('Classic Outlook collection failed: '+$_.Exception.Message)
