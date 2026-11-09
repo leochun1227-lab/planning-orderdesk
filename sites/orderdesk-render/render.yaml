@@ -32,3 +32,11 @@ services:
         generateValue: true
       - key: PLANNING_AGENT_ENABLED
         value: "false"                  # set to true after the PC's read-only verification passes
+      - key: LONGTREE_APP_ID            # Feishu app for Longtree 生产海运总表 (产线 page)
+        sync: false
+      - key: LONGTREE_APP_SECRET
+        sync: false
+      - key: PROD_REPORT_EMAIL          # AU production API (prodReport) sign-in
+        sync: false
+      - key: PROD_REPORT_PASSWORD
+        sync: false

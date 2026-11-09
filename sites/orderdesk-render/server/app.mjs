@@ -12,6 +12,7 @@ import { applyReport, dayInSydney, reportFingerprint, importProductionSources } 
 import { buildOrderlist } from '../lib/orderlist-export.mjs';
 import { forecastResolver } from '../lib/schedule.mjs';
 import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
+import { createProductionLineSource, buildProductionLine, STAGES } from '../lib/production-line.mjs';
 import { handlePlanningAgent, planningAgentStatus } from '../lib/planning-agent.mjs';
 import { syncMail, mailConfig, mailStatus } from '../lib/mail-sync.mjs';
 import { MailSyncError } from '../lib/outlook-report.mjs';
@@ -76,6 +77,18 @@ export function createApp({ store, auth, env = process.env }) {
   app.get('/api/campervan-plan', async () => {
     try { return json(await campervanPlan.current()); }
     catch (e) { return json({ error: message(e, 'Dealer Portal 排产暂时读取不到'), plan: {} }, 502); }
+  });
+
+  // Production line (产线): Longtree + AU production API + Portal GR/GI, read-only, cached 15 minutes.
+  const productionLine = createProductionLineSource(env);
+  if (env.NODE_ENV === 'production') productionLine.current().catch(() => {}); // warm up at start
+  app.get('/api/production-line', async c => {
+    try {
+      const sources = await productionLine.current({ force: c.req.query('refresh') === '1' });
+      const { state } = await store.readState();
+      const line = buildProductionLine({ orders: state?.orders || {}, ...sources, today: dayInSydney(new Date()) });
+      return json({ ...line, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
+    } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
   });
 
   app.get('/api/orders', async c => {
