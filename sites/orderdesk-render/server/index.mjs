@@ -10,7 +10,7 @@ const env = process.env;
 const firebase = createFirebase(env);
 const store = createStore(firebase, { root: env.FIREBASE_ROOT || 'orderdesk/v2' });
 const auth = createAuth(env);
-const app = createApp({ store, auth, env });
+const app = createApp({ store, auth, env, firebase });
 const port = Number(env.PORT) || 3000;
 
 serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, () => {

@@ -14,6 +14,8 @@ import { forecastResolver } from '../lib/schedule.mjs';
 import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { createProductionLineSource, buildProductionLine, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
+import { createSapSource, SAP_MAX_BYTES } from '../lib/sap-grgi.mjs';
+import { agentAuthorized } from '../lib/planning-agent.mjs';
 import { handlePlanningAgent, planningAgentStatus } from '../lib/planning-agent.mjs';
 import { syncMail, mailConfig, mailStatus } from '../lib/mail-sync.mjs';
 import { MailSyncError } from '../lib/outlook-report.mjs';
@@ -25,7 +27,7 @@ const noStore = { 'Cache-Control': 'private, no-store' };
 const json = (body, status = 200, headers = noStore) => Response.json(body, { status, headers });
 const message = (e, fallback) => (e instanceof Error ? e.message : fallback);
 
-export function createApp({ store, auth, env = process.env }) {
+export function createApp({ store, auth, env = process.env, firebase = null }) {
   const app = new Hono();
   const secureCookie = env.NODE_ENV === 'production';
   const sameOrigin = c => { const origin = c.req.header('origin'); return !!origin && origin === new URL(c.req.url).origin; };
@@ -52,6 +54,19 @@ export function createApp({ store, auth, env = process.env }) {
 
   // ---- Planning computer endpoint: bearer token, no browser session ----
   app.post('/api/planning-agent', c => handlePlanningAgent(c.req.raw, { env, read: () => store.readState(), write: (state, etag) => store.writeState(state, etag) }));
+  const sap = createSapSource(firebase);
+  // SAP GR / GI pushed by the in-network computer (same token as the Planning-PC mail import).
+  app.post('/api/sap-grgi', async c => {
+    if (!await agentAuthorized(c.req.raw, env.PLANNING_AGENT_TOKEN)) return json({ error: 'Agent authorization required' }, 401);
+    if (env.PLANNING_AGENT_ENABLED !== 'true') return json({ error: 'Planning computer import is not enabled' }, 409);
+    if (Number(c.req.header('content-length')) > SAP_MAX_BYTES) return json({ error: 'Upload too large' }, 413);
+    try {
+      const text = await c.req.text();
+      if (text.length > SAP_MAX_BYTES) return json({ error: 'Upload too large' }, 413);
+      return json({ ok: true, ...(await sap.save(JSON.parse(text))) });
+    } catch (e) { return json({ error: message(e, 'SAP 数据保存失败') }, 400); }
+  });
+
 
   // ---- sign in ----
   app.get('/login', c => c.html(loginPage({ returnTo: c.req.query('return_to') || '/' })));
@@ -83,7 +98,7 @@ export function createApp({ store, auth, env = process.env }) {
   });
 
   // Production line (产线): Longtree + AU production API + Portal GR/GI, read-only, cached 15 minutes.
-  const productionLine = createProductionLineSource(env, { portal });
+  const productionLine = createProductionLineSource(env, { portal, sap });
   if (env.NODE_ENV === 'production') productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); // warm up at start
   app.get('/api/production-line', async c => {
     try {

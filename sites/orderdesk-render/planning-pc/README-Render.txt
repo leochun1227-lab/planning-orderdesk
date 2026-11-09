@@ -34,3 +34,23 @@ Planning 电脑每日自动读取 CRM 报告（Render 版网站）
 
 暂停：任务计划程序里禁用 "OrderDesk Planning CRM Reader"，或把 PLANNING_AGENT_ENABLED 改回 false。
 没收到报告/失败时不会用旧邮件补；网站会提示未按时同步，可以手动在网站"导入报告"补上。
+
+==================== SAP GR / GI（产线页面） ====================
+网站在 Render 上连不到公司内网的 SAP HANA（10.11.2.25），所以由一台内网电脑定时查询后推给网站。
+SQL 与 Planning Schedule 工作簿里 Power Query 的 "GR"、"PGI" 两个查询完全相同，只读，不改 SAP。
+
+这台电脑需要：能连 SAP HANA、装有 64 位 SAP HANA ODBC 驱动（HDBODBC）、已经配置过本文件夹的网站令牌（agent-settings.json）。
+
+1) 配置（只做一次；密码只给当前 Windows 用户加密保存在本机）：
+   .\Configure-Sap.ps1
+2) 只读检查（不发送）：
+   .\Sync-SapGrGi.ps1 -VerifyOnly
+   看 sap-last-run.json：ok 为 true，grRows / giRows 有数字。
+3) 手动发送一次：
+   .\Sync-SapGrGi.ps1
+4) 安装定时任务（默认每天 06:40、09:40、12:40、15:40、18:40）：
+   .\Install-SapTask.ps1
+   重装：.\Install-SapTask.ps1 -Replace
+
+网站产线页面上方的 "SAP GR/GI（内网电脑）" 显示最近一次推送时间。
+GR/GI 以 SAP 为准；SAP 没有的车才用 Portal 的 TMS / DateTrack / pgirecord 补。

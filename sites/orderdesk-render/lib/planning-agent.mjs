@@ -8,6 +8,7 @@ export function planningAgentStatus(env={},state={},now=new Date()){
   const expectedDay=dayInSydney(new Date(now.getTime()-30*60*1000));
   return {mode:'planning-pc',target:MAIL_TARGET,schedule:'00:20 Australia/Sydney',window:'Inbox + CRM Report, 00:00 to the scan',windowMinutes:20,configured:typeof env.PLANNING_AGENT_TOKEN==='string'&&env.PLANNING_AGENT_TOKEN.length>=32,enabled:env.PLANNING_AGENT_ENABLED==='true',lastCheckedAt:saved.lastCheckedAt||null,lastSuccessAt:saved.lastSuccessAt||null,lastError:saved.lastError||null,lastRun:saved.lastRun||null,stale:!!saved.lastSuccessAt&&dayInSydney(new Date(saved.lastSuccessAt))<expectedDay};
 }
+export const agentAuthorized=(request,token)=>authorized(request,token);
 async function authorized(request,token){
   if(typeof token!=='string'||token.length<32)return false;
   const supplied=request.headers.get('authorization')||'';

@@ -5,6 +5,8 @@
 import { PORTAL_BOARD_SOURCES, PORTAL_DATABASE_URL } from './campervan-plan.mjs';
 
 export const PORTAL_TTL_MS = 2 * 60 * 60 * 1000;
+// Extra nodes for 产线 only (not used by the board code): TMS containers carry SAP GR at plant 3111 (~2.4 MB).
+export const PORTAL_EXTRA_SOURCES = [['tms', 'tmssystem/containers']];
 
 export function createPortalSource({ url = PORTAL_DATABASE_URL, ttlMs = PORTAL_TTL_MS, fetcher = fetch } = {}) {
   const base = url.replace(/\/+$/, '');
@@ -16,7 +18,7 @@ export function createPortalSource({ url = PORTAL_DATABASE_URL, ttlMs = PORTAL_T
   }
   async function load() {
     try {
-      const raw = Object.fromEntries(await Promise.all(PORTAL_BOARD_SOURCES.map(async ([name, path]) => [name, await get(path)])));
+      const raw = Object.fromEntries(await Promise.all([...PORTAL_BOARD_SOURCES, ...PORTAL_EXTRA_SOURCES].map(async ([name, path]) => [name, await get(path)])));
       copy = { at: new Date().toISOString(), raw }; error = '';
     } catch (e) { error = e instanceof Error ? e.message : String(e); if (!copy) throw e; }
     return copy;
