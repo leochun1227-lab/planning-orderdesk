@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, ListFilter, RefreshCw, AlertTriangle } from 'lucide-react';
 
 type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
-type Live = { stage: string; since: string; days: number | null; weldAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; atd: string; ata: string; notes: Record<string, string>; grAt: string; giAt: string; location: string; station: string; flags: string[]; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
+type Live = { stage: string; since: string; days: number | null; inLongtree: boolean; orderAt: string; weldAt: string; furnitureAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; etd: string; atd: string; eta: string; ata: string; notes: Record<string, string>;
+  grAt: string; grSource: string; giAt: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
+type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
-  liveStageName?: string; liveTone?: string;
+  liveStageName?: string; liveTone?: string; v?: View;
   id: string; chassis: string; empty: boolean; line: string; source: string; group: string; status: string; dealer: string; model: string; range: string; customer: string; orderId: string;
   production: null | { status: string; stage: string; location: string };
   cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
@@ -26,6 +28,7 @@ const CHIPS = [
   { id: 'overdue', zh: '已过国内计划上线日', en: 'Past CN plan start', test: (r: Row) => r.overdue },
   { id: 'station', zh: '同一工位 >14 天', en: 'Same station >14d', test: (r: Row) => (r.live?.daysAtStation ?? 0) > 14 },
   { id: 'noGr', zh: '到港未 GR >14 天', en: 'Arrived, no GR >14d', test: (r: Row) => r.live?.stage === 'seaArrived' && (r.live.days ?? 0) > 14 },
+  { id: 'differs', zh: '初步判断与 Portal 不同', en: 'Live differs from Portal', test: (r: Row) => Boolean(r.v?.differs) },
   { id: 'warn', zh: '有字段待补', en: 'Has warnings', test: (r: Row) => r.warnings.length > 0 },
 ] as const;
 
@@ -41,6 +44,27 @@ function OnlineDate({ actual, expected, baseline, zh }: { actual: string; expect
   return <div className="pl-two" title={actual ? `${zh ? '源数据实际日期' : 'Actual'}：${actual}` : `${zh ? '预计日期；原计划' : 'Expected; baseline'}：${baseline || '—'}`}>
     <strong>{actual || expected || '—'}</strong>
     <small><span className={`pl-kind ${actual ? 'actual' : ''}`}>{actual ? (zh ? '实际' : 'Actual') : expected ? (zh ? '预计' : 'Expected') : (zh ? '待补日期' : 'No date')}</span>{!actual && baseline && baseline !== expected ? ` ${zh ? '原计划' : 'plan'} ${baseline}` : ''}</small></div>;
+}
+
+const LT_NODES: [keyof Live, string, string][] = [['ata', '实际到港', 'Arrived AU port'], ['atd', '实际离港', 'Left CN port'], ['shippedAt', '发运', 'Shipped'], ['finishedAt', '总装入库', 'Finished'], ['assemblyAt', '总装上线', 'Assembly'], ['furnitureAt', '家具上线', 'Furniture'], ['weldAt', '钣焊上线', 'Welding'], ['orderAt', '订单接收', 'Order received']];
+const LOCATION_ZH: Record<string, string> = { received: '已接收', 'pre-assembly': '预装', production: '生产', qc: '质检', transport: '待运输' };
+const LIVE_PHASE: Record<string, string> = { cnWaiting: 'plan', cnWelding: 'cn', cnAssembly: 'cn', cnFinished: 'cn', cnShipped: 'sea', seaPort: 'sea', seaOnWater: 'sea', seaArrived: 'sea', auFactory: 'au', gi: 'done' };
+/** The four live facts as plain results, plus a first reading that does not change the Portal group. */
+function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => string, groupName: (id: string) => string): View | undefined {
+  const l = r.live; if (!l) return undefined;
+  const node = LT_NODES.find(([f]) => { const d = l[f] as string; return d && d <= today; });
+  const future = !node ? '' : '';
+  const ltSub = !l.inLongtree ? '' : l.atd && !l.ata ? `${zh ? '预计到港' : 'ETA'} ${l.eta || '—'}` : l.shippedAt && !l.atd ? `${zh ? '预计离港' : 'ETD'} ${l.etd || '—'}` : Object.values(l.notes || {})[0] || future;
+  const phase = LIVE_PHASE[l.stage], board = ['au', 'sea', 'cn'].includes(r.group) ? r.group : 'plan';
+  const differs = phase !== board && !(phase === 'done' && board === 'au');
+  return {
+    grText: l.grAt ? (zh ? '已 GR' : 'GR done') : (zh ? '未 GR' : 'No GR'), grSub: l.grAt ? `${l.grAt} · ${l.grSource}` : '',
+    giText: l.giAt ? (zh ? '已 GI' : 'GI done') : (zh ? '未 GI' : 'No GI'), giSub: l.giAt || '',
+    ltText: !l.inLongtree ? (zh ? '飞书无此车' : 'Not in Longtree') : node ? `${zh ? node[1] : node[2]} · ${l[node[0]]}` : (zh ? '未开始' : 'Not started'), ltSub,
+    prodText: l.inProduction ? `${zh ? LOCATION_ZH[l.location] || l.location : l.location} · ${l.station || '—'}` : (zh ? '生产系统无此车' : 'Not in production API'),
+    prodSub: l.inProduction ? `${zh ? '工位' : 'Station'} ${l.daysAtStation ?? '—'} ${zh ? '天' : 'd'}${l.enteredAt ? ` · ${zh ? '进厂' : 'in'} ${l.enteredAt}` : ''}` : '',
+    judge: stageName(l.stage), judgeSub: differs ? `Portal：${groupName(r.group)}` : (l.days != null ? `${l.days} ${zh ? '天' : 'd'}` : ''), judgeTone: '', differs,
+  };
 }
 
 export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; onOpenOrder: (id: string) => void }) {
@@ -62,7 +86,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const groupOf = (id: string) => groups.find(g => g.id === id);
   const stageName = (id?: string) => { const s = data?.stages.find(x => x.id === id); return s ? (zh ? s.zh : s.en) : ''; };
   const stageTone = (id?: string) => STAGE_TONE[data?.stages.find(x => x.id === id)?.group || 'cn'];
-  const rows = useMemo(() => (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '' })), [data, zh]);
+  const groupName = (id: string) => { const x = groups.find(g => g.id === id); return x ? (zh ? x.zh : x.en) : id; };
+  const rows = useMemo(() => (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName) })), [data, zh]);
   const searching = query.trim().length > 0;
   const base = useMemo(() => rows.filter(r => (line === 'All' || r.line === line) && (!dealer || r.dealer === dealer)), [rows, line, dealer]);
   const counts = useMemo(() => Object.fromEntries(groups.map(g => [g.id, base.filter(r => r.group === g.id).length])), [base, groups]);
@@ -80,12 +105,10 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const g = groupOf(group);
   const band = (ids: string[]) => ids.reduce((n, id) => n + (counts[id] || 0), 0);
 
-  const live = (id: string, label: string, get: (l: Live) => string | number | null | undefined, extra: Partial<ColDef<Row>> = {}): ColDef<Row> =>
-    ({ colId: id, headerName: label, width: 88, valueGetter: p => (p.data?.live ? get(p.data.live) ?? '' : ''), ...extra });
   const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => [
     { headerName: zh ? 'Portal · 上线 / 车辆' : 'Portal · start / vehicle', children: [
-      { colId: 'cnStart', headerName: zh ? '国内上线时间' : 'CN start', pinned: 'left', width: 118, valueGetter: p => p.data?.cnActual || p.data?.cnStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.cnActual} expected={p.data.cnStart} baseline={p.data.cnPlanStart} /> },
-      { colId: 'auStart', headerName: zh ? '澳洲上线时间' : 'AU start', pinned: 'left', width: 118, valueGetter: p => p.data?.auActual || p.data?.auStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.auActual} expected={p.data.auStart} baseline={p.data.auPlanStart} /> },
+      { colId: 'cnStart', headerName: zh ? '国内上线时间' : 'CN start', pinned: 'left', width: 150, valueGetter: p => p.data?.cnActual || p.data?.cnStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.cnActual} expected={p.data.cnStart} baseline={p.data.cnPlanStart} /> },
+      { colId: 'auStart', headerName: zh ? '澳洲上线时间' : 'AU start', pinned: 'left', width: 150, valueGetter: p => p.data?.auActual || p.data?.auStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.auActual} expected={p.data.auStart} baseline={p.data.auPlanStart} /> },
       { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two"><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></div> },
     ] },
     { headerName: zh ? 'Dealer Portal 排产（与 Portal 一致）' : 'Dealer Portal board (same as Portal)', children: [
@@ -105,22 +128,14 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         valueGetter: (p: any) => !p.data ? '' : p.data.empty ? (p.data.dealer ? (zh ? '等待车架号' : 'Waiting for chassis') : (zh ? '待分配 Dealer / 车架号' : 'Needs dealer / chassis')) : group === 'customers' ? (zh ? '待匹配 slot' : 'Needs slot') : group === 'later' ? (p.data.cnPlanStart ? (zh ? '60 天以外' : 'Beyond 60 days') : (zh ? '计划日期待补' : 'Plan date missing')) : p.data.locked ? (zh ? '已确认锁定' : 'Locked') : (zh ? '待确认' : 'To confirm'),
         cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.overdue ? 'overdue' : 'neutral'}`}>{p.value}</span>{p.data.overdue && <small className="pl-delay">{zh ? '已过国内计划上线日' : 'Past CN plan start'}</small>}</div> } as ColDef<Row>] : []),
     ] },
-    { headerName: zh ? '实时 · Longtree / 澳洲工厂 / SAP' : 'Live · Longtree / AU factory / SAP', children: [
-      { field: 'liveStageName', headerName: zh ? '当前节点' : 'Live stage', width: 104, cellRenderer: (p: any) => p.value ? <span className="pl-stage" style={{ background: p.data.liveTone }}>{p.value}</span> : null },
-      live('liveDays', zh ? '本节点天数' : 'Days', l => l.days, { width: 66, type: 'numericColumn' }),
-      live('weldAt', zh ? '钣焊上线' : 'Welding', l => l.weldAt || l.notes?.weldAt),
-      live('assemblyAt', zh ? '总装上线' : 'Assembly', l => l.assemblyAt || l.notes?.assemblyAt),
-      live('finishedAt', zh ? '总装入库' : 'Finished', l => l.finishedAt || l.notes?.finishedAt),
-      live('shippedAt', zh ? '发运' : 'Shipped', l => l.shippedAt || l.notes?.shippedAt),
-      live('atd', zh ? '实际离港' : 'ATD', l => l.atd), live('ata', zh ? '实际到港' : 'ATA', l => l.ata),
-      live('grAt', 'GR', l => l.grAt),
-      live('location', zh ? '实时库位' : 'Live location', l => l.location, { width: 92 }),
-      live('station', zh ? '实时工位' : 'Live station', l => l.station, { width: 120 }),
-      live('daysAtStation', zh ? '工位天数' : 'Days at station', l => l.daysAtStation, { width: 66, type: 'numericColumn', cellClass: p => (p.value ?? 0) > 14 ? 'pl-late' : '' }),
-      live('flags', zh ? '标记' : 'Flags', l => l.flags.join(' '), { width: 76, cellRenderer: (p: any) => <span className="pl-flags">{(p.data?.live?.flags || []).map((f: string, i: number) => <i key={i} style={{ background: FLAG_COLORS[f]?.[0] || '#868e96', color: FLAG_COLORS[f]?.[1] || '#fff' }}>{f}</i>)}</span> }),
-      live('giAt', 'GI', l => l.giAt),
-      { field: 'customer', headerName: zh ? '客户' : 'Customer', width: 120 },
-      { colId: 'warnings', headerName: zh ? '提示' : 'Warnings', width: 160, valueGetter: p => (p.data?.warnings || []).join('；'), tooltipValueGetter: p => p.value || undefined, cellClass: 'pl-warn' },
+    { headerName: zh ? '实时 · 四个来源（只列结果，不改 Portal 分组）' : 'Live · four sources (results only)', children: [
+      { colId: 'gr', headerName: 'GR', width: 150, valueGetter: p => p.data?.v?.grSub || p.data?.v?.grText || '', cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className={`pl-yes ${p.data.live.grAt ? 'on' : ''}`}>{p.data.v.grText}</span><small>{p.data.v.grSub}</small></div> },
+      { colId: 'gi', headerName: 'GI', width: 104, valueGetter: p => p.data?.v?.giSub || p.data?.v?.giText || '', cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className={`pl-yes ${p.data.live.giAt ? 'on' : ''}`}>{p.data.v.giText}</span><small>{p.data.v.giSub}</small></div> },
+      { colId: 'longtree', headerName: zh ? '飞书 Longtree' : 'Longtree (Feishu)', width: 176, valueGetter: p => p.data?.v?.ltText || '', tooltipValueGetter: p => p.data?.v?.ltSub || undefined, cellRenderer: (p: any) => p.data?.v && <Two top={p.data.v.ltText} sub={p.data.v.ltSub} /> },
+      { colId: 'production', headerName: zh ? 'Production API（Rafael）' : 'Production API (Rafael)', width: 262, valueGetter: p => p.data?.v?.prodText || '',
+        cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span>{p.data.v.prodText}</span><small>{p.data.v.prodSub}{(p.data.live.flags || []).length > 0 && <span className="pl-flags" style={{ marginLeft: 6 }}>{p.data.live.flags.map((f: string, i: number) => <i key={i} style={{ background: FLAG_COLORS[f]?.[0] || '#868e96', color: FLAG_COLORS[f]?.[1] || '#fff' }}>{f}</i>)}</span>}</small></div> },
+      { colId: 'judge', headerName: zh ? '初步判断' : 'First reading', width: 140, valueGetter: p => p.data?.v?.judge || '',
+        cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className="pl-stage" style={{ background: p.data.liveTone, alignSelf: 'flex-start' }}>{p.data.v.judge}</span><small className={p.data.v.differs ? 'pl-delay' : ''}>{p.data.v.judgeSub}</small></div> },
     ] },
   ], [zh, group, exec, searching, data]);
 

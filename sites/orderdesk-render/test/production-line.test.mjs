@@ -27,10 +27,11 @@ test('prodReport rows give location, station, flags and station time (Sydney)', 
   assert.equal(r.enteredAt, '2026-10-12'); assert.equal(r.stationSince.slice(0, 10), '2026-11-04');
 });
 
-test('Portal GR/GI: dd/mm/yyyy, 01/01/1970 placeholders ignored, SAP GR as fallback', () => {
-  const m = parsePortal({ a: { 'Chassis Number': 'SRC-1', 'Received in Melbourne': '30/04/2025', GRPURCHASEORDER: '01/01/1970' }, b: { 'Chassis Number': 'SRC2', 'Received in Melbourne': '01/01/1970' } }, { SRC1: { pgidate: '05/05/2025' }, SRC2: { pgidate: '<NA>', grDateLast: '12/10/2026' } });
-  assert.deepEqual(m.get('SRC1'), { grAt: '2025-04-30', giAt: '2025-05-05' });
-  assert.deepEqual(m.get('SRC2'), { grAt: '2026-10-12', giAt: '' });
+test('Portal GR/GI: dd/mm/yyyy, 01/01/1970 placeholders ignored, SAP GR first, DateTrack when SAP has none', () => {
+  const m = parsePortal({ a: { 'Chassis Number': 'SRC-1', 'Received in Melbourne': '30/04/2025', GRPURCHASEORDER: '01/01/1970' }, b: { 'Chassis Number': 'SRC2', 'Received in Melbourne': '01/01/1970' }, c: { 'Chassis Number': 'SRC3', 'Received in Melbourne': '02/05/2025' } }, { SRC1: { pgidate: '05/05/2025' }, SRC2: { pgidate: '<NA>', grDateLast: '12/10/2026' }, SRC3: { grDateLast: '01/05/2025' } });
+  assert.deepEqual(m.get('SRC1'), { grAt: '2025-04-30', grSource: 'DateTrack', giAt: '2025-05-05' });
+  assert.deepEqual(m.get('SRC2'), { grAt: '2026-10-12', grSource: 'SAP', giAt: '' });
+  assert.deepEqual(m.get('SRC3'), { grAt: '2025-05-01', grSource: 'SAP', giAt: '' });
 });
 
 test('stage: latest node wins; AU factory report counts before GR; future dates do not count', () => {

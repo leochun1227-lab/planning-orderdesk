@@ -97,25 +97,26 @@ export function parseProdReport(rows) {
   return out;
 }
 const portalDay = text => { const m = String(text || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? iso(+m[3], +m[2], +m[1]) : ''; };
-/** Dealer Portal datetrack + pgirecord → Map chassis → {grAt, giAt}. 01/01/1970 placeholders are ignored. */
+/** Dealer Portal datetrack + pgirecord → Map chassis → {grAt, grSource, giAt}. SAP GR (pgirecord) first,
+ *  DateTrack "Received in Melbourne" when SAP has none. 01/01/1970 placeholders are ignored. */
 export function parsePortal(datetrack, pgirecord) {
   const out = new Map();
-  const get = c => out.get(c) || out.set(c, { grAt: '', giAt: '' }).get(c);
-  for (const [k, v] of Object.entries(datetrack || {})) {
-    if (!v || typeof v !== 'object') continue;
-    const c = normalizeChassis(v['Chassis Number'] || k); if (!c) continue;
-    const gr = portalDay(v['Received in Melbourne']); if (gr > '1971') get(c).grAt = gr;
-  }
+  const get = c => out.get(c) || out.set(c, { grAt: '', grSource: '', giAt: '' }).get(c);
   for (const [k, v] of Object.entries(pgirecord || {})) {
     if (!v || typeof v !== 'object') continue;
     const c = normalizeChassis(k); if (!c) continue;
     const row = get(c);
     const gi = portalDay(v.pgidate); if (gi > '1971') row.giAt = gi;
-    const gr = portalDay(v.grDateLast); if (!row.grAt && gr > '1971') row.grAt = gr;
+    const gr = portalDay(v.grDateLast); if (gr > '1971') { row.grAt = gr; row.grSource = 'SAP'; }
+  }
+  for (const [k, v] of Object.entries(datetrack || {})) {
+    if (!v || typeof v !== 'object') continue;
+    const c = normalizeChassis(v['Chassis Number'] || k); if (!c) continue;
+    const gr = portalDay(v['Received in Melbourne']);
+    if (gr > '1971' && !get(c).grAt) { get(c).grAt = gr; get(c).grSource = 'DateTrack'; }
   }
   return out;
 }
-
 const daysBetween = (from, to) => (from && to ? Math.round((Date.parse(to.slice(0, 10)) - Date.parse(from.slice(0, 10))) / 86400000) : null);
 
 /** Stage of one vehicle, Portal rule order (latest node first). */
@@ -166,9 +167,10 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       planStart: b.planStart, planEnd: b.planEnd, expectedEnd: b.expectedEnd, delay: b.delay, cnMrp: b.cnMrp, auMrp: b.auMrp, overdue: Boolean(b.overdue), locked: Boolean(b.locked), warnings: b.warnings || [],
       live: live && {
         stage: live.stage, since: live.since, days: daysBetween(live.since, today),
-        weldAt: lt?.weldAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '', atd: lt?.atd || '', ata: lt?.ata || '', notes: lt?.notes || {},
-        grAt: p.grAt || '', giAt: p.giAt || '',
-        location: au?.location || '', station: au?.station || '', flags: au?.flags || [], daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
+        inLongtree: Boolean(lt), orderAt: lt?.orderAt || '', weldAt: lt?.weldAt || '', furnitureAt: lt?.furnitureAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '',
+        etd: lt?.etd || '', atd: lt?.atd || '', eta: lt?.eta || '', ata: lt?.ata || '', notes: lt?.notes || {},
+        grAt: p.grAt || '', grSource: p.grSource || '', giAt: p.giAt || '',
+        inProduction: Boolean(au), location: au?.location || '', station: au?.station || '', flags: au?.flags || [], enteredAt: au?.enteredAt || '', stationSince: au?.stationSince || '', daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
       },
     });
   }
