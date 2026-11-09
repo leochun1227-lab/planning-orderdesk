@@ -12,7 +12,8 @@ import { applyReport, dayInSydney, reportFingerprint, importProductionSources } 
 import { buildOrderlist } from '../lib/orderlist-export.mjs';
 import { forecastResolver } from '../lib/schedule.mjs';
 import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
-import { createProductionLineSource, buildProductionLine, STAGES } from '../lib/production-line.mjs';
+import { createProductionLineSource, buildProductionLine, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
+import { createPortalSource } from '../lib/portal-source.mjs';
 import { handlePlanningAgent, planningAgentStatus } from '../lib/planning-agent.mjs';
 import { syncMail, mailConfig, mailStatus } from '../lib/mail-sync.mjs';
 import { MailSyncError } from '../lib/outlook-report.mjs';
@@ -73,21 +74,24 @@ export function createApp({ store, auth, env = process.env }) {
   app.get('/api/session', c => json({ user: auth.user(c.req.raw), store: store.info() }));
   app.get('/api/revision', async c => json({ revision: await store.revision() }));
   // SRV/SRM planned dates, read-only from the Dealer Portal (cached 15 minutes).
-  const campervanPlan = createCampervanPlanSource({ url: env.PORTAL_DATABASE_URL || undefined });
+  // One shared copy of the Dealer Portal (read every 2 hours at most) for the SRV/SRM plan and 产线.
+  const portal = createPortalSource({ url: env.PORTAL_DATABASE_URL || undefined });
+  const campervanPlan = createCampervanPlanSource({ url: env.PORTAL_DATABASE_URL || undefined, portal });
   app.get('/api/campervan-plan', async () => {
     try { return json(await campervanPlan.current()); }
     catch (e) { return json({ error: message(e, 'Dealer Portal 排产暂时读取不到'), plan: {} }, 502); }
   });
 
   // Production line (产线): Longtree + AU production API + Portal GR/GI, read-only, cached 15 minutes.
-  const productionLine = createProductionLineSource(env);
-  if (env.NODE_ENV === 'production') productionLine.current().catch(() => {}); // warm up at start
+  const productionLine = createProductionLineSource(env, { portal });
+  if (env.NODE_ENV === 'production') productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); // warm up at start
   app.get('/api/production-line', async c => {
     try {
-      const sources = await productionLine.current({ force: c.req.query('refresh') === '1' });
+      const today = dayInSydney(new Date());
+      const sources = await productionLine.current({ force: c.req.query('refresh') === '1', today });
       const { state } = await store.readState();
-      const line = buildProductionLine({ orders: state?.orders || {}, ...sources, today: dayInSydney(new Date()) });
-      return json({ ...line, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
+      const line = buildProductionLine({ orders: state?.orders || {}, ...sources, today });
+      return json({ ...line, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
   });
 

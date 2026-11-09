@@ -1,54 +1,51 @@
-// 产线 (production line): where every signed order is, Longtree → sea → AU factory → GI.
-// Data from /api/production-line (read-only merge of Longtree, AU production API and Portal GR/GI).
+// 产线: the Dealer Portal production board (same groups, plan / expected / MRP dates and delay as
+// the Portal page), plus live facts per vehicle: Longtree node dates, AU factory station, SAP GR/GI.
+// Data: /api/production-line (read-only).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { themeQuartz, type ColDef, type ColGroupDef } from 'ag-grid-community';
 import { Button } from '@/components/ui/button';
-import { ArrowDownToLine, Factory, Ship, Warehouse, Search, X, ListFilter, RefreshCw, AlertTriangle, PackageCheck } from 'lucide-react';
+import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, ListFilter, RefreshCw, AlertTriangle } from 'lucide-react';
 
-type Stage = { id: string; group: 'cn' | 'sea' | 'au' | 'done'; zh: string; en: string };
+type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
+type Live = { stage: string; since: string; days: number | null; weldAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; atd: string; ata: string; notes: Record<string, string>; grAt: string; giAt: string; location: string; station: string; flags: string[]; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type Row = {
-  stageName?: string; stageGroup?: string;
-  id: string; chassis: string; model: string; dealer: string; customer: string; stage: string; stageIndex: number; since: string; daysInStage: number | null;
-  signedAt: string; forecastDate: string; grAt: string; giAt: string; grToToday: number | null;
-  cn: null | { orderAt: string; weldAt: string; furnitureAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; notes: Record<string, string> };
-  sea: null | { etd: string; atd: string; eta: string; ata: string };
-  au: null | { location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; forecastAt: string; history: { stage: string; location: string; at: string }[] };
+  liveStageName?: string; liveTone?: string;
+  id: string; chassis: string; empty: boolean; line: string; source: string; group: string; status: string; dealer: string; model: string; range: string; customer: string; orderId: string;
+  production: null | { status: string; stage: string; location: string };
+  cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
+  planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
 };
-type Payload = { today: string; counts: Record<string, number>; unsigned: number; rows: Row[]; stages: Stage[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }>; error?: string };
+type Payload = { today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
-// Alerts: days a vehicle has been waiting. Thresholds are a starting point, to be tuned with Planning.
-const ALERTS = [
-  { id: 'cnIdle', zh: '国内完工未发运 >14 天', en: 'Finished, not shipped >14d', test: (r: Row) => r.stage === 'cnFinished' && (r.daysInStage ?? 0) > 14 },
-  { id: 'portWait', zh: '等待离港 >21 天', en: 'At CN port >21d', test: (r: Row) => r.stage === 'seaPort' && (r.daysInStage ?? 0) > 21 },
-  { id: 'noGr', zh: '到港未 GR >14 天', en: 'Arrived, no GR >14d', test: (r: Row) => r.stage === 'seaArrived' && (r.daysInStage ?? 0) > 14 },
-  { id: 'station', zh: '同一工位 >14 天', en: 'Same station >14d', test: (r: Row) => r.stage === 'auFactory' && (r.au?.daysAtStation ?? 0) > 14 },
-  { id: 'grLong', zh: 'GR 后 >60 天未 GI', en: 'GR >60d, no GI', test: (r: Row) => r.stage === 'auFactory' && (r.grToToday ?? 0) > 60 },
-  { id: 'noAu', zh: '已 GR，生产系统无记录', en: 'GR but not in production system', test: (r: Row) => r.stage === 'auFactory' && !r.au },
-] as const;
-const LOCATIONS = ['received', 'pre-assembly', 'production', 'qc', 'transport'];
-const LOCATION_ZH: Record<string, string> = { received: '已接收', 'pre-assembly': '预装', production: '生产', qc: '质检', transport: '待运输' };
+const EXEC = ['au', 'sea', 'cn'];
+const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
 const FLAG_COLORS: Record<string, [string, string]> = { G: ['#2b8a3e', '#fff'], B: ['#1c7ed6', '#fff'], O: ['#f08c00', '#fff'], R: ['#e03131', '#fff'], Y: ['#fcc419', '#3d2c00'], M: ['#c2255c', '#fff'], P: ['#7048e8', '#fff'], D: ['#343a40', '#fff'] };
-const STAGE_COLORS: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
-const GROUPS = [
-  { id: 'cn', zh: '国内 · Longtree', en: 'China · Longtree', Icon: Factory },
-  { id: 'sea', zh: '海运', en: 'Shipping', Icon: Ship },
-  { id: 'au', zh: '澳洲工厂', en: 'AU factory', Icon: Warehouse },
-  { id: 'done', zh: '已 GI', en: 'GI', Icon: PackageCheck },
+const CHIPS = [
+  { id: 'delay', zh: '已延迟', en: 'Delayed', test: (r: Row) => (r.delay ?? 0) > 0 },
+  { id: 'overdue', zh: '已过国内计划上线日', en: 'Past CN plan start', test: (r: Row) => r.overdue },
+  { id: 'station', zh: '同一工位 >14 天', en: 'Same station >14d', test: (r: Row) => (r.live?.daysAtStation ?? 0) > 14 },
+  { id: 'noGr', zh: '到港未 GR >14 天', en: 'Arrived, no GR >14d', test: (r: Row) => r.live?.stage === 'seaArrived' && (r.live.days ?? 0) > 14 },
+  { id: 'warn', zh: '有字段待补', en: 'Has warnings', test: (r: Row) => r.warnings.length > 0 },
 ] as const;
 
-const fmt = (v?: string) => !v ? '' : /^\d{4}-\d{2}-\d{2}/.test(v) ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(2, 4)}` : v;
 const time = (v?: string) => v ? new Date(v).toLocaleString('en-AU', { timeZone: 'Australia/Sydney', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 const gridTheme = themeQuartz.withParams({
   fontFamily: '"Segoe UI", Inter, "Microsoft YaHei", sans-serif', fontSize: 12.5, headerFontSize: 12, headerFontWeight: 700,
   foregroundColor: '#1d2433', backgroundColor: '#fff', headerBackgroundColor: '#1f3352', headerTextColor: '#fff',
   borderColor: '#d9dee7', rowBorder: { color: '#e6e9ef', width: 1 }, columnBorder: { color: '#edf0f4', width: 1 },
-  wrapperBorder: false, wrapperBorderRadius: 0, cellHorizontalPadding: 6, rowHoverColor: '#eef4ff', accentColor: '#2f5be0', headerColumnResizeHandleColor: '#5a7097',
+  wrapperBorder: false, wrapperBorderRadius: 0, cellHorizontalPadding: 7, rowHoverColor: '#eef4ff', accentColor: '#2f5be0', headerColumnResizeHandleColor: '#5a7097',
 });
+const Two = ({ top, sub, strong }: { top: React.ReactNode; sub?: React.ReactNode; strong?: boolean }) => <div className="pl-two">{strong ? <strong>{top}</strong> : <span>{top}</span>}{sub ? <small>{sub}</small> : null}</div>;
+function OnlineDate({ actual, expected, baseline, zh }: { actual: string; expected: string; baseline: string; zh: boolean }) {
+  return <div className="pl-two" title={actual ? `${zh ? '源数据实际日期' : 'Actual'}：${actual}` : `${zh ? '预计日期；原计划' : 'Expected; baseline'}：${baseline || '—'}`}>
+    <strong>{actual || expected || '—'}</strong>
+    <small><span className={`pl-kind ${actual ? 'actual' : ''}`}>{actual ? (zh ? '实际' : 'Actual') : expected ? (zh ? '预计' : 'Expected') : (zh ? '待补日期' : 'No date')}</span>{!actual && baseline && baseline !== expected ? ` ${zh ? '原计划' : 'plan'} ${baseline}` : ''}</small></div>;
+}
 
 export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; onOpenOrder: (id: string) => void }) {
   const [data, setData] = useState<Payload | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [stage, setStage] = useState<string>(''), [group, setGroup] = useState<string>(''), [location, setLocation] = useState(''), [alert, setAlert] = useState('');
+  const [group, setGroup] = useState('au'), [line, setLine] = useState('All'), [chip, setChip] = useState(''), [sort, setSort] = useState<'status' | 'date'>('status');
   const [query, setQuery] = useState(''), [dealer, setDealer] = useState(''), [detail, setDetail] = useState<Row | null>(null);
   const grid = useRef<AgGridReact<Row>>(null);
   async function load(refresh = false) {
@@ -61,120 +58,130 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   }
   useEffect(() => { void load(); }, []);
-  const stages = data?.stages || [];
-  const stageName = (id: string) => { const s = stages.find(x => x.id === id); return s ? (zh ? s.zh : s.en) : id; };
-  const stageGroup = (id: string) => stages.find(x => x.id === id)?.group || 'cn';
-  const rows = useMemo(() => (data?.rows || []).map(r => ({ ...r, stageName: stageName(r.stage), stageGroup: stageGroup(r.stage) })), [data, zh]);
-  const dealers = useMemo(() => Array.from(new Set(rows.map(r => r.dealer).filter(Boolean))).sort(), [rows]);
-  const alertCounts = useMemo(() => Object.fromEntries(ALERTS.map(a => [a.id, rows.filter(a.test).length])), [rows]);
-  const locationCounts = useMemo(() => Object.fromEntries(LOCATIONS.map(l => [l, rows.filter(r => r.stage === 'auFactory' && r.au?.location === l).length])), [rows]);
+  const groups = data?.groups || [];
+  const groupOf = (id: string) => groups.find(g => g.id === id);
+  const stageName = (id?: string) => { const s = data?.stages.find(x => x.id === id); return s ? (zh ? s.zh : s.en) : ''; };
+  const stageTone = (id?: string) => STAGE_TONE[data?.stages.find(x => x.id === id)?.group || 'cn'];
+  const rows = useMemo(() => (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '' })), [data, zh]);
+  const searching = query.trim().length > 0;
+  const base = useMemo(() => rows.filter(r => (line === 'All' || r.line === line) && (!dealer || r.dealer === dealer)), [rows, line, dealer]);
+  const counts = useMemo(() => Object.fromEntries(groups.map(g => [g.id, base.filter(r => r.group === g.id).length])), [base, groups]);
+  const inGroup = useMemo(() => base.filter(r => r.group === group), [base, group]);
+  const chipCounts = useMemo(() => Object.fromEntries(CHIPS.map(c => [c.id, inGroup.filter(c.test).length])), [inGroup]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/[-\s]/g, '');
-    const a = ALERTS.find(x => x.id === alert);
-    return rows.filter(r => {
-      if (q) return [r.chassis, r.model, r.customer, r.dealer, r.au?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q));
-      if (stage && r.stage !== stage) return false;
-      if (!stage && !group && r.stage === 'gi') return false; // GI'd vehicles only when asked for
-      if (group && r.stageGroup !== group) return false;
-      if (location && r.au?.location !== location) return false;
-      if (a && !a.test(r)) return false;
-      return !dealer || r.dealer === dealer;
-    });
-  }, [rows, query, stage, group, location, alert, dealer]);
-  const pick = (next: { stage?: string; group?: string; location?: string; alert?: string }) => { setStage(next.stage ?? ''); setGroup(next.group ?? ''); setLocation(next.location ?? ''); setAlert(next.alert ?? ''); };
+    let list = searching ? base.filter(r => [r.chassis, r.model, r.dealer, r.customer, r.live?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q))) : inGroup;
+    const c = CHIPS.find(x => x.id === chip);
+    if (c && !searching) list = list.filter(c.test);
+    return sort === 'date' ? [...list].sort((a, b) => (a.cnStart || '9999').localeCompare(b.cnStart || '9999')) : list;
+  }, [base, inGroup, query, chip, sort]);
+  const dealers = useMemo(() => Array.from(new Set(rows.map(r => r.dealer).filter(Boolean))).sort(), [rows]);
+  const exec = EXEC.includes(group) || searching;
+  const g = groupOf(group);
+  const band = (ids: string[]) => ids.reduce((n, id) => n + (counts[id] || 0), 0);
 
-  const date = (field: string, label: string, get: (r: Row) => string | undefined, note?: (r: Row) => string | undefined): ColDef<Row> => ({
-    colId: field, headerName: label, width: 84, valueGetter: p => p.data ? get(p.data) || note?.(p.data) || '' : '',
-    valueFormatter: p => fmt(p.value), cellClass: p => (p.data && !get(p.data) && note?.(p.data) ? 'pl-note' : ''), tooltipValueGetter: p => (p.data && note?.(p.data)) || undefined,
-  });
+  const live = (id: string, label: string, get: (l: Live) => string | number | null | undefined, extra: Partial<ColDef<Row>> = {}): ColDef<Row> =>
+    ({ colId: id, headerName: label, width: 88, valueGetter: p => (p.data?.live ? get(p.data.live) ?? '' : ''), ...extra });
   const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => [
-    { headerName: zh ? '车辆' : 'Vehicle', children: [
-      { field: 'chassis', headerName: 'Chassis', pinned: 'left', width: 112, cellClass: 'chassis-cell', cellRenderer: (p: any) => <button className="chassis-link" onClick={() => setDetail(p.data)}>{p.value}</button> },
-      { field: 'stageName', headerName: zh ? '当前阶段' : 'Stage', pinned: 'left', width: 112,
-        cellRenderer: (p: any) => p.data ? <span className="pl-stage" style={{ background: STAGE_COLORS[p.data.stageGroup] }}>{p.value}</span> : null },
-      { field: 'daysInStage', headerName: zh ? '本阶段天数' : 'Days in stage', pinned: 'left', width: 72, type: 'numericColumn', cellClass: p => ALERTS.some(a => p.data && a.test(p.data)) ? 'pl-late' : '' },
+    { headerName: zh ? 'Portal · 上线 / 车辆' : 'Portal · start / vehicle', children: [
+      { colId: 'cnStart', headerName: zh ? '国内上线时间' : 'CN start', pinned: 'left', width: 118, valueGetter: p => p.data?.cnActual || p.data?.cnStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.cnActual} expected={p.data.cnStart} baseline={p.data.cnPlanStart} /> },
+      { colId: 'auStart', headerName: zh ? '澳洲上线时间' : 'AU start', pinned: 'left', width: 118, valueGetter: p => p.data?.auActual || p.data?.auStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.auActual} expected={p.data.auStart} baseline={p.data.auPlanStart} /> },
+      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two"><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></div> },
     ] },
-    { headerName: zh ? '订单' : 'Order', children: [
-      { field: 'model', headerName: zh ? '车型' : 'Model', width: 104 },
-      { field: 'dealer', headerName: 'Dealer', width: 110 },
+    { headerName: zh ? 'Dealer Portal 排产（与 Portal 一致）' : 'Dealer Portal board (same as Portal)', children: [
+      { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
+      { field: 'model', headerName: 'Model / Range', width: 118, cellRenderer: (p: any) => p.data && <Two strong top={p.data.model || (zh ? '未提供车型' : 'No model')} sub={p.data.range} /> },
+      { colId: 'prodStatus', headerName: zh ? '生产状态' : 'Production status', width: 170, valueGetter: p => p.data ? (p.data.production?.status || p.data.production?.stage || (p.data.empty ? (zh ? '待补订单' : 'Awaiting order') : p.data.status)) : '',
+        cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.group}`}>{p.value}</span>{p.data.production && <small>{p.data.status}{p.data.production.stage ? ` · ${p.data.production.stage}` : ''}</small>}</div> },
+      { colId: 'prodLocation', headerName: zh ? '生产库位' : 'Location', width: 92, valueGetter: p => p.data?.production?.location || '', cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '未提供' : '—'}</span> },
+      { colId: 'planStart', headerName: exec ? (zh ? '计划开始' : 'Plan start') : (zh ? '国内计划完成' : 'CN plan end'), width: 96, valueGetter: p => (p.data ? (EXEC.includes(p.data.group) ? p.data.planStart : p.data.cnPlanEnd) : '') || '—' },
+      { field: 'planEnd', headerName: exec ? (zh ? '计划完成' : 'Plan end') : (zh ? '澳洲计划完成' : 'AU plan end'), width: 96, valueFormatter: p => p.value || '—' },
+      { field: 'expectedEnd', headerName: exec ? (zh ? '预计完成' : 'Expected end') : (zh ? '澳洲预计完成' : 'AU expected end'), width: 100, cellClass: 'pl-bold', valueFormatter: p => p.value || '—' },
+      { field: 'delay', headerName: zh ? '延迟天数' : 'Delay', width: 74, cellRenderer: (p: any) => p.value == null ? '—' : <span className={p.value > 0 ? 'pl-delay' : 'pl-ontime'}>{p.value > 0 ? '+' : ''}{p.value} {zh ? '天' : 'd'}</span> },
+      { field: 'cnMrp', headerName: zh ? '国内 MRP 日期' : 'CN MRP', width: 96, valueFormatter: p => p.value || '—' },
+      { field: 'auMrp', headerName: zh ? '澳洲 MRP 日期' : 'AU MRP', width: 96, valueFormatter: p => p.value || '—' },
+      ...(group === 'customers' && !searching ? [{ colId: 'orderType', headerName: zh ? '订单类型 / Customer' : 'Order type / customer', width: 160, valueGetter: (p: any) => p.data?.customer, cellRenderer: (p: any) => p.data && <Two top={/\/.*stock/i.test(p.data.customer) ? 'Transfer from stock' : 'Customer'} sub={p.data.customer} /> } as ColDef<Row>] : []),
+      ...(!exec ? [{ colId: 'scheduleState', headerName: group === 'empty' || group === 'customers' ? (zh ? '订单进度' : 'Order progress') : (zh ? '排产状态' : 'Schedule state'), width: 150,
+        valueGetter: (p: any) => !p.data ? '' : p.data.empty ? (p.data.dealer ? (zh ? '等待车架号' : 'Waiting for chassis') : (zh ? '待分配 Dealer / 车架号' : 'Needs dealer / chassis')) : group === 'customers' ? (zh ? '待匹配 slot' : 'Needs slot') : group === 'later' ? (p.data.cnPlanStart ? (zh ? '60 天以外' : 'Beyond 60 days') : (zh ? '计划日期待补' : 'Plan date missing')) : p.data.locked ? (zh ? '已确认锁定' : 'Locked') : (zh ? '待确认' : 'To confirm'),
+        cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.overdue ? 'overdue' : 'neutral'}`}>{p.value}</span>{p.data.overdue && <small className="pl-delay">{zh ? '已过国内计划上线日' : 'Past CN plan start'}</small>}</div> } as ColDef<Row>] : []),
+    ] },
+    { headerName: zh ? '实时 · Longtree / 澳洲工厂 / SAP' : 'Live · Longtree / AU factory / SAP', children: [
+      { field: 'liveStageName', headerName: zh ? '当前节点' : 'Live stage', width: 104, cellRenderer: (p: any) => p.value ? <span className="pl-stage" style={{ background: p.data.liveTone }}>{p.value}</span> : null },
+      live('liveDays', zh ? '本节点天数' : 'Days', l => l.days, { width: 66, type: 'numericColumn' }),
+      live('weldAt', zh ? '钣焊上线' : 'Welding', l => l.weldAt || l.notes?.weldAt),
+      live('assemblyAt', zh ? '总装上线' : 'Assembly', l => l.assemblyAt || l.notes?.assemblyAt),
+      live('finishedAt', zh ? '总装入库' : 'Finished', l => l.finishedAt || l.notes?.finishedAt),
+      live('shippedAt', zh ? '发运' : 'Shipped', l => l.shippedAt || l.notes?.shippedAt),
+      live('atd', zh ? '实际离港' : 'ATD', l => l.atd), live('ata', zh ? '实际到港' : 'ATA', l => l.ata),
+      live('grAt', 'GR', l => l.grAt),
+      live('location', zh ? '实时库位' : 'Live location', l => l.location, { width: 92 }),
+      live('station', zh ? '实时工位' : 'Live station', l => l.station, { width: 120 }),
+      live('daysAtStation', zh ? '工位天数' : 'Days at station', l => l.daysAtStation, { width: 66, type: 'numericColumn', cellClass: p => (p.value ?? 0) > 14 ? 'pl-late' : '' }),
+      live('flags', zh ? '标记' : 'Flags', l => l.flags.join(' '), { width: 76, cellRenderer: (p: any) => <span className="pl-flags">{(p.data?.live?.flags || []).map((f: string, i: number) => <i key={i} style={{ background: FLAG_COLORS[f]?.[0] || '#868e96', color: FLAG_COLORS[f]?.[1] || '#fff' }}>{f}</i>)}</span> }),
+      live('giAt', 'GI', l => l.giAt),
       { field: 'customer', headerName: zh ? '客户' : 'Customer', width: 120 },
+      { colId: 'warnings', headerName: zh ? '提示' : 'Warnings', width: 160, valueGetter: p => (p.data?.warnings || []).join('；'), tooltipValueGetter: p => p.value || undefined, cellClass: 'pl-warn' },
     ] },
-    { headerName: zh ? '国内 Longtree' : 'China · Longtree', children: [
-      date('orderAt', zh ? '订单接收' : 'Order', r => r.cn?.orderAt),
-      date('weldAt', zh ? '钣焊上线' : 'Welding', r => r.cn?.weldAt, r => r.cn?.notes?.weldAt),
-      date('furnitureAt', zh ? '家具上线' : 'Furniture', r => r.cn?.furnitureAt),
-      date('assemblyAt', zh ? '总装上线' : 'Assembly', r => r.cn?.assemblyAt, r => r.cn?.notes?.assemblyAt),
-      date('finishedAt', zh ? '总装入库' : 'Finished', r => r.cn?.finishedAt, r => r.cn?.notes?.finishedAt),
-      date('shippedAt', zh ? '发运' : 'Shipped', r => r.cn?.shippedAt, r => r.cn?.notes?.shippedAt),
-    ] },
-    { headerName: zh ? '海运' : 'Shipping', children: [
-      date('etd', zh ? '预计离港' : 'ETD', r => r.sea?.etd), date('atd', zh ? '实际离港' : 'ATD', r => r.sea?.atd),
-      date('eta', zh ? '预计到港' : 'ETA', r => r.sea?.eta), date('ata', zh ? '实际到港' : 'ATA', r => r.sea?.ata),
-    ] },
-    { headerName: zh ? '澳洲工厂' : 'AU factory', children: [
-      date('grAt', 'GR', r => r.grAt),
-      { colId: 'location', headerName: zh ? '库位' : 'Location', width: 92, valueGetter: p => p.data?.au?.location ? (zh ? LOCATION_ZH[p.data.au.location] || p.data.au.location : p.data.au.location) : '' },
-      { colId: 'station', headerName: zh ? '工位' : 'Station', width: 118, valueGetter: p => p.data?.au?.station || '' },
-      { colId: 'daysAtStation', headerName: zh ? '工位天数' : 'Days at station', width: 66, type: 'numericColumn', valueGetter: p => p.data?.au?.daysAtStation ?? null },
-      { colId: 'flags', headerName: zh ? '标记' : 'Flags', width: 76, valueGetter: p => (p.data?.au?.flags || []).join(' '),
-        cellRenderer: (p: any) => <span className="pl-flags">{(p.data?.au?.flags || []).map((f: string, i: number) => <i key={i} style={{ background: FLAG_COLORS[f]?.[0] || '#868e96', color: FLAG_COLORS[f]?.[1] || '#fff' }}>{f}</i>)}</span> },
-      date('auForecast', zh ? '计划完工' : 'Planned', r => r.au?.forecastAt),
-      { field: 'grToToday', headerName: zh ? 'GR 至今' : 'Since GR', width: 64, type: 'numericColumn' },
-      date('giAt', 'GI', r => r.giAt),
-    ] },
-  ], [zh, stages]);
+  ], [zh, group, exec, searching, data]);
 
-  async function exportCsv() {
-    grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${data?.today || ''}.csv`, processCellCallback: p => p.column.getColId() === 'chassis' ? p.value : p.value ?? '' });
-  }
+  function exportCsv() { grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${g?.id || 'search'}-${data?.today || ''}.csv` }); }
   const src = data?.sources || {};
-  const srcLabel: Record<string, string> = { longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', portal: 'GR / GI' };
-  const groupTotal = (g: string) => stages.filter(s => s.group === g).reduce((n, s) => n + (data?.counts[s.id] || 0), 0);
+  const srcLabel: Record<string, string> = { portal: 'Dealer Portal', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production' };
+  const avg = g?.phase ? data?.averages?.[g.phase] : null;
+  const card = (ids: string[], Icon: any, step: string, title: string, sub: string, target: string) =>
+    <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => { setGroup(target); setChip(''); setQuery(''); }}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
 
   return <section className="table-panel schedule-panel pl-panel">
-    <div className="pl-stagebar">
-      {GROUPS.map(({ id, zh: gz, en, Icon }) => <div key={id} className={`pl-group ${id}`}>
-        <button className={`pl-group-head ${group === id ? 'on' : ''}`} onClick={() => pick(group === id ? {} : { group: id })}><Icon size={15} />{zh ? gz : en}<b>{groupTotal(id).toLocaleString()}</b></button>
-        <div className="pl-stages">{stages.filter(s => s.group === id).map(s => <button key={s.id} className={`pl-stage-card ${stage === s.id ? 'on' : ''}`} onClick={() => pick(stage === s.id ? {} : { stage: s.id })} title={s.id === 'gi' ? (zh ? '表格只列近 14 天 GI 的车' : 'Only vehicles GI’d in the last 14 days are listed') : ''}>
-          <b>{(data?.counts[s.id] ?? 0).toLocaleString()}</b><span>{zh ? s.zh : s.en}</span></button>)}</div>
-      </div>)}
+    <div className="pl-overview">
+      {card(['au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', '', `${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'au')}
+      {card(['locked', 'rolling'], CalendarDays, zh ? '02 · 滚动 60 天' : '02 · Rolling 60 days', '', `${zh ? '已锁定' : 'Locked'} ${counts.locked ?? 0} · ${zh ? '待确认' : 'To confirm'} ${counts.rolling ?? 0}`, 'locked')}
+      {card(['empty', 'customers'], Layers, zh ? '03 · 预排产' : '03 · Pre-schedule', '', `Empty slots ${counts.empty ?? 0} · Customer ${counts.customers ?? 0}`, 'empty')}
+      {card(['later'], Clock3, zh ? '后续排产 / 日期待补' : 'Later / dates missing', '', zh ? '国内计划上线在 60 天之后' : 'CN plan start beyond 60 days', 'later')}
+      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{(rows.length).toLocaleString()} {zh ? '条未发运车辆 / slot' : 'open vehicles / slots'}</p></div></div>
+    </div>
+    <div className="pl-tabs" role="tablist">
+      {groups.map(x => <button key={x.id} role="tab" aria-selected={group === x.id && !searching} className={`pl-tab ${x.id} ${group === x.id && !searching ? 'on' : ''}`} onClick={() => { setGroup(x.id); setChip(''); setQuery(''); }}>{zh ? x.zh : x.en}<b>{(counts[x.id] ?? 0).toLocaleString()}</b></button>)}
+    </div>
+    <div className="pl-section-head">
+      <div><h3>{searching ? (zh ? `搜索「${query}」` : `Search "${query}"`) : (zh ? g?.zh : g?.en)} <span className="count-chip">{visible.length.toLocaleString()}</span></h3><p>{searching ? (zh ? '在所有分组里搜索' : 'Searching every group') : g?.note}</p></div>
+      <div className="pl-head-right"><label className="pl-sort">{zh ? '排序' : 'Sort'}<select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '生产状态 → 生产库位 → 国内上线' : 'Status → location → CN start'}</option><option value="date">{zh ? '国内上线日期' : 'CN start date'}</option></select></label>
+      {avg && !searching && <div className="pl-average"><span>{zh ? '已完成节点平均用时' : 'Average completed stage'}</span><strong>{avg.days == null ? '—' : `${avg.days} ${zh ? '天' : 'd'}`}</strong><small>{avg.count} {zh ? '条有效样本' : 'samples'}</small></div>}</div>
     </div>
     <div className="schedule-toolbar">
-      <div className="chips">
-        {ALERTS.map(a => <button key={a.id} className={`chip ${alert === a.id ? 'on' : ''}`} onClick={() => pick(alert === a.id ? {} : { alert: a.id })}><i style={{ background: alertCounts[a.id] ? '#ffe3e3' : '#f1f3f5', color: alertCounts[a.id] ? '#c92a2a' : '#868e96' }}>{alertCounts[a.id] ?? 0}</i>{zh ? a.zh : a.en}</button>)}
-      </div>
-      <label className="search"><Search size={16} /><input placeholder={zh ? '搜索车架号、车型、客户、工位' : 'Search chassis, model, customer, station'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
+      <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
+      {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}
+      <label className="search"><Search size={16} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
       <label className="dealer-filter"><ListFilter size={16} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-      <span className="count-chip">{visible.length.toLocaleString()} {zh ? '台' : 'vehicles'}</span>
     </div>
-    {(stage === 'auFactory' || group === 'au' || location) && <div className="pl-locations">
-      <span>{zh ? '库位' : 'Location'}</span>
-      {LOCATIONS.map(l => <button key={l} className={`day-chip ${location === l ? 'on' : ''}`} onClick={() => pick(location === l ? { stage: 'auFactory' } : { stage: 'auFactory', location: l })}><b>{locationCounts[l]}</b>{zh ? LOCATION_ZH[l] : l}</button>)}
-    </div>}
     <div className="pl-sources">
-      {Object.entries(srcLabel).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={src[k]?.error || ''}>{l} · {src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error ? (zh ? '读取失败，显示上次数据' : 'failed, showing last copy') : `${(src[k]?.count || 0).toLocaleString()} ${zh ? '台' : ''} · ${time(src[k]?.at)}`}</span>)}
-      <span className="muted">{zh ? `未签字 ${data?.unsigned ?? 0} 台不在产线；只读，不修改任何来源` : `${data?.unsigned ?? 0} unsigned orders not shown; read-only`}</span>
-      <button className="pl-export" onClick={() => void exportCsv()} disabled={!visible.length}><ArrowDownToLine size={14} />{zh ? '导出 CSV' : 'Export CSV'}</button>
+      {Object.entries(srcLabel).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={src[k]?.error || ''}>{l} · {src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error ? (zh ? '读取失败，显示上次数据' : 'failed, showing last copy') : time(src[k]?.at)}</span>)}
+      <span className="muted">{zh ? '只读 · 排产日期与 Dealer Portal 相同算法' : 'Read-only · board dates use the Dealer Portal code'}</span>
+      <button className="pl-export" onClick={exportCsv} disabled={!visible.length}><ArrowDownToLine size={14} />{zh ? '导出 CSV' : 'Export CSV'}</button>
       <button aria-label={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={15} /></button>
     </div>
     {error && <div className="message error compact-msg"><AlertTriangle size={16} />{error}</div>}
-    {!data && !error && <div className="pl-loading">{zh ? '正在读取 Longtree、澳洲生产系统和 GR/GI…第一次大约需要 30–40 秒' : 'Loading Longtree, AU production and GR/GI… the first load takes ~30–40 s'}</div>}
+    {!data && !error && <div className="pl-loading">{zh ? '正在读取 Dealer Portal、Longtree 和澳洲生产系统…第一次大约需要 30–40 秒' : 'Loading Dealer Portal, Longtree and AU production… the first load takes ~30–40 s'}</div>}
     <div className="schedule-grid">
       <AgGridReact<Row> ref={grid} theme={gridTheme} rowData={visible} columnDefs={columns} getRowId={p => p.data.id}
         defaultColDef={{ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }}
-        rowHeight={26} headerHeight={34} groupHeaderHeight={24} tooltipShowDelay={250} enableCellTextSelection
+        rowHeight={42} headerHeight={34} groupHeaderHeight={24} tooltipShowDelay={250} enableCellTextSelection
         onRowDoubleClicked={e => e.data && setDetail(e.data)}
-        overlayNoRowsTemplate={`<span style="color:#61718a">${zh ? '没有符合条件的车' : 'No matching vehicles'}</span>`} />
+        overlayNoRowsTemplate={`<span style="color:#61718a">${zh ? '当前筛选下没有记录' : 'No matching records'}</span>`} />
     </div>
-    {detail && <aside className="pl-detail" role="dialog" aria-label={detail.chassis}>
-      <header><div><strong>{detail.chassis}</strong><span>{detail.model} · {detail.dealer} · {detail.customer}</span></div><button className="icon-button" aria-label={zh ? '关闭' : 'Close'} onClick={() => setDetail(null)}><X size={16} /></button></header>
-      <ol className="pl-timeline">
-        {([[zh ? '订单接收' : 'Order', detail.cn?.orderAt], [zh ? '钣焊上线' : 'Welding', detail.cn?.weldAt], [zh ? '家具上线' : 'Furniture', detail.cn?.furnitureAt], [zh ? '总装上线' : 'Assembly', detail.cn?.assemblyAt], [zh ? '总装入库' : 'Finished', detail.cn?.finishedAt], [zh ? '发运' : 'Shipped', detail.cn?.shippedAt], [zh ? '实际离港' : 'ATD', detail.sea?.atd], [zh ? '实际到港' : 'ATA', detail.sea?.ata], ['GR', detail.grAt], ['GI', detail.giAt]] as [string, string | undefined][])
-          .map(([l, v]) => <li key={l} className={v ? 'done' : ''}><span>{l}</span><b>{fmt(v) || '—'}</b></li>)}
-      </ol>
-      {detail.au && <><h4>{zh ? '澳洲工厂工位记录' : 'AU station history'}</h4><ul className="pl-history">{detail.au.history.length ? detail.au.history.map((h, i) => <li key={i}><span>{time(h.at)}</span><b>{h.stage}</b><em>{h.location}</em></li>) : <li><b>{detail.au.station}</b><em>{detail.au.location}</em></li>}</ul></>}
-      {Object.keys(detail.cn?.notes || {}).length > 0 && <p className="pl-notes">{Object.values(detail.cn!.notes).join(' · ')}</p>}
-      <Button variant="outline" className="action slim" onClick={() => onOpenOrder(detail.id)}>{zh ? '打开订单' : 'Open order'}</Button>
+    {detail && <aside className="pl-detail" role="dialog" aria-label={detail.chassis || 'slot'}>
+      <header><div><strong>{detail.empty ? 'Empty slot' : detail.chassis}</strong><span>{detail.model} · {detail.dealer || '—'} · {detail.customer || '—'}</span></div><button className="icon-button" aria-label={zh ? '关闭' : 'Close'} onClick={() => setDetail(null)}><X size={16} /></button></header>
+      <div className="pl-plan">
+        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '计划完成' : 'Plan end', detail.planEnd, ''], [zh ? '预计完成' : 'Expected end', detail.expectedEnd, detail.delay ? `${detail.delay > 0 ? '+' : ''}${detail.delay} ${zh ? '天' : 'd'}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
+          .map(([l, v, n]) => <div key={l}><span>{l}</span><b>{v || '—'}</b><em>{n}</em></div>)}
+      </div>
+      {detail.live && <ol className="pl-timeline">
+        {([[zh ? '钣焊上线' : 'Welding', detail.live.weldAt], [zh ? '总装上线' : 'Assembly', detail.live.assemblyAt], [zh ? '总装入库' : 'Finished', detail.live.finishedAt], [zh ? '发运' : 'Shipped', detail.live.shippedAt], [zh ? '实际离港' : 'ATD', detail.live.atd], [zh ? '实际到港' : 'ATA', detail.live.ata], ['GR', detail.live.grAt], ['GI', detail.live.giAt]] as [string, string][])
+          .map(([l, v]) => <li key={l} className={v ? 'done' : ''}><span>{l}</span><b>{v || '—'}</b></li>)}
+      </ol>}
+      {detail.live?.history?.length ? <><h4>{zh ? '澳洲工厂工位记录（实时）' : 'AU station history (live)'}</h4><ul className="pl-history">{detail.live.history.map((h, i) => <li key={i}><span>{time(h.at)}</span><b>{h.stage}</b><em>{h.location}</em></li>)}</ul></> : null}
+      {detail.warnings.length > 0 && <p className="pl-notes">{detail.warnings.join('；')}</p>}
+      {Object.keys(detail.live?.notes || {}).length > 0 && <p className="pl-notes">{Object.values(detail.live!.notes).join(' · ')}</p>}
+      {detail.orderId && <Button variant="outline" className="action slim" onClick={() => onOpenOrder(detail.orderId)}>{zh ? '打开订单' : 'Open order'}</Button>}
     </aside>}
   </section>;
 }

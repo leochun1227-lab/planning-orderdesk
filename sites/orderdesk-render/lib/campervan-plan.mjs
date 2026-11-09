@@ -47,7 +47,7 @@ export function applyPortalBoard(plan, board) {
 }
 
 /** Cached fetch of the Portal data (public read) + the Portal's own scheduling code. */
-export function createCampervanPlanSource({ url = PORTAL_DATABASE_URL, ttlMs = 15 * 60 * 1000, fetcher = fetch, board = loadPortalBoard() } = {}) {
+export function createCampervanPlanSource({ url = PORTAL_DATABASE_URL, ttlMs = 15 * 60 * 1000, fetcher = fetch, board = loadPortalBoard(), portal = null } = {}) {
   let cache = null, inflight = null;
   const base = url.replace(/\/+$/, '');
   async function get(path) {
@@ -56,7 +56,8 @@ export function createCampervanPlanSource({ url = PORTAL_DATABASE_URL, ttlMs = 1
     return r.json();
   }
   async function load() {
-    const raw = Object.fromEntries(await Promise.all(PORTAL_BOARD_SOURCES.map(async ([name, path]) => [name, await get(path)])));
+    // With a shared Portal copy (portal-source.mjs) the nodes are read once for every page.
+    const raw = portal ? (await portal.current()).raw : Object.fromEntries(await Promise.all(PORTAL_BOARD_SOURCES.map(async ([name, path]) => [name, await get(path)])));
     let plan = buildCampervanPlan(raw.motorhome, raw.campers), boardError = null;
     try {
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date());

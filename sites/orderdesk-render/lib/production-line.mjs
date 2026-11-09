@@ -7,6 +7,7 @@
 // the latest node that has a date decides; a vehicle the AU factory reports as received/in
 // production counts as in the AU factory even before the GR date reaches datetrack.
 import { normalizeChassis } from './order-engine.mjs';
+import { loadPortalBoard } from './campervan-plan.mjs';
 
 export const STAGES = [
   { id: 'cnWaiting', group: 'cn', zh: 'Longtree 未开始', en: 'Not started (Longtree)' },
@@ -133,48 +134,66 @@ export function stageOf(order, lt = {}, au, portal = {}, today) {
 }
 
 /**
- * Merge orders with the three sources. Orders not yet signed are left out (they are not on the
- * line); GI'd vehicles are counted, and only those GI'd within `recentGiDays` are listed.
+ * The production line is the Dealer Portal production board (same code, same groups, plan dates,
+ * MRP dates and delay as the Portal page), with live facts added per vehicle: Longtree node dates,
+ * the AU factory's current location/station, SAP GR/GI and the Orderdesk order.
  */
-export function buildProductionLine({ orders, longtree, prod, portal, today, recentGiDays = 14 }) {
+export const BOARD_GROUPS = [
+  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: '澳洲工厂车辆 · 实际上线取 Production Start，不将到厂日期当作上线日期。', phase: 'au' },
+  { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '国内出厂至澳洲工厂接收 · 包括港口等待、海运及入厂前转运。', phase: 'sea' },
+  { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆 · 从底盘焊接、总装到国内完工。', phase: 'cn' },
+  { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: '已确认待上线 · 仅以现有 Schedule Confirmed = Yes 判断锁定。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '滚动安排待确认 · 不根据日期自动改写确认状态。' },
+  { id: 'empty', band: 'preschedule', zh: 'Empty slots', en: 'Empty slots', note: '现有 SRV / SRM 未分配 slot · 原数据没有 Dealer 时明确显示待分配。' },
+  { id: 'customers', band: 'preschedule', zh: 'Customer 订单池', en: 'Customer pool', note: '客户订单独立成池，Stock 不进入 Customer 订单池。' },
+  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '国内计划上线在 60 天之后的车，或计划日期待补。' },
+];
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings }) {
+  const orderByChassis = new Map(Object.values(orders || {}).filter(o => o && o.status !== 'cancelled').map(o => [normalizeChassis(o.chassis), o]));
+  const counts = Object.fromEntries(BOARD_GROUPS.map(g => [g.id, 0]));
   const rows = [];
-  const counts = Object.fromEntries(STAGES.map(s => [s.id, 0]));
-  let unsigned = 0;
-  for (const order of Object.values(orders || {})) {
-    if (!order || order.status === 'cancelled') continue;
-    const chassis = normalizeChassis(order.chassis);
-    const lt = longtree.get(chassis), au = prod.get(chassis), p = portal.get(chassis) || {};
-    const onLine = order.signedAt || order.purchaseAt || lt?.weldAt || lt?.assemblyAt || au || p.grAt || p.giAt;
-    if (!onLine) { unsigned++; continue; }
-    const { stage, since } = stageOf(order, lt, au, p, today);
-    counts[stage]++;
-    if (stage === 'gi' && daysBetween(p.giAt, today) > recentGiDays) continue;
+  for (const b of board.rows) {
+    counts[b.group] = (counts[b.group] || 0) + 1;
+    const chassis = b.empty ? '' : normalizeChassis(b.chassis);
+    const order = chassis ? orderByChassis.get(chassis) : undefined;
+    const lt = chassis ? longtree.get(chassis) : undefined, au = chassis ? prod.get(chassis) : undefined, p = (chassis && portal.get(chassis)) || {};
+    const live = chassis ? stageOf(order || {}, lt, au, p, today) : null;
     rows.push({
-      id: chassis, chassis: order.chassis, model: order.model || lt?.model || '', dealer: order.dealer || '', customer: order.customer || '',
-      stage, stageIndex: STAGE_INDEX[stage], since, daysInStage: daysBetween(since, today),
-      signedAt: order.signedAt || '', forecastDate: order.forecastDate || '',
-      cn: lt ? { orderAt: lt.orderAt || '', weldAt: lt.weldAt || '', furnitureAt: lt.furnitureAt || '', assemblyAt: lt.assemblyAt || '', finishedAt: lt.finishedAt || '', shippedAt: lt.shippedAt || '', notes: lt.notes } : null,
-      sea: lt ? { etd: lt.etd || '', atd: lt.atd || '', eta: lt.eta || '', ata: lt.ata || '' } : null,
-      au: au ? { location: au.location, station: au.station, flags: au.flags, enteredAt: au.enteredAt, stationSince: au.stationSince, daysAtStation: daysBetween(au.stationSince, today), forecastAt: au.forecastAt, history: au.history } : null,
-      grAt: p.grAt || '', giAt: p.giAt || '', grToToday: p.grAt && !p.giAt ? daysBetween(p.grAt, today) : null,
+      id: b.id, chassis: b.chassis || '', empty: Boolean(b.empty), line: b.line || '', source: b.source || '', group: b.group, status: b.status || '',
+      dealer: b.dealer || '', model: b.model || '', range: b.range || '', customer: order?.customer || b.customer || '', orderId: order ? chassis : '',
+      production: b.production ? { status: b.production.status || '', stage: b.production.stage || '', location: b.production.location || '' } : null,
+      cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: b.cnPlanEnd, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
+      planStart: b.planStart, planEnd: b.planEnd, expectedEnd: b.expectedEnd, delay: b.delay, cnMrp: b.cnMrp, auMrp: b.auMrp, overdue: Boolean(b.overdue), locked: Boolean(b.locked), warnings: b.warnings || [],
+      live: live && {
+        stage: live.stage, since: live.since, days: daysBetween(live.since, today),
+        weldAt: lt?.weldAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '', atd: lt?.atd || '', ata: lt?.ata || '', notes: lt?.notes || {},
+        grAt: p.grAt || '', giAt: p.giAt || '',
+        location: au?.location || '', station: au?.station || '', flags: au?.flags || [], daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
+      },
     });
   }
-  rows.sort((a, b) => b.stageIndex - a.stageIndex || String(a.since || '9999').localeCompare(String(b.since || '9999')));
-  return { today, counts, unsigned, rows };
+  return { today, counts, completed: board.completed, averages: board.averages, settings, rows };
 }
 
 // ---- live sources (server side) ---------------------------------------------------------------
 const FEISHU = 'https://open.feishu.cn/open-apis';
-async function feishuRecords(env, fetcher) {
+async function feishuRecords(env, fetcher, retryDelayMs = 1500) {
   const r = await fetcher(`${FEISHU}/auth/v3/tenant_access_token/internal`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_id: env.LONGTREE_APP_ID, app_secret: env.LONGTREE_APP_SECRET }), signal: AbortSignal.timeout(30000) });
   const auth = await r.json().catch(() => ({}));
   if (!r.ok || auth.code !== 0) throw new Error(`Longtree login failed (${auth.code ?? r.status})`);
   const headers = { Authorization: `Bearer ${auth.tenant_access_token}`, Accept: 'application/json' };
+  // Feishu sometimes answers "busy / data not ready" (e.g. 1254607, 1254290, HTTP 429/5xx); retry a few times.
   const call = async (path, params = {}) => {
-    const res = await fetcher(`${FEISHU}${path}?${new URLSearchParams(params)}`, { headers, signal: AbortSignal.timeout(90000) });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok || body.code !== 0) throw new Error(`Longtree ${path.split('/').slice(0, 4).join('/')} failed (${body.code ?? res.status})`);
-    return body.data;
+    let last = '';
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt) await new Promise(r => setTimeout(r, retryDelayMs * 2 ** (attempt - 1)));
+      const res = await fetcher(`${FEISHU}${path}?${new URLSearchParams(params)}`, { headers, signal: AbortSignal.timeout(90000) });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.code === 0) return body.data;
+      last = String(body.code ?? res.status);
+      if (res.status === 401 || res.status === 403 || [99991663, 99991668, 91402, 1254302].includes(body.code)) break; // auth/permission: no point retrying
+    }
+    throw new Error(`Longtree ${path.split('/').slice(0, 4).join('/')} failed (${last})`);
   };
   const app = (await call('/wiki/v2/spaces/get_node', { token: env.LONGTREE_WIKI_TOKEN || 'D8AmwXGMxieF9Ek3mPIcigYLnIg' })).node.obj_token;
   const table = env.LONGTREE_TABLE_ID || (await call(`/bitable/v1/apps/${app}/tables`, { page_size: 100 })).items?.[0]?.table_id;
@@ -200,36 +219,44 @@ async function prodReportRows(env, fetcher) {
   if (!res.ok || !Array.isArray(body?.data)) throw new Error(`Production report failed (${res.status})`);
   return body.data;
 }
-async function portalNodes(url, fetcher) {
-  const get = async path => { const r = await fetcher(`${url}/${encodeURIComponent(path)}.json`, { signal: AbortSignal.timeout(120000) }); if (!r.ok) throw new Error(`Portal ${path} ${r.status}`); return r.json(); };
-  const [datetrack, pgirecord] = await Promise.all([get('datetrack'), get('pgirecord')]);
-  return { datetrack, pgirecord };
-}
-
-/** Cached sources; each source keeps its last good copy when a refresh fails. */
-export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 15 * 60 * 1000, portalUrl = 'https://scheduling-dd672-default-rtdb.asia-southeast1.firebasedatabase.app' } = {}) {
+/** Cached sources; each keeps its last good copy when a refresh fails. Portal comes from the shared copy. */
+export const SOURCE_TTL_MS = { longtree: 30 * 60 * 1000, prod: 15 * 60 * 1000 };
+export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = SOURCE_TTL_MS, portal, board = loadPortalBoard() } = {}) {
   const sources = {
     longtree: { configured: Boolean(env.LONGTREE_APP_ID && env.LONGTREE_APP_SECRET), load: async () => parseLongtree(await feishuRecords(env, fetcher)) },
     prod: { configured: Boolean(env.PROD_REPORT_EMAIL && env.PROD_REPORT_PASSWORD), load: async () => parseProdReport(await prodReportRows(env, fetcher)) },
-    portal: { configured: true, load: async () => { const n = await portalNodes((env.PORTAL_DATABASE_URL || portalUrl).replace(/\/+$/, ''), fetcher); return parsePortal(n.datetrack, n.pgirecord); } },
   };
   const state = Object.fromEntries(Object.keys(sources).map(k => [k, { data: new Map(), at: '', error: '', count: 0 }]));
-  let inflight = null, loadedAt = 0;
-  async function refresh() {
-    await Promise.all(Object.entries(sources).map(async ([name, s]) => {
-      if (!s.configured) { state[name].error = 'not configured'; return; }
+  const ttl = name => (typeof ttlMs === 'number' ? ttlMs : ttlMs[name] ?? 15 * 60 * 1000);
+  const loaded = {};
+  let inflight = null, boardCache = null;
+  const staleSources = force => Object.keys(sources).filter(name => force || !loaded[name] || Date.now() - loaded[name] > ttl(name));
+  async function refresh(force = false) {
+    await Promise.all(staleSources(force).map(async name => { const s = sources[name];
+      if (!s.configured) { state[name].error = 'not configured'; loaded[name] = Date.now(); return; }
       try { const data = await s.load(); state[name] = { data, at: new Date().toISOString(), error: '', count: data.size }; }
       catch (e) { state[name] = { ...state[name], error: e instanceof Error ? e.message : String(e) }; }
+      loaded[name] = Date.now();
     }));
-    loadedAt = Date.now();
+  }
+  // The board is recomputed only when the Portal copy or the day changes.
+  async function portalBoard(copy, today) {
+    if (boardCache && boardCache.at === copy.at && boardCache.today === today) return boardCache;
+    const mod = await board, raw = copy.raw;
+    const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
+    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, grgi: parsePortal(raw.datetrack, raw.pgi), settings: mod.DEFAULT_BOARD_SETTINGS };
+    return boardCache;
   }
   return {
     // First load waits; later a stale copy is returned at once and refreshed in the background.
-    async current({ force = false } = {}) {
-      const stale = !loadedAt || Date.now() - loadedAt > ttlMs;
-      if (force || stale) inflight ??= refresh().finally(() => { inflight = null; });
-      if (force || !loadedAt) await inflight;
-      return { refreshing: Boolean(inflight), longtree: state.longtree.data, prod: state.prod.data, portal: state.portal.data, status: Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])) };
+    async current({ force = false, today } = {}) {
+      const stale = staleSources(false).length > 0;
+      if (force || stale) inflight ??= refresh(force).finally(() => { inflight = null; });
+      const first = Object.values(loaded).length < Object.keys(sources).length;
+      const [copy] = await Promise.all([portal.current({ force }), force || first ? inflight : null]);
+      const pb = await portalBoard(copy, today);
+      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: pb.grgi, board: pb.board, settings: pb.settings,
+        status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true } } };
     },
   };
 }

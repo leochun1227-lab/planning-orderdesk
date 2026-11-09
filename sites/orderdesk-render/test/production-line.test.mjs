@@ -47,24 +47,27 @@ test('stage: latest node wins; AU factory report counts before GR; future dates 
   assert.equal(stageOf(o, {}, { location: 'transport' }, { grAt: '2026-08-06', giAt: '2026-11-01' }, today).stage, 'gi');
 });
 
-test('line: unsigned and cancelled orders left out; GI listed only when recent; counts cover all', () => {
-  const orders = {
-    A: { chassis: 'A', status: 'active' }, B: { chassis: 'B', status: 'cancelled', signedAt: '2026-01-01' },
-    C: { chassis: 'C', status: 'active', signedAt: '2026-01-01' }, D: { chassis: 'D', status: 'completed', signedAt: '2025-01-01' }, E: { chassis: 'E', status: 'completed', signedAt: '2026-01-01' },
-  };
-  const portal = new Map([['D', { grAt: '2025-03-01', giAt: '2025-04-01' }], ['E', { grAt: '2026-10-01', giAt: '2026-11-05' }]]);
-  const r = buildProductionLine({ orders, longtree: new Map(), prod: new Map(), portal, today: '2026-11-09' });
-  assert.equal(r.unsigned, 1); assert.equal(r.counts.gi, 2); assert.equal(r.counts.cnWaiting, 1);
-  assert.deepEqual(r.rows.map(x => x.id), ['E', 'C']);
+const fakeBoard = rows => Promise.resolve({ DEFAULT_BOARD_SETTINGS: { cnDays: 20 }, boardVehiclesFromSources: () => [], sortBoardRows: r => r, buildProductionBoard: () => ({ rows, completed: 7, averages: { cn: { days: 30, count: 3 } } }) });
+const portalCopy = (raw = { datetrack: {}, pgi: {} }) => ({ calls: 0, async current() { this.calls++; return { at: '2026-11-09T00:00:00Z', raw, error: '' }; } });
+
+test('line = Portal board rows (groups, plan dates kept) plus live facts and the Orderdesk order', () => {
+  const board = { completed: 5, averages: {}, rows: [
+    { id: 'chassis-SRC1', chassis: 'SRC1', group: 'au', line: 'Towable', planStart: '2026-10-26', planEnd: '2026-12-05', expectedEnd: '2026-12-05', delay: 0, cnMrp: '2025-09-17', auMrp: '2026-10-21', production: { status: '', stage: 'Final', location: 'qc' }, warnings: [] },
+    { id: 'slot-1', chassis: '', empty: true, group: 'empty', line: 'SRM', warnings: [] },
+  ] };
+  const r = buildProductionLine({ board, orders: { SRC1: { chassis: 'SRC-1', customer: 'Smith', status: 'active', signedAt: '2025-01-01' } }, longtree: new Map([['SRC1', { weldAt: '2025-09-22' }]]), prod: new Map([['SRC1', { location: 'qc', station: 'Qc Red Zone', flags: ['G'], stationSince: '2026-11-01T00:00:00Z', history: [] }]]), portal: new Map([['SRC1', { grAt: '2026-10-10', giAt: '' }]]), today: '2026-11-09' });
+  assert.deepEqual(r.counts.au, 1); assert.equal(r.counts.empty, 1); assert.equal(r.completed, 5);
+  const a = r.rows[0];
+  assert.equal(a.auMrp, '2026-10-21'); assert.equal(a.customer, 'Smith'); assert.equal(a.orderId, 'SRC1');
+  assert.equal(a.live.stage, 'auFactory'); assert.equal(a.live.station, 'Qc Red Zone'); assert.equal(a.live.daysAtStation, 8); assert.equal(a.live.grAt, '2026-10-10');
+  assert.equal(r.rows[1].live, null);
 });
 
-test('sources: unconfigured sources are reported, a failed refresh keeps the last good copy', async () => {
-  let fail = false;
-  const fetcher = async url => { if (fail) throw new Error('down'); return new Response(JSON.stringify(url.includes('datetrack') ? { x: { 'Chassis Number': 'SRC1', 'Received in Melbourne': '01/02/2026' } } : {}), { status: 200 }); };
-  const src = createProductionLineSource({}, { fetcher, ttlMs: 0 });
-  let r = await src.current();
-  assert.equal(r.status.longtree.error, 'not configured'); assert.equal(r.portal.get('SRC1').grAt, '2026-02-01');
-  fail = true; r = await src.current({ force: true });
-  fail = false; const quick = await src.current(); assert.equal(typeof quick.refreshing, 'boolean');
-  assert.match(r.status.portal.error, /down/); assert.equal(r.portal.get('SRC1').grAt, '2026-02-01');
+test('sources: unconfigured sources are reported; the Portal board is built from the shared copy', async () => {
+  const portal = portalCopy({ datetrack: { x: { 'Chassis Number': 'SRC1', 'Received in Melbourne': '01/02/2026' } }, pgi: {} });
+  const src = createProductionLineSource({}, { fetcher: async () => { throw new Error('no network'); }, portal, board: fakeBoard([{ id: 'a', chassis: 'SRC1', group: 'sea' }]) });
+  const r = await src.current({ today: '2026-11-09' });
+  assert.equal(r.status.longtree.error, 'not configured'); assert.equal(r.status.prod.error, 'not configured');
+  assert.equal(r.board.rows.length, 1); assert.equal(r.board.completed, 7); assert.equal(r.portal.get('SRC1').grAt, '2026-02-01');
+  await src.current({ today: '2026-11-09' }); assert.equal(portal.calls, 2); // the shared copy decides when to download
 });
