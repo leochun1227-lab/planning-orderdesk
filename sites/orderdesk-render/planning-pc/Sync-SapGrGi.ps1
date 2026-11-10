@@ -2,7 +2,7 @@ param([switch]$VerifyOnly)
 # Reads GR and PGI per chassis from SAP HANA with the same SQL as the Planning Schedule workbook's
 # Power Query queries "GR" and "PGI", then posts them to the website (/api/sap-grgi).
 #   GR : chassis (SER02/OBJK on sales order item 10) -> PO (EKKN item 10 -> EKKO, purch. org 3111, released)
-#        -> latest EKBE goods receipt (BEWTP E, movement 101)
+#        -> latest EKBE goods receipt (BEWTP E, movement 101). POs without a GR are sent too (PO raised, not received).
 #   PGI: NSDM_V_MSEG plant 3111, movement 601, sales order item 10, not reversed -> posting date + document
 # Read-only in SAP. -VerifyOnly runs the queries and shows counts without sending anything.
 $ErrorActionPreference='Stop'
@@ -23,19 +23,25 @@ function Sap-Date($v){
   return ''
 }
 function Json-Text([string]$s){ return '"'+($s -replace '\\','\\' -replace '"','\"')+'"' }
-function Read-Rows($connection,[string]$sql,[int]$dateIndex){
+function Read-Rows($connection,[string]$sql,[int[]]$dateColumns){
+  # Returns JSON arrays (as text) of every column; date columns become yyyy-MM-dd, rows without a chassis are skipped.
   $command=$connection.CreateCommand(); $command.CommandText=$sql; $command.CommandTimeout=900
   $reader=$command.ExecuteReader(); $rows=New-Object 'System.Collections.Generic.List[string]'
   try{
     while($reader.Read()){
-      $chassis=([string]$reader.GetValue(0)).Trim(); $date=Sap-Date $reader.GetValue($dateIndex); $doc=([string]$reader.GetValue(2)).Trim()
-      if($chassis -and $date){$rows.Add('['+(Json-Text $chassis)+','+(Json-Text $date)+','+(Json-Text $doc)+']')}
+      $cells=New-Object 'System.Collections.Generic.List[string]'
+      for($i=0;$i -lt $reader.FieldCount;$i++){
+        $v=$reader.GetValue($i)
+        if($dateColumns -contains $i){$text=Sap-Date $v}elseif($v -is [DBNull]){$text=''}else{$text=([string]$v).Trim()}
+        $cells.Add((Json-Text $text))
+      }
+      if($cells[0] -ne '""'){$rows.Add('['+($cells -join ',')+']')}
     }
   }finally{$reader.Close()}
   return ,$rows
 }
 $grSql=@'
-SELECT objk.SERNR AS CHASSIS, gr.GR_BUDAT AS GR_DATE, ekko.EBELN AS PO
+SELECT objk.SERNR AS CHASSIS, gr.GR_BUDAT AS GR_DATE, ekko.EBELN AS PO, ekko.BEDAT AS PO_DATE
 FROM "SAPHANADB"."VBAK" AS vbak
 LEFT JOIN "SAPHANADB"."SER02" AS ser02 ON vbak.VBELN = ser02.SDAUFNR AND ser02.POSNR = 10
 LEFT JOIN "SAPHANADB"."OBJK" AS objk ON ser02.OBKNR = objk.OBKNR
@@ -44,7 +50,7 @@ LEFT JOIN "SAPHANADB"."EKKO" AS ekko ON ekkn.EBELN = ekko.EBELN AND ekko.EKORG =
 LEFT JOIN (
   SELECT EBELN, MAX(BUDAT) AS GR_BUDAT FROM "SAPHANADB"."EKBE" WHERE BEWTP = 'E' AND BWART = '101' GROUP BY EBELN
 ) AS gr ON ekko.EBELN = gr.EBELN
-WHERE objk.SERNR IS NOT NULL AND gr.GR_BUDAT IS NOT NULL
+WHERE objk.SERNR IS NOT NULL AND ekko.EBELN IS NOT NULL
 '@
 $giSql=@'
 SELECT DISTINCT obj.SERNR AS CHASSIS, mseg.BUDAT_MKPF AS GI_DATE, mseg.MBLNR AS GI_DOC
@@ -69,8 +75,8 @@ try{
   $connection=New-Object System.Data.Odbc.OdbcConnection ('DRIVER={'+$sap.driver+'};SERVERNODE='+$sap.server+';UID='+(Odbc-Value $sap.user)+';PWD='+(Odbc-Value $password)+';')
   $password=$null
   $connection.Open()
-  $gr=Read-Rows $connection $grSql 1
-  $gi=Read-Rows $connection $giSql 1
+  $gr=Read-Rows $connection $grSql @(1,3)
+  $gi=Read-Rows $connection $giSql @(1)
   $result.grRows=$gr.Count; $result.giRows=$gi.Count
   if($gr.Count -lt 1 -and $gi.Count -lt 1){throw 'SAP returned no GR or PGI rows; nothing was sent.'}
   $result.sampleGr=@($gr|Select-Object -First 3); $result.sampleGi=@($gi|Select-Object -First 3)
@@ -81,7 +87,7 @@ try{
     $uri=([Uri]$agent.siteUrl).GetLeftPart([UriPartial]::Authority)+'/api/sap-grgi'
     $response=Invoke-RestMethod -Method Post -Uri $uri -Headers @{Authorization='Bearer '+$token} -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 180
     $token=$null
-    $result.ok=$true;$result.uploaded=$true;$result.message="Website saved $($response.chassis) chassis (GR rows $($response.gr), PGI rows $($response.gi))."
+    $result.ok=$true;$result.uploaded=$true;$result.message="Website saved $($response.chassis) chassis (GR $($response.gr), PGI $($response.gi))."
   }
 }catch{
   $result.message=$_.Exception.Message

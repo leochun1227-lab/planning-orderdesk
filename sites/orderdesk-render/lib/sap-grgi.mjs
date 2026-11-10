@@ -1,6 +1,7 @@
 // SAP GR / GI per chassis, pushed by a computer inside the company network (SAP HANA is not
 // reachable from Render). The computer runs the same SQL as the Planning Schedule workbook's
-// Power Query "GR" and "PGI" queries and posts {gr: [[chassis, grDate, po]], gi: [[chassis, giDate, doc]]}.
+// Power Query "GR" and "PGI" queries and posts {gr: [[chassis, grDate, po, poDate]], gi: [[chassis, giDate, doc]]}.
+// This is the only GR / GI source of the production line (no Portal copies).
 // Stored compactly at orderdesk/sap-grgi (outside the order state, so order saves never load it).
 import { normalizeChassis } from './order-engine.mjs';
 
@@ -9,18 +10,24 @@ export const SAP_MAX_BYTES = 20 * 1024 * 1024;
 const day = v => { const s = String(v ?? '').trim(); const m = s.match(/^(\d{4})-?(\d{2})-?(\d{2})/); return m && m[1] > '1971' ? `${m[1]}-${m[2]}-${m[3]}` : ''; };
 const clean = v => String(v ?? '').replace(/[|\s]+/g, ' ').trim().slice(0, 20);
 
-/** Validate an upload and fold it to chassis → "grAt|po|giAt|giDoc" (latest GR and latest GI win). */
+/**
+ * Validate an upload and fold it per chassis. gr rows: [chassis, grDate or '', po, poDate] (a PO without
+ * a GR is kept, so "PO raised, not received" differs from "not in SAP"); gi rows: [chassis, giDate, doc].
+ * The latest GR and the latest GI win.
+ */
 export function foldSapUpload(body) {
   if (!body || !Array.isArray(body.gr) || !Array.isArray(body.gi)) throw new Error('gr and gi arrays are required');
-  if (body.gr.length + body.gi.length > 200000) throw new Error('too many rows');
+  if (body.gr.length + body.gi.length > 300000) throw new Error('too many rows');
   const rows = new Map();
-  const row = c => rows.get(c) || rows.set(c, { grAt: '', po: '', giAt: '', giDoc: '' }).get(c);
+  const row = c => rows.get(c) || rows.set(c, { grAt: '', po: '', poAt: '', giAt: '', giDoc: '' }).get(c);
   let gr = 0, gi = 0;
   for (const r of body.gr) {
     if (!Array.isArray(r)) continue;
-    const c = normalizeChassis(r[0]), d = day(r[1]);
-    if (!c || !/^[A-Z0-9]{4,20}$/.test(c) || !d) continue;
-    const x = row(c); if (d >= x.grAt) { x.grAt = d; x.po = clean(r[2]); } gr++;
+    const c = normalizeChassis(r[0]), d = day(r[1]), po = clean(r[2]), poAt = day(r[3]);
+    if (!c || !/^[A-Z0-9]{4,20}$/.test(c) || (!d && !po)) continue;
+    const x = row(c);
+    if (d && d >= x.grAt) { x.grAt = d; x.po = po; x.poAt = poAt; } else if (!x.grAt && po && poAt >= x.poAt) { x.po = po; x.poAt = poAt; }
+    if (d) gr++;
   }
   for (const r of body.gi) {
     if (!Array.isArray(r)) continue;
@@ -30,8 +37,9 @@ export function foldSapUpload(body) {
   }
   return { rows, gr, gi };
 }
-export const encodeSap = rows => Object.fromEntries([...rows].map(([c, x]) => [c, [x.grAt, x.po, x.giAt, x.giDoc].join('|')]));
-export const decodeSap = obj => new Map(Object.entries(obj || {}).map(([c, s]) => { const [grAt = '', po = '', giAt = '', giDoc = ''] = String(s).split('|'); return [c, { grAt, po, giAt, giDoc }]; }));
+const FIELDS = ['grAt', 'po', 'poAt', 'giAt', 'giDoc'];
+export const encodeSap = rows => Object.fromEntries([...rows].map(([c, x]) => [c, FIELDS.map(f => x[f]).join('|')]));
+export const decodeSap = obj => new Map(Object.entries(obj || {}).map(([c, s]) => { const v = String(s).split('|'); return [c, Object.fromEntries(FIELDS.map((f, i) => [f, v[i] || '']))]; }));
 
 /** Reads the stored SAP copy (cached; refreshed after an upload or every 10 minutes). */
 export function createSapSource(firebase, { path = SAP_PATH, ttlMs = 10 * 60 * 1000 } = {}) {
@@ -56,16 +64,4 @@ export function createSapSource(firebase, { path = SAP_PATH, ttlMs = 10 * 60 * 1
       return { at: doc.at, chassis: rows.size, gr, gi };
     },
   };
-}
-
-/** SAP first; the Portal copies (TMS, DateTrack, pgirecord) only fill what SAP does not have. */
-export function mergeGrGi(portal, sap) {
-  const out = new Map(portal);
-  for (const [c, s] of sap) {
-    const p = out.get(c) || { grAt: '', grSource: '', giAt: '', tmsStatus: '', container: '' };
-    out.set(c, { ...p,
-      ...(s.grAt ? { grAt: s.grAt, grSource: 'SAP', po: s.po } : {}),
-      ...(s.giAt ? { giAt: s.giAt, giSource: 'SAP', giDoc: s.giDoc } : {}) });
-  }
-  return out;
 }

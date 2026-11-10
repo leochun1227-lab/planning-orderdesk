@@ -2,13 +2,12 @@
 // leg to the Australian factory and GI. Read-only from every source:
 //   Longtree      Feishu Bitable "车辆生产发运进度 / 生产海运总表" (China production + shipping dates)
 //   prodReport    Regent production API (AU factory location, station, flags, station history)
-//   Dealer Portal Firebase: datetrack "Received in Melbourne" (GR) and pgirecord (GI)
+//   SAP           GR / GI per chassis, pushed by an in-network computer (sap-grgi.mjs)
 // Stage rule follows the Dealer Portal (planningIntegration/vehicleStatus.ts getCurrentStatus):
 // the latest node that has a date decides; a vehicle the AU factory reports as received/in
 // production counts as in the AU factory even before the GR date reaches datetrack.
 import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
-import { mergeGrGi } from './sap-grgi.mjs';
 
 export const STAGES = [
   { id: 'cnWaiting', group: 'cn', zh: 'Longtree 未开始', en: 'Not started (Longtree)' },
@@ -97,41 +96,6 @@ export function parseProdReport(rows) {
   }
   return out;
 }
-const portalDay = text => { const m = String(text || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? iso(+m[3], +m[2], +m[1]) : ''; };
-/**
- * GR / GI per chassis. GR: SAP goods receipt at plant 3111 from the Portal TMS containers
- * (sap.grDate3111) first, then DateTrack "Received in Melbourne", then pgirecord grDateLast.
- * GI: pgirecord pgidate. Without a GR the TMS container status says why (in transit, GR pending…).
- * 01/01/1970 placeholders are ignored.
- */
-export function parsePortal(datetrack, pgirecord, tmsContainers) {
-  const out = new Map();
-  const get = c => out.get(c) || out.set(c, { grAt: '', grSource: '', giAt: '', tmsStatus: '', container: '' }).get(c);
-  for (const c of Object.values(tmsContainers || {})) {
-    if (!c || typeof c !== 'object') continue;
-    const gr = portalDay(c.sap?.grDate3111);
-    for (const ch of Array.isArray(c.chassisNumbers) ? c.chassisNumbers : []) {
-      const k = normalizeChassis(ch); if (!k) continue;
-      const row = get(k);
-      if (gr > '1971' && gr > row.grAt) { row.grAt = gr; row.grSource = 'TMS'; row.container = String(c.containerNumber || ''); }
-      if (!row.grAt) { row.tmsStatus = String(c.status || ''); row.container = String(c.containerNumber || ''); }
-    }
-  }
-  for (const [k, v] of Object.entries(datetrack || {})) {
-    if (!v || typeof v !== 'object') continue;
-    const c = normalizeChassis(v['Chassis Number'] || k); if (!c) continue;
-    const gr = portalDay(v['Received in Melbourne']);
-    if (gr > '1971' && !get(c).grAt) { get(c).grAt = gr; get(c).grSource = 'DateTrack'; }
-  }
-  for (const [k, v] of Object.entries(pgirecord || {})) {
-    if (!v || typeof v !== 'object') continue;
-    const c = normalizeChassis(k); if (!c) continue;
-    const row = get(c);
-    const gi = portalDay(v.pgidate); if (gi > '1971') { row.giAt = gi; row.giSource = 'pgirecord'; }
-    const gr = portalDay(v.grDateLast); if (gr > '1971' && !row.grAt) { row.grAt = gr; row.grSource = 'pgirecord'; }
-  }
-  return out;
-}
 const daysBetween = (from, to) => (from && to ? Math.round((Date.parse(to.slice(0, 10)) - Date.parse(from.slice(0, 10))) / 86400000) : null);
 
 /** Stage of one vehicle, Portal rule order (latest node first). */
@@ -184,7 +148,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         stage: live.stage, since: live.since, days: daysBetween(live.since, today),
         inLongtree: Boolean(lt), orderAt: lt?.orderAt || '', weldAt: lt?.weldAt || '', furnitureAt: lt?.furnitureAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '',
         etd: lt?.etd || '', atd: lt?.atd || '', eta: lt?.eta || '', ata: lt?.ata || '', notes: lt?.notes || {},
-        grAt: p.grAt || '', grSource: p.grSource || '', po: p.po || '', giAt: p.giAt || '', giSource: p.giSource || '', giDoc: p.giDoc || '', tmsStatus: p.tmsStatus || '', container: p.container || '',
+        inSap: Boolean(chassis && portal.has(chassis)), grAt: p.grAt || '', po: p.po || '', poAt: p.poAt || '', giAt: p.giAt || '', giDoc: p.giDoc || '',
         inProduction: Boolean(au), location: au?.location || '', station: au?.station || '', flags: au?.flags || [], enteredAt: au?.enteredAt || '', stationSince: au?.stationSince || '', daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
       },
     });
@@ -261,7 +225,7 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     if (boardCache && boardCache.at === copy.at && boardCache.today === today) return boardCache;
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
-    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, grgi: parsePortal(raw.datetrack, raw.pgi, raw.tms), settings: mod.DEFAULT_BOARD_SETTINGS };
+    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS };
     return boardCache;
   }
   return {
@@ -273,7 +237,7 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
       const [copy] = await Promise.all([portal.current({ force }), force || first ? inflight : null]);
       const pb = await portalBoard(copy, today);
       const sapCopy = sap ? await sap.current() : { rows: new Map(), at: '', count: 0, error: 'not configured' };
-      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: mergeGrGi(pb.grgi, sapCopy.rows), board: pb.board, settings: pb.settings,
+      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings,
         status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) } } };
     },
   };

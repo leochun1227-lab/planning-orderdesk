@@ -9,7 +9,7 @@ import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, List
 
 type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
 type Live = { stage: string; since: string; days: number | null; inLongtree: boolean; orderAt: string; weldAt: string; furnitureAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; etd: string; atd: string; eta: string; ata: string; notes: Record<string, string>;
-  grAt: string; grSource: string; po: string; giAt: string; giSource: string; giDoc: string; tmsStatus: string; container: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
+  inSap: boolean; grAt: string; po: string; poAt: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
   liveStageName?: string; liveTone?: string; v?: View;
@@ -48,10 +48,9 @@ function OnlineDate({ actual, expected, baseline, zh }: { actual: string; expect
 
 const LT_NODES: [keyof Live, string, string][] = [['ata', '实际到港', 'Arrived AU port'], ['atd', '实际离港', 'Left CN port'], ['shippedAt', '发运', 'Shipped'], ['finishedAt', '总装入库', 'Finished'], ['assemblyAt', '总装上线', 'Assembly'], ['furnitureAt', '家具上线', 'Furniture'], ['weldAt', '钣焊上线', 'Welding'], ['orderAt', '订单接收', 'Order received']];
 const LOCATION_ZH: Record<string, string> = { received: '已接收', 'pre-assembly': '预装', production: '生产', qc: '质检', transport: '待运输' };
-const TMS_ZH: Record<string, string> = { 'In transit / pending': '在途', 'Vessel arrived / GR pending': '船已到，待 GR', Arrived: '已到港', 'Needs review - Mismatch': '需核对（柜号不符）' };
 const LIVE_PHASE: Record<string, string> = { cnWaiting: 'plan', cnWelding: 'cn', cnAssembly: 'cn', cnFinished: 'cn', cnShipped: 'sea', seaPort: 'sea', seaOnWater: 'sea', seaArrived: 'sea', auFactory: 'au', gi: 'done' };
 /** The four live facts as plain results, plus a first reading that does not change the Portal group. */
-function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => string, groupName: (id: string) => string, ltDown: string, prodDown: string): View | undefined {
+function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => string, groupName: (id: string) => string, ltDown: string, prodDown: string, sapDown: string): View | undefined {
   const l = r.live; if (!l) return undefined;
   const node = LT_NODES.find(([f]) => { const d = l[f] as string; return d && d <= today; });
   const future = !node ? '' : '';
@@ -59,8 +58,9 @@ function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => 
   const phase = LIVE_PHASE[l.stage], board = ['au', 'sea', 'cn'].includes(r.group) ? r.group : 'plan';
   const differs = phase !== board && !(phase === 'done' && board === 'au');
   return {
-    grText: l.grAt ? (zh ? '已 GR' : 'GR done') : (zh ? '未 GR' : 'No GR'), grSub: l.grAt ? `${l.grAt} · ${l.grSource}${l.grSource === 'SAP' && l.po ? ` PO ${l.po}` : ''}` : l.tmsStatus ? `TMS：${zh ? TMS_ZH[l.tmsStatus] || l.tmsStatus : l.tmsStatus}` : '',
-    giText: l.giAt ? (zh ? '已 GI' : 'GI done') : (zh ? '未 GI' : 'No GI'), giSub: l.giAt ? `${l.giAt} · ${l.giSource === 'SAP' ? `SAP ${l.giDoc}`.trim() : l.giSource || ''}` : '',
+    grText: sapDown || (l.grAt ? (zh ? '已 GR' : 'GR done') : (zh ? '未 GR' : 'No GR')),
+    grSub: sapDown ? '' : l.grAt ? `${l.grAt}${l.po ? ` · PO ${l.po}` : ''}` : l.po ? `PO ${l.po}${l.poAt ? `（${l.poAt}）` : ''}` : (zh ? 'SAP 无此车 PO' : 'No PO in SAP'),
+    giText: sapDown || (l.giAt ? (zh ? '已 GI' : 'GI done') : (zh ? '未 GI' : 'No GI')), giSub: sapDown ? '' : l.giAt ? `${l.giAt}${l.giDoc ? ` · ${l.giDoc}` : ''}` : '',
     ltText: ltDown ? ltDown : !l.inLongtree ? (zh ? '飞书表里还没有这台车' : 'Not in the Longtree table yet') : node ? `${zh ? node[1] : node[2]} · ${l[node[0]]}` : (zh ? '未开始' : 'Not started'), ltSub,
     prodText: prodDown ? prodDown : l.inProduction ? `${zh ? LOCATION_ZH[l.location] || l.location : l.location} · ${l.station || '—'}` : (zh ? '生产系统无此车' : 'Not in production API'),
     prodSub: !prodDown && l.inProduction ? `${zh ? '工位' : 'Station'} ${l.daysAtStation ?? '—'} ${zh ? '天' : 'd'}${l.enteredAt ? ` · ${zh ? '进厂' : 'in'} ${l.enteredAt}` : ''}` : '',
@@ -90,8 +90,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const groupName = (id: string) => { const x = groups.find(g => g.id === id); return x ? (zh ? x.zh : x.en) : id; };
   // A source that is not configured or could not be read says so, instead of "not found" on every row.
   const down = (k: string, name: string) => { const x = data?.sources?.[k]; if (!x || x.count) return ''; return x.error === 'not configured' ? (zh ? `${name}未配置` : `${name} not configured`) : x.error ? (zh ? `${name}读取失败` : `${name} unavailable`) : ''; };
-  const rows = useMemo(() => { const lt = down('longtree', zh ? '飞书' : 'Longtree '), pr = down('prod', zh ? '生产系统' : 'Production API ');
-    return (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName, lt, pr) })); }, [data, zh]);
+  const rows = useMemo(() => { const lt = down('longtree', zh ? '飞书' : 'Longtree '), pr = down('prod', zh ? '生产系统' : 'Production API '), sp = data?.sources?.sap?.count ? '' : (zh ? 'SAP 未连接' : 'SAP not connected');
+    return (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName, lt, pr, sp) })); }, [data, zh]);
   const searching = query.trim().length > 0;
   const base = useMemo(() => rows.filter(r => (line === 'All' || r.line === line) && (!dealer || r.dealer === dealer)), [rows, line, dealer]);
   const counts = useMemo(() => Object.fromEntries(groups.map(g => [g.id, base.filter(r => r.group === g.id).length])), [base, groups]);
@@ -145,7 +145,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
 
   function exportCsv() { grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${g?.id || 'search'}-${data?.today || ''}.csv` }); }
   const src = data?.sources || {};
-  const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产 · TMS GR · PGI）' : 'Dealer Portal (board · TMS GR · PGI)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: zh ? 'SAP GR/GI（内网电脑）' : 'SAP GR/GI (in-network PC)' };
+  const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI' };
   const avg = g?.phase ? data?.averages?.[g.phase] : null;
   const card = (ids: string[], Icon: any, step: string, title: string, sub: string, target: string) =>
     <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => { setGroup(target); setChip(''); setQuery(''); }}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
@@ -173,7 +173,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <label className="dealer-filter"><ListFilter size={16} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
     </div>
     <div className="pl-sources">
-      {Object.entries(srcLabel).filter(([k]) => k !== 'sap' || src.sap?.count).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={src[k]?.error || ''}>{l} · {src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '还没有推送' : 'no upload yet') : src[k]?.error ? (zh ? '读取失败，显示上次数据' : 'failed, showing last copy') : time(src[k]?.at)}</span>)}
+      {Object.entries(srcLabel).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={src[k]?.error || ''}>{l} · {src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '内网电脑还没有推送' : 'no upload from the in-network PC yet') : src[k]?.error ? (zh ? '读取失败，显示上次数据' : 'failed, showing last copy') : time(src[k]?.at)}</span>)}
       <span className="muted">{zh ? '只读 · 排产日期与 Dealer Portal 相同算法' : 'Read-only · board dates use the Dealer Portal code'}</span>
       <button className="pl-export" onClick={exportCsv} disabled={!visible.length}><ArrowDownToLine size={14} />{zh ? '导出 CSV' : 'Export CSV'}</button>
       <button aria-label={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={15} /></button>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { longtreeDate, parseLongtree, parseProdReport, parsePortal, stageOf, buildProductionLine, createProductionLineSource } from '../lib/production-line.mjs';
+import { longtreeDate, parseLongtree, parseProdReport, stageOf, buildProductionLine, createProductionLineSource } from '../lib/production-line.mjs';
 
 test('Longtree dates: Beijing epoch, dash/dot/compact text, whitespace; other text is a note', () => {
   assert.equal(longtreeDate([1787068800000]).date, '2026-08-19'); // 2026-08-18T16:00Z = Beijing midnight
@@ -25,16 +25,6 @@ test('prodReport rows give location, station, flags and station time (Sydney)', 
   const r = m.get('SRV265330');
   assert.equal(r.location, 'production'); assert.equal(r.station, 'Campervan'); assert.deepEqual(r.flags, ['G', 'B']);
   assert.equal(r.enteredAt, '2026-10-12'); assert.equal(r.stationSince.slice(0, 10), '2026-11-04');
-});
-
-test('GR: SAP 3111 from TMS first, then DateTrack, then pgirecord; TMS status kept when no GR; 1970 ignored', () => {
-  const tms = { a: { containerNumber: 'C1', status: 'Arrived', chassisNumbers: ['SRC1'], sap: { grDate3111: '05/05/2025' } }, b: { containerNumber: 'C2', status: 'In transit / pending', chassisNumbers: ['SRC4'], sap: { grDate3111: '' } } };
-  const m = parsePortal({ a: { 'Chassis Number': 'SRC-1', 'Received in Melbourne': '30/04/2025' }, b: { 'Chassis Number': 'SRC2', 'Received in Melbourne': '01/01/1970' }, c: { 'Chassis Number': 'SRC3', 'Received in Melbourne': '02/05/2025' } },
-    { SRC1: { pgidate: '06/05/2025' }, SRC2: { pgidate: '<NA>', grDateLast: '12/10/2026' }, SRC3: { grDateLast: '01/05/2025' } }, tms);
-  assert.deepEqual(m.get('SRC1'), { grAt: '2025-05-05', grSource: 'TMS', giAt: '2025-05-06', giSource: 'pgirecord', tmsStatus: '', container: 'C1' });
-  assert.deepEqual(m.get('SRC2'), { grAt: '2026-10-12', grSource: 'pgirecord', giAt: '', tmsStatus: '', container: '' });
-  assert.equal(m.get('SRC3').grSource, 'DateTrack');
-  assert.deepEqual(m.get('SRC4'), { grAt: '', grSource: '', giAt: '', tmsStatus: 'In transit / pending', container: 'C2' });
 });
 
 test('stage: latest node wins; AU factory report counts before GR; future dates do not count', () => {
@@ -67,11 +57,11 @@ test('line = Portal board rows (groups, plan dates kept) plus live facts and the
   assert.equal(r.rows[1].live, null);
 });
 
-test('sources: unconfigured sources are reported; the Portal board is built from the shared copy', async () => {
+test('sources: unconfigured sources are reported; the Portal board is built from the shared copy; GR/GI only from SAP', async () => {
   const portal = portalCopy({ datetrack: { x: { 'Chassis Number': 'SRC1', 'Received in Melbourne': '01/02/2026' } }, pgi: {} });
   const src = createProductionLineSource({}, { fetcher: async () => { throw new Error('no network'); }, portal, board: fakeBoard([{ id: 'a', chassis: 'SRC1', group: 'sea' }]) });
   const r = await src.current({ today: '2026-11-09' });
   assert.equal(r.status.longtree.error, 'not configured'); assert.equal(r.status.prod.error, 'not configured');
-  assert.equal(r.board.rows.length, 1); assert.equal(r.board.completed, 7); assert.equal(r.portal.get('SRC1').grAt, '2026-02-01');
+  assert.equal(r.board.rows.length, 1); assert.equal(r.board.completed, 7); assert.equal(r.portal.size, 0); assert.equal(r.status.sap.error, 'not configured');
   await src.current({ today: '2026-11-09' }); assert.equal(portal.calls, 2); // the shared copy decides when to download
 });
