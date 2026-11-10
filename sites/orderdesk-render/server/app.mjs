@@ -132,7 +132,9 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
       if (state.meta.lastReportDate && reportDate < state.meta.lastReportDate) throw new Error('报告日期早于已处理报告');
       if (reportDate > dayInSydney()) throw new Error('报告日期不能晚于今天');
       const batchId = await reportFingerprint(body.records, reportDate);
-      const result = applyReport(state, body.records, { batchId, fileName: String(body.fileName || 'CRM Report').slice(0, 160), businessDate: dayInSydney(), reportDate, now: new Date().toISOString() });
+      // The business date is the report's own day: a report imported late (missed night) is dated the day it covers,
+      // exactly as the 00:20 run would have done; today's report gives today.
+      const result = applyReport(state, body.records, { batchId, fileName: String(body.fileName || 'CRM Report').slice(0, 160), businessDate: reportDate, reportDate, now: new Date().toISOString() });
       if (!result.duplicate) { result.state.meta.lastReportDate = reportDate; await store.writeState(result.state, etag); }
       return json({ summary: result.summary, duplicate: result.duplicate });
     } catch (e) { return json({ error: message(e, '导入失败') }, 400); }

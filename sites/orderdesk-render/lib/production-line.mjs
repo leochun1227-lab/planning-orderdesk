@@ -148,7 +148,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         stage: live.stage, since: live.since, days: daysBetween(live.since, today),
         inLongtree: Boolean(lt), orderAt: lt?.orderAt || '', weldAt: lt?.weldAt || '', furnitureAt: lt?.furnitureAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '',
         etd: lt?.etd || '', atd: lt?.atd || '', eta: lt?.eta || '', ata: lt?.ata || '', notes: lt?.notes || {},
-        inSap: Boolean(chassis && portal.has(chassis)), grAt: p.grAt || '', po: p.po || '', poAt: p.poAt || '', giAt: p.giAt || '', giDoc: p.giDoc || '',
+        inSap: Boolean(chassis && portal.has(chassis)), grAt: p.grAt || '', po: p.po || '', grDoc: p.grDoc || '', fgAt: p.fgAt || '', fgDoc: p.fgDoc || '', giAt: p.giAt || '', giDoc: p.giDoc || '',
         inProduction: Boolean(au), location: au?.location || '', station: au?.station || '', flags: au?.flags || [], enteredAt: au?.enteredAt || '', stationSince: au?.stationSince || '', daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
       },
     });

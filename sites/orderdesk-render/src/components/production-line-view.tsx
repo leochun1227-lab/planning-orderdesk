@@ -9,7 +9,7 @@ import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, List
 
 type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
 type Live = { stage: string; since: string; days: number | null; inLongtree: boolean; orderAt: string; weldAt: string; furnitureAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; etd: string; atd: string; eta: string; ata: string; notes: Record<string, string>;
-  inSap: boolean; grAt: string; po: string; poAt: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
+  inSap: boolean; grAt: string; po: string; grDoc: string; fgAt: string; fgDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
   liveStageName?: string; liveTone?: string; v?: View;
@@ -59,7 +59,7 @@ function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => 
   const differs = phase !== board && !(phase === 'done' && board === 'au');
   return {
     grText: sapDown || (l.grAt ? (zh ? '已 GR' : 'GR done') : (zh ? '未 GR' : 'No GR')),
-    grSub: sapDown ? '' : l.grAt ? `${l.grAt}${l.po ? ` · PO ${l.po}` : ''}` : l.po ? `PO ${l.po}${l.poAt ? `（${l.poAt}）` : ''}` : (zh ? 'SAP 无此车 PO' : 'No PO in SAP'),
+    grSub: sapDown ? '' : [l.grAt, l.fgAt ? `${zh ? '完工入库' : 'Built'} ${l.fgAt}` : ''].filter(Boolean).join(' · '),
     giText: sapDown || (l.giAt ? (zh ? '已 GI' : 'GI done') : (zh ? '未 GI' : 'No GI')), giSub: sapDown ? '' : l.giAt ? `${l.giAt}${l.giDoc ? ` · ${l.giDoc}` : ''}` : '',
     ltText: ltDown ? ltDown : !l.inLongtree ? (zh ? '飞书表里还没有这台车' : 'Not in the Longtree table yet') : node ? `${zh ? node[1] : node[2]} · ${l[node[0]]}` : (zh ? '未开始' : 'Not started'), ltSub,
     prodText: prodDown ? prodDown : l.inProduction ? `${zh ? LOCATION_ZH[l.location] || l.location : l.location} · ${l.station || '—'}` : (zh ? '生产系统无此车' : 'Not in production API'),
@@ -136,7 +136,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       { colId: 'longtree', headerName: zh ? '飞书 Longtree' : 'Longtree (Feishu)', width: 176, valueGetter: p => p.data?.v?.ltText || '', tooltipValueGetter: p => p.data?.v?.ltSub || undefined, cellRenderer: (p: any) => p.data?.v && <Two top={p.data.v.ltText} sub={p.data.v.ltSub} /> },
       { colId: 'production', headerName: zh ? 'Production API（Rafael）' : 'Production API (Rafael)', width: 262, valueGetter: p => p.data?.v?.prodText || '',
         cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span>{p.data.v.prodText}</span><small>{p.data.v.prodSub}{(p.data.live.flags || []).length > 0 && <span className="pl-flags" style={{ marginLeft: 6 }}>{p.data.live.flags.map((f: string, i: number) => <i key={i} style={{ background: FLAG_COLORS[f]?.[0] || '#868e96', color: FLAG_COLORS[f]?.[1] || '#fff' }}>{f}</i>)}</span>}</small></div> },
-      { colId: 'gr', headerName: 'GR', width: 190, valueGetter: p => p.data?.v?.grSub || p.data?.v?.grText || '', cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className={`pl-yes ${p.data.live.grAt ? 'on' : ''}`}>{p.data.v.grText}</span><small>{p.data.v.grSub}</small></div> },
+      { colId: 'gr', headerName: 'GR', width: 190, tooltipValueGetter: p => p.data?.live?.po ? `PO ${p.data.live.po} · ${p.data.live.grDoc}` : undefined, valueGetter: p => p.data?.v?.grSub || p.data?.v?.grText || '', cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className={`pl-yes ${p.data.live.grAt ? 'on' : ''}`}>{p.data.v.grText}</span><small>{p.data.v.grSub}</small></div> },
       { colId: 'gi', headerName: 'GI', width: 150, valueGetter: p => p.data?.v?.giSub || p.data?.v?.giText || '', cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className={`pl-yes ${p.data.live.giAt ? 'on' : ''}`}>{p.data.v.giText}</span><small>{p.data.v.giSub}</small></div> },
       { colId: 'judge', headerName: zh ? '初步判断' : 'First reading', width: 140, valueGetter: p => p.data?.v?.judge || '',
         cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className="pl-stage" style={{ background: p.data.liveTone, alignSelf: 'flex-start' }}>{p.data.v.judge}</span><small className={p.data.v.differs ? 'pl-delay' : ''}>{p.data.v.judgeSub}</small></div> },
@@ -194,7 +194,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
           .map(([l, v, n]) => <div key={l}><span>{l}</span><b>{v || '—'}</b><em>{n}</em></div>)}
       </div>
       {detail.live && <ol className="pl-timeline">
-        {([[zh ? '钣焊上线' : 'Welding', detail.live.weldAt], [zh ? '总装上线' : 'Assembly', detail.live.assemblyAt], [zh ? '总装入库' : 'Finished', detail.live.finishedAt], [zh ? '发运' : 'Shipped', detail.live.shippedAt], [zh ? '实际离港' : 'ATD', detail.live.atd], [zh ? '实际到港' : 'ATA', detail.live.ata], ['GR', detail.live.grAt], ['GI', detail.live.giAt]] as [string, string][])
+        {([[zh ? '钣焊上线' : 'Welding', detail.live.weldAt], [zh ? '总装上线' : 'Assembly', detail.live.assemblyAt], [zh ? '总装入库' : 'Finished', detail.live.finishedAt], [zh ? '发运' : 'Shipped', detail.live.shippedAt], [zh ? '实际离港' : 'ATD', detail.live.atd], [zh ? '实际到港' : 'ATA', detail.live.ata], ['GR', detail.live.grAt], [zh ? '完工入库' : 'Built (AU)', detail.live.fgAt], ['GI', detail.live.giAt]] as [string, string][])
           .map(([l, v]) => <li key={l} className={v ? 'done' : ''}><span>{l}</span><b>{v || '—'}</b></li>)}
       </ol>}
       {detail.live?.history?.length ? <><h4>{zh ? '澳洲工厂工位记录（实时）' : 'AU station history (live)'}</h4><ul className="pl-history">{detail.live.history.map((h, i) => <li key={i}><span>{time(h.at)}</span><b>{h.stage}</b><em>{h.location}</em></li>)}</ul></> : null}

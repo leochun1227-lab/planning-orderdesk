@@ -1,6 +1,7 @@
 // SAP GR / GI per chassis, pushed by a computer inside the company network (SAP HANA is not
 // reachable from Render). The computer runs the same SQL as the Planning Schedule workbook's
-// Power Query "GR" and "PGI" queries and posts {gr: [[chassis, grDate, po, poDate]], gi: [[chassis, giDate, doc]]}.
+// queries posts {gr, fg, gi}: goods receipts found by the chassis serial number on the material document
+// (SER03 + OBJK), and PGI as in the Planning Schedule workbook's Power Query "PGI".
 // This is the only GR / GI source of the production line (no Portal copies).
 // Stored compactly at orderdesk/sap-grgi (outside the order state, so order saves never load it).
 import { normalizeChassis } from './order-engine.mjs';
@@ -11,35 +12,32 @@ const day = v => { const s = String(v ?? '').trim(); const m = s.match(/^(\d{4})
 const clean = v => String(v ?? '').replace(/[|\s]+/g, ' ').trim().slice(0, 20);
 
 /**
- * Validate an upload and fold it per chassis. gr rows: [chassis, grDate or '', po, poDate] (a PO without
- * a GR is kept, so "PO raised, not received" differs from "not in SAP"); gi rows: [chassis, giDate, doc].
- * The latest GR and the latest GI win.
+ * Validate an upload and fold it per chassis (the latest of each kind wins):
+ *   gr [chassis, date, po, doc]  goods receipt 101 at plant 3111 WITH a purchase order (received from Longtree)
+ *   fg [chassis, date, doc]      goods receipt 101 at plant 3111 WITHOUT a PO (AU production finished)
+ *   gi [chassis, date, doc]      PGI 601 at plant 3111
  */
 export function foldSapUpload(body) {
   if (!body || !Array.isArray(body.gr) || !Array.isArray(body.gi)) throw new Error('gr and gi arrays are required');
-  if (body.gr.length + body.gi.length > 300000) throw new Error('too many rows');
+  const fgIn = Array.isArray(body.fg) ? body.fg : [];
+  if (body.gr.length + body.gi.length + fgIn.length > 300000) throw new Error('too many rows');
   const rows = new Map();
-  const row = c => rows.get(c) || rows.set(c, { grAt: '', po: '', poAt: '', giAt: '', giDoc: '' }).get(c);
-  let gr = 0, gi = 0;
-  for (const r of body.gr) {
-    if (!Array.isArray(r)) continue;
-    const c = normalizeChassis(r[0]), d = day(r[1]), po = clean(r[2]), poAt = day(r[3]);
-    if (!c || !/^[A-Z0-9]{4,20}$/.test(c) || (!d && !po)) continue;
-    const x = row(c);
-    if (d && d >= x.grAt) { x.grAt = d; x.po = po; x.poAt = poAt; } else if (!x.grAt && po && poAt >= x.poAt) { x.po = po; x.poAt = poAt; }
-    if (d) gr++;
-  }
-  for (const r of body.gi) {
+  const row = c => rows.get(c) || rows.set(c, { grAt: '', po: '', grDoc: '', fgAt: '', fgDoc: '', giAt: '', giDoc: '' }).get(c);
+  const take = (list, dateField, apply) => { let n = 0; for (const r of list) {
     if (!Array.isArray(r)) continue;
     const c = normalizeChassis(r[0]), d = day(r[1]);
     if (!c || !/^[A-Z0-9]{4,20}$/.test(c) || !d) continue;
-    const x = row(c); if (d >= x.giAt) { x.giAt = d; x.giDoc = clean(r[2]); } gi++;
-  }
-  return { rows, gr, gi };
+    const x = row(c); if (d >= x[dateField]) apply(x, d, r); n++; } return n; };
+  const gr = take(body.gr, 'grAt', (x, d, r) => { x.grAt = d; x.po = clean(r[2]); x.grDoc = clean(r[3]); });
+  const fg = take(fgIn, 'fgAt', (x, d, r) => { x.fgAt = d; x.fgDoc = clean(r[2]); });
+  const gi = take(body.gi, 'giAt', (x, d, r) => { x.giAt = d; x.giDoc = clean(r[2]); });
+  return { rows, gr, fg, gi };
 }
-const FIELDS = ['grAt', 'po', 'poAt', 'giAt', 'giDoc'];
+const FIELDS = ['grAt', 'po', 'grDoc', 'fgAt', 'fgDoc', 'giAt', 'giDoc'];
 export const encodeSap = rows => Object.fromEntries([...rows].map(([c, x]) => [c, FIELDS.map(f => x[f]).join('|')]));
-export const decodeSap = obj => new Map(Object.entries(obj || {}).map(([c, s]) => { const v = String(s).split('|'); return [c, Object.fromEntries(FIELDS.map((f, i) => [f, v[i] || '']))]; }));
+const OLD_FIELDS = ['grAt', 'po', '', 'giAt', 'giDoc']; // first upload format (5 parts), read until the next push replaces it
+export const decodeSap = obj => new Map(Object.entries(obj || {}).map(([c, s]) => { const v = String(s).split('|'), names = v.length === 5 ? OLD_FIELDS : FIELDS;
+  const x = Object.fromEntries(FIELDS.map(f => [f, ''])); names.forEach((f, i) => { if (f) x[f] = v[i] || ''; }); return [c, x]; }));
 
 /** Reads the stored SAP copy (cached; refreshed after an upload or every 10 minutes). */
 export function createSapSource(firebase, { path = SAP_PATH, ttlMs = 10 * 60 * 1000 } = {}) {
@@ -56,12 +54,12 @@ export function createSapSource(firebase, { path = SAP_PATH, ttlMs = 10 * 60 * 1
     },
     async save(upload, now = new Date()) {
       if (!firebase) throw new Error('Database not configured');
-      const { rows, gr, gi } = foldSapUpload(upload);
+      const { rows, gr, fg, gi } = foldSapUpload(upload);
       if (!rows.size) throw new Error('No GR/GI rows with a chassis and a date');
-      const doc = { at: now.toISOString(), count: rows.size, grRows: gr, giRows: gi, source: clean(upload.source || 'SAP HANA'), rows: encodeSap(rows) };
+      const doc = { at: now.toISOString(), count: rows.size, grRows: gr, fgRows: fg, giRows: gi, source: clean(upload.source || 'SAP HANA'), rows: encodeSap(rows) };
       await firebase.put(path, doc);
       cache = { rows, at: doc.at, count: rows.size, error: '' }; loadedAt = Date.now();
-      return { at: doc.at, chassis: rows.size, gr, gi };
+      return { at: doc.at, chassis: rows.size, gr, fg, gi };
     },
   };
 }

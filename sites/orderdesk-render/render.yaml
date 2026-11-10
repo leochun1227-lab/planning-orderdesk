@@ -30,8 +30,8 @@ services:
         value: planning-pc
       - key: PLANNING_AGENT_TOKEN       # >= 32 random chars, also entered on the Planning PC
         generateValue: true
-      - key: PLANNING_AGENT_ENABLED
-        value: "false"                  # set to true after the PC's read-only verification passes
+      - key: PLANNING_AGENT_ENABLED     # set to true in the Render dashboard after the PC's read-only verification passes;
+        sync: false                     # sync: false so a Blueprint sync never switches it back off
       - key: LONGTREE_APP_ID            # Feishu app for Longtree 生产海运总表 (产线 page)
         sync: false
       - key: LONGTREE_APP_SECRET
