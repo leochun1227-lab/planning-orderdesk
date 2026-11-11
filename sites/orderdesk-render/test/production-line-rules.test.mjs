@@ -7,6 +7,8 @@ test('GR always means AU production; shipped without GR means shipping', () => {
   assert.equal(groupFor({ chassis: 'X', group: 'sea' }, {}, { grAt: '2026-10-01' }, today), 'au');
   assert.equal(groupFor({ chassis: 'X', group: 'rolling' }, {}, { grAt: '2026-10-01' }, today), 'au');
   assert.equal(groupFor({ chassis: 'X', group: 'au' }, { ata: '2026-09-30' }, {}, today), 'sea');
+  assert.equal(groupFor({ chassis: 'X', group: 'au' }, { ata: '2026-09-30' }, {}, today, { location: 'production' }), 'au', 'in the factory without GR is AU');
+  assert.equal(groupFor({ chassis: 'X', group: 'sea' }, { ata: '2026-10-29' }, {}, today, { location: 'received' }), 'au');
   assert.equal(groupFor({ chassis: 'X', group: 'cn' }, { shippedAt: '2026-11-09' }, {}, today), 'sea');
   assert.equal(groupFor({ chassis: 'X', group: 'cn' }, { shippedAt: '2026-12-09' }, {}, today), 'cn', 'a future ship date is not shipped');
   assert.equal(groupFor({ chassis: 'X', group: 'locked' }, { weldAt: '2026-11-01' }, {}, today), 'locked');

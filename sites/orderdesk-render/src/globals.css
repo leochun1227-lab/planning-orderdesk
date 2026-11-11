@@ -449,3 +449,6 @@ body{background:#eef1f6;font-size:14px}
 .pl-issue.error{background:#ffe3e3;color:#c92a2a}.pl-issue.warn{background:#fff3bf;color:#8a5a00}
 .pl-derived{color:#7b8799;font-style:italic}
 .pl-issue-list{margin:8px 0;padding-left:18px;font-size:12.5px}.pl-issue-list li{margin:2px 0}.pl-issue-list li.error{color:#c92a2a;font-weight:600}.pl-issue-list li.warn{color:#8a5a00}
+.pl-conf{margin-left:6px;font-size:10.5px;font-weight:700;padding:0 5px;border-radius:4px;background:#f1f3f5;color:#5c677d}
+.pl-conf.high{background:#e6f4ea;color:#2b8a3e}.pl-conf.medium{background:#fff3bf;color:#8a5a00}.pl-conf.low{background:#ffe3e3;color:#c92a2a}
+.pl-two small{min-width:0;max-width:100%}.pl-clip{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}

@@ -5,8 +5,9 @@
 import { PORTAL_BOARD_SOURCES, PORTAL_DATABASE_URL } from './campervan-plan.mjs';
 
 export const PORTAL_TTL_MS = 2 * 60 * 60 * 1000;
-// GR / GI come from SAP directly (sap-grgi.mjs), not from Portal copies.
-export const PORTAL_EXTRA_SOURCES = [];
+// GR / GI come from SAP directly (sap-grgi.mjs). tmssystem = the Portal's Vessel movements & ETA
+// (container / vessel / ETA per chassis, ~2.4 MB), shown on the production line.
+export const PORTAL_EXTRA_SOURCES = [['tms', 'tmssystem']];
 
 export function createPortalSource({ url = PORTAL_DATABASE_URL, ttlMs = PORTAL_TTL_MS, fetcher = fetch } = {}) {
   const base = url.replace(/\/+$/, '');

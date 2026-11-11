@@ -10,6 +10,7 @@ import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, List
 
 type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
 type Live = { stage: string; since: string; days: number | null; inLongtree: boolean; orderAt: string; weldAt: string; furnitureAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; etd: string; atd: string; eta: string; ata: string; notes: Record<string, string>;
+  ship: null | { container: string; voyage: string; vesselStatus: string; arrived: boolean; shippingDate: string; shippingText: string; eta: string; etaText: string; confidence: string; classification: string; containerGr: string; containerStatus: string };
   inSap: boolean; grAt: string; po: string; grDoc: string; fgAt: string; fgDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
@@ -149,6 +150,11 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         tooltipValueGetter: p => p.data?.regentDerived ? (zh ? 'CRM 没有生产状态，按已发 PO / 已签字显示' : 'CRM has no production status; shown from PO / signature') : undefined,
         cellRenderer: (p: any) => p.data && (p.value ? <span className={p.data.regentDerived ? 'pl-derived' : ''}>{p.value}</span> : <span className="pl-missing">—</span>) },
       { colId: 'longtree', headerName: zh ? '飞书 Longtree' : 'Longtree (Feishu)', width: 176, valueGetter: p => p.data?.v?.ltText || '', tooltipValueGetter: p => p.data?.v?.ltSub || undefined, cellRenderer: (p: any) => p.data?.v && <Two top={p.data.v.ltText} sub={p.data.v.ltSub} /> },
+      { colId: 'ship', headerName: zh ? '集装箱 · 船 · ETA' : 'Container · vessel · ETA', width: 250, valueGetter: p => p.data?.live?.ship?.voyage || '',
+        tooltipValueGetter: p => { const x = p.data?.live?.ship; return x ? [`${zh ? '集装箱' : 'Container'} ${x.container}`, x.voyage, `${zh ? '船状态' : 'Vessel'}：${x.vesselStatus || '—'}`, `${zh ? '发船' : 'Shipping'}：${x.shippingText || '—'}`, `ETA：${x.etaText || '—'}`, `${x.classification || ''} ${x.confidence || ''}`.trim(), x.containerGr ? `${zh ? '集装箱 GR' : 'Container GR'} ${x.containerGr}` : ''].filter(Boolean).join(' · ') : undefined; },
+        cellRenderer: (p: any) => { const x = p.data?.live?.ship; if (!p.data?.live) return null; if (!x) return <span className="pl-missing">{zh ? '船运页没有' : 'Not in shipping'}</span>;
+          const eta = x.arrived ? (zh ? '已到港' : 'Arrived') : x.eta ? `ETA ${x.eta}` : (x.etaText || (zh ? 'ETA 待定' : 'ETA TBC'));
+          return <Two top={<><b className={x.arrived ? 'pl-ontime' : ''}>{eta}</b>{x.confidence && !x.arrived ? <span className={`pl-conf ${x.confidence.toLowerCase()}`}>{x.confidence}</span> : null}</>} sub={<span className="pl-clip" title={`${x.container} · ${x.voyage}`}>{x.container} · {x.voyage}</span>} />; } },
       { colId: 'production', headerName: zh ? 'Production API（Rafael）' : 'Production API (Rafael)', width: 262, valueGetter: p => p.data?.v?.prodText || '',
         cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span>{p.data.v.prodText}</span><small>{p.data.v.prodSub}{(p.data.live.flags || []).length > 0 && <span className="pl-flags" style={{ marginLeft: 6 }}>{p.data.live.flags.map((f: string, i: number) => <i key={i} style={{ background: FLAG_COLORS[f]?.[0] || '#868e96', color: FLAG_COLORS[f]?.[1] || '#fff' }}>{f}</i>)}</span>}</small></div> },
       { colId: 'gr', headerName: 'GR', width: 190, tooltipValueGetter: p => p.data?.live?.po ? `PO ${p.data.live.po} · ${p.data.live.grDoc}` : undefined, valueGetter: p => p.data?.v?.grSub || p.data?.v?.grText || '', cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className={`pl-yes ${p.data.live.grAt ? 'on' : ''}`}>{p.data.v.grText}</span><small>{p.data.v.grSub}</small></div> },
@@ -161,7 +167,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const defaultColDef = useMemo<ColDef<Row>>(() => ({ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
   function exportCsv() { grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${g?.id || 'search'}-${data?.today || ''}.csv` }); }
   const src = data?.sources || {};
-  const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI' };
+  const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI', tms: zh ? '船运（Portal）' : 'Shipping (Portal)' };
   const avg = g?.phase ? data?.averages?.[g.phase] : null;
   const pick = (id: string) => { setGroup(id); setChip(''); setQuery(''); clearColFilters(); };
   const srcText = (k: string) => src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '内网电脑还没有推送' : 'no upload from the in-network PC yet') : src[k]?.error ? `${zh ? '读取失败，显示上次数据' : 'failed, showing last copy'}：${src[k].error}` : time(src[k]?.at);
