@@ -147,36 +147,39 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const src = data?.sources || {};
   const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI' };
   const avg = g?.phase ? data?.averages?.[g.phase] : null;
-  const card = (ids: string[], Icon: any, step: string, title: string, sub: string, target: string) =>
-    <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => { setGroup(target); setChip(''); setQuery(''); }}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
+  const pick = (id: string) => { setGroup(id); setChip(''); setQuery(''); };
+  const srcText = (k: string) => src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '内网电脑还没有推送' : 'no upload from the in-network PC yet') : src[k]?.error ? `${zh ? '读取失败，显示上次数据' : 'failed, showing last copy'}：${src[k].error}` : time(src[k]?.at);
+  const card = (ids: string[], Icon: any, step: string, sub: string, target: string) =>
+    <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => pick(target)}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
+  const note = searching ? (zh ? '在所有分组里搜索' : 'Searching every group') : g?.note || '';
 
   return <section className="table-panel schedule-panel pl-panel">
     <div className="pl-overview">
-      {card(['au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', '', `${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'au')}
-      {card(['locked', 'rolling'], CalendarDays, zh ? '02 · 滚动 60 天' : '02 · Rolling 60 days', '', `${zh ? '已锁定' : 'Locked'} ${counts.locked ?? 0} · ${zh ? '待确认' : 'To confirm'} ${counts.rolling ?? 0}`, 'locked')}
-      {card(['empty', 'customers'], Layers, zh ? '03 · 预排产' : '03 · Pre-schedule', '', `Empty slots ${counts.empty ?? 0} · Customer ${counts.customers ?? 0}`, 'empty')}
-      {card(['later'], Clock3, zh ? '后续排产 / 日期待补' : 'Later / dates missing', '', zh ? '国内计划上线在 60 天之后' : 'CN plan start beyond 60 days', 'later')}
+      {card(['au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', `${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'au')}
+      {card(['locked', 'rolling'], CalendarDays, zh ? '02 · 滚动 60 天' : '02 · Rolling 60 days', `${zh ? '已锁定' : 'Locked'} ${counts.locked ?? 0} · ${zh ? '待确认' : 'To confirm'} ${counts.rolling ?? 0}`, 'locked')}
+      {card(['empty', 'customers'], Layers, zh ? '03 · 预排产' : '03 · Pre-schedule', `Empty slots ${counts.empty ?? 0} · Customer ${counts.customers ?? 0}`, 'empty')}
+      {card(['later'], Clock3, zh ? '后续排产 / 日期待补' : 'Later / dates missing', zh ? '国内计划上线在 60 天之后' : 'CN plan start beyond 60 days', 'later')}
       <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{(rows.length).toLocaleString()} {zh ? '条未发运车辆 / slot' : 'open vehicles / slots'}</p></div></div>
     </div>
     <div className="pl-tabs" role="tablist">
-      {groups.map(x => <button key={x.id} role="tab" aria-selected={group === x.id && !searching} className={`pl-tab ${x.id} ${group === x.id && !searching ? 'on' : ''}`} onClick={() => { setGroup(x.id); setChip(''); setQuery(''); }}>{zh ? x.zh : x.en}<b>{(counts[x.id] ?? 0).toLocaleString()}</b></button>)}
+      {groups.map(x => { const on = group === x.id && !searching;
+        return <button key={x.id} role="tab" aria-selected={on} className={`pl-tab ${x.id} ${on ? 'on' : ''}`} onClick={() => pick(x.id)}>{zh ? x.zh : x.en}<b>{(counts[x.id] ?? 0).toLocaleString()}</b></button>; })}
+      <i className="pl-break" aria-hidden="true" />
+      <span className="pl-tabnote" title={note}>{searching && <strong>{zh ? `搜索「${query}」` : `Search "${query}"`}</strong>}<b>{visible.length.toLocaleString()}</b>{zh ? ' 条' : ' rows'} · {note}{avg && avg.days != null && !searching ? ` · ${zh ? '已完成节点平均' : 'avg completed stage'} ${avg.days} ${zh ? '天' : 'd'}` : ''}</span>
+      <div className="pl-sources">
+        {Object.entries(srcLabel).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={`${l} · ${srcText(k)}`}>{l}{src[k]?.error ? ` · ${src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : (zh ? '有问题' : 'issue')}` : ''}</span>)}
+      </div>
+      <button className="pl-export" onClick={exportCsv} disabled={!visible.length}><ArrowDownToLine size={13} />CSV</button>
+      <button aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={14} /></button>
     </div>
-    <div className="pl-section-head">
-      <div><h3>{searching ? (zh ? `搜索「${query}」` : `Search "${query}"`) : (zh ? g?.zh : g?.en)} <span className="count-chip">{visible.length.toLocaleString()}</span></h3><p>{searching ? (zh ? '在所有分组里搜索' : 'Searching every group') : g?.note}</p></div>
-      <div className="pl-head-right"><label className="pl-sort">{zh ? '排序' : 'Sort'}<select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '生产状态 → 生产库位 → 国内上线' : 'Status → location → CN start'}</option><option value="date">{zh ? '国内上线日期' : 'CN start date'}</option></select></label>
-      {avg && !searching && <div className="pl-average"><span>{zh ? '已完成节点平均用时' : 'Average completed stage'}</span><strong>{avg.days == null ? '—' : `${avg.days} ${zh ? '天' : 'd'}`}</strong><small>{avg.count} {zh ? '条有效样本' : 'samples'}</small></div>}</div>
-    </div>
-    <div className="schedule-toolbar">
+    <div className="schedule-toolbar pl-toolbar">
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
       {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}
-      <label className="search"><Search size={16} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
-      <label className="dealer-filter"><ListFilter size={16} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-    </div>
-    <div className="pl-sources">
-      {Object.entries(srcLabel).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={src[k]?.error || ''}>{l} · {src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '内网电脑还没有推送' : 'no upload from the in-network PC yet') : src[k]?.error ? (zh ? '读取失败，显示上次数据' : 'failed, showing last copy') : time(src[k]?.at)}</span>)}
-      <span className="muted">{zh ? '只读 · 排产日期与 Dealer Portal 相同算法' : 'Read-only · board dates use the Dealer Portal code'}</span>
-      <button className="pl-export" onClick={exportCsv} disabled={!visible.length}><ArrowDownToLine size={14} />{zh ? '导出 CSV' : 'Export CSV'}</button>
-      <button aria-label={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={15} /></button>
+      <div className="pl-toolbar-right">
+        <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
+        <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
+        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '按状态排序' : 'Sort by status'}</option><option value="date">{zh ? '按国内上线排序' : 'Sort by CN start'}</option></select></label>
+      </div>
     </div>
     {error && <div className="message error compact-msg"><AlertTriangle size={16} />{error}</div>}
     {!data && !error && <div className="pl-loading">{zh ? '正在读取 Dealer Portal、Longtree 和澳洲生产系统…第一次大约需要 30–40 秒' : 'Loading Dealer Portal, Longtree and AU production… the first load takes ~30–40 s'}</div>}
