@@ -423,3 +423,24 @@ body{background:#eef1f6;font-size:14px}
 .vf-actions{display:flex;justify-content:flex-end;gap:6px;border-top:1px solid #e6e9ef;padding-top:6px}
 .vf-actions button{border:1px solid #c9d6f5;background:#fff;color:#1f4fbf;border-radius:5px;padding:2px 9px;font-size:12px}.vf-actions button:disabled{opacity:.45;cursor:default}
 .pl-clear-filters{display:inline-flex;align-items:center;gap:4px;border:1px solid #f1c6c6;background:#fff5f5;color:#c92a2a;border-radius:5px;padding:2px 8px;font-size:12px;white-space:nowrap}
+/* 排产表 · compact header, same treatment as 产线 */
+.view-schedule .page-header{margin-bottom:8px}.view-schedule .page-header .eyebrow{display:none}
+.view-schedule .page-header h1{font-size:19px;line-height:1.3;letter-spacing:-.2px}
+.view-schedule .header-actions .action{height:32px;padding:0 12px;font-size:13px}
+.view-schedule .schedule-daybar{gap:8px;padding:5px 10px}
+.view-schedule .day-date{height:28px}.view-schedule .day-date input{font-size:12.5px}
+.view-schedule .day-chip{height:28px;font-size:12.5px;gap:6px}.view-schedule .day-chip b{min-width:24px;height:20px;font-size:12.5px}
+.view-schedule .sv-count{margin-left:auto;font-size:12px}
+.view-schedule .sv-export{height:28px;padding:0 10px;font-size:12.5px;gap:5px}
+.view-schedule .schedule-daybar .report-stamp.small{margin-left:4px;font-size:12px}
+.view-schedule .schedule-toolbar{padding:5px 10px;gap:8px}
+.view-schedule .schedule-toolbar .seg button{padding:2px 9px;font-size:12.5px}
+.view-schedule .schedule-toolbar .chips{gap:5px}
+.view-schedule .schedule-toolbar .chip{padding:1px 9px 1px 1px;font-size:12px}
+.view-schedule .schedule-toolbar .chip i{min-width:24px;height:18px;font-size:11px}
+.view-schedule .schedule-toolbar .search{height:28px;width:220px}.view-schedule .schedule-toolbar .dealer-filter{height:28px}
+.view-schedule .schedule-toolbar .search input,.view-schedule .schedule-toolbar .dealer-filter select{font-size:12.5px}
+.view-schedule .filter-note{padding:4px 10px;font-size:12px}
+.view-schedule .schedule-grid{height:calc(100vh - 180px)}
+.view-schedule .sv-count{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;height:28px}
+.view-schedule .schedule-toolbar .search{width:190px}.view-schedule .schedule-toolbar .dealer-filter select{max-width:150px}

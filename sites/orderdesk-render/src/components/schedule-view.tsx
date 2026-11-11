@@ -3,6 +3,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { themeQuartz, type ColDef, type CellStyle } from 'ag-grid-community';
 import { ArrowDownToLine, Search, X, ListFilter, CalendarRange, Clock3, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ValueFilter from '@/components/value-filter';
 import { dealerColor } from '@/lib/schedule-colors.mjs';
 import { FIELD_LABELS, isOverdue } from '@/lib/order-engine.mjs';
 import { ALERTS, type AlertKey, type ScheduleRow, type Order } from './schedule-model';
@@ -29,6 +30,9 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
 }) {
   const grid = useRef<AgGridReact<ScheduleRow>>(null);
   const [exporting, setExporting] = useState(false), [error, setError] = useState('');
+  const [shown, setShown] = useState<number | null>(null), [colFilters, setColFilters] = useState(0);
+  const syncShown = () => { const api = grid.current?.api; if (!api) return; const n = Object.keys(api.getFilterModel() || {}).length; setColFilters(n); setShown(n ? api.getDisplayedRowCount() : null); };
+  const defaultColDef = useMemo<ColDef<ScheduleRow>>(() => ({ resizable: true, sortable: false, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
   const dealers = useMemo(() => Array.from(new Set([...rows, ...extras].map(r => r.dealer).filter(Boolean))).sort() as string[], [rows, extras]);
 
   // Changes on the selected day, per order (same events the old overview counted).
@@ -129,6 +133,8 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     <div className="schedule-daybar">
       <label className="day-date"><Clock3 size={15} /><input type="date" max={today} value={date} onChange={e => setDate(e.target.value || today)} aria-label={zh ? '查看日期' : 'Date'} />{date === today && <span className="today-tag">{zh ? '今天' : 'Today'}</span>}</label>
       <div className="day-chips">{dayChips.map(([k, l]) => <button key={k} className={`day-chip ${k} ${filter.day === k ? 'on' : ''} ${day.ids[k].size ? '' : 'zero'}`} onClick={() => set({ day: filter.day === k ? null : k, alert: null })}><b>{day.ids[k].size}</b>{l}</button>)}</div>
+      <span className="count-chip sv-count"><CalendarRange size={14} /> {shown != null && <>{shown.toLocaleString()} / </>}{visible.length.toLocaleString()} {zh ? '行' : 'rows'}</span>
+      <Button variant="outline" className="action slim sv-export" disabled={exporting} onClick={() => void exportExcel()}><ArrowDownToLine size={15} />{exporting ? (zh ? '导出中' : 'Exporting') : (zh ? '导出 Excel' : 'Export Excel')}</Button>
       <span className="report-stamp small">{zh ? '最新报告' : 'Latest report'} <strong>{fmt(reportDate) || '—'}</strong><button aria-label={zh ? '刷新' : 'Refresh'} className={busy ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={onRefresh}><RefreshCw size={15} /></button></span>
     </div>
     <div className="schedule-toolbar">
@@ -141,8 +147,7 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
       </div>
       <label className="search"><Search size={16} /><input placeholder={zh ? '搜索车架号、客户、车型' : 'Search chassis, customer, model'} value={filter.query} onChange={e => set({ query: e.target.value })} />{filter.query && <button onClick={() => set({ query: '' })}><X size={14} /></button>}</label>
       <label className="dealer-filter"><ListFilter size={16} /><select value={filter.dealer} onChange={e => set({ dealer: e.target.value })}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-      <span className="count-chip"><CalendarRange size={14} /> {visible.length.toLocaleString()} {zh ? '行' : 'rows'}</span>
-      <Button variant="outline" className="action slim" disabled={exporting} onClick={() => void exportExcel()}><ArrowDownToLine size={16} />{exporting ? (zh ? '导出中' : 'Exporting') : (zh ? '导出 Excel' : 'Export Excel')}</Button>
+      {colFilters > 0 && <button className="pl-clear-filters" onClick={() => grid.current?.api.setFilterModel(null)}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
     </div>
     {(filter.query || filter.day || filter.alert === 'overdue' || filter.alert === 'pending' || filter.scope === 'campervan') && <div className="filter-note">
       {filter.query ? (zh ? `在全部车里搜索「${filter.query}」：包括 Orderlist、Campervan、待排位和已取消的车。` : `Searching all vehicles for "${filter.query}" (Orderlist, campervans, not placed, cancelled).`)
@@ -154,7 +159,7 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     {error && <div className="message error compact-msg">{error}</div>}
     <div className="schedule-grid">
       <AgGridReact<ScheduleRow> ref={grid} theme={gridTheme} rowData={visible} columnDefs={columns} getRowId={p => p.data.id}
-        defaultColDef={{ resizable: true, sortable: false, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }}
+        defaultColDef={defaultColDef} onFilterChanged={syncShown} onModelUpdated={syncShown}
         rowHeight={26} headerHeight={34} tooltipShowDelay={250}
         getRowClass={p => [p.data?.weekStart && !filter.day ? 'week-start' : '', p.data?.order ? '' : 'slot-row', p.data?.finished ? 'finished-row' : '', p.data?.order?.status === 'cancelled' ? 'cancelled-row' : ''].join(' ')}
         onRowDoubleClicked={e => e.data?.order && onOpen(e.data.order)}

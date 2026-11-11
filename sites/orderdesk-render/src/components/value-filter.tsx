@@ -12,26 +12,32 @@ export const filterKey = (v: unknown) => {
 };
 
 export default function ValueFilter(props: CustomFilterProps<any, any, ValueFilterModel> & { zh?: boolean }) {
-  const { model, onModelChange, getValue, api, zh } = props;
+  const { model, onModelChange, getValue, api, column, zh } = props;
   const [all, setAll] = useState<[string, number][]>([]);
+  const [names, setNames] = useState<Map<string, string>>(new Map());
   const [q, setQ] = useState('');
 
   const collect = useCallback(() => {
-    const m = new Map<string, number>();
-    api.forEachNode(n => { if (n.data) { const k = filterKey(getValue(n)); m.set(k, (m.get(k) || 0) + 1); } });
+    const m = new Map<string, number>(), shown = new Map<string, string>();
+    api.forEachNode(n => {
+      if (!n.data) return;
+      const k = filterKey(getValue(n)); m.set(k, (m.get(k) || 0) + 1);
+      if (k !== BLANK && !shown.has(k)) { let f: unknown; try { f = api.getCellValue({ rowNode: n, colKey: column, useFormatter: true }); } catch { f = null; } shown.set(k, f != null && String(f).trim() ? String(f) : k); }
+    });
+    setNames(shown);
     const list = [...m.entries()];
     const numeric = list.every(([k]) => k === BLANK || (k !== '' && !Number.isNaN(Number(k))));
     list.sort(([a], [b]) => a === BLANK ? 1 : b === BLANK ? -1 : numeric ? Number(a) - Number(b) : a.localeCompare(b, 'zh-CN', { numeric: true }));
     setAll(list);
-  }, [api, getValue]);
+  }, [api, getValue, column]);
 
   const selected = useMemo(() => model ? new Set(model.values) : null, [model]);
   const doesFilterPass = useCallback(({ node }: { node: any }) => !selected || selected.has(filterKey(getValue(node))), [selected, getValue]);
   useGridFilter({ doesFilterPass, afterGuiAttached: () => collect() });
 
-  const label = (k: string) => k === BLANK ? (zh ? '（空白）' : '(Blanks)') : k;
+  const label = (k: string) => k === BLANK ? (zh ? '（空白）' : '(Blanks)') : names.get(k) ?? k;
   const needle = q.trim().toLowerCase();
-  const shown = needle ? all.filter(([k]) => label(k).toLowerCase().includes(needle)) : all;
+  const shown = needle ? all.filter(([k]) => label(k).toLowerCase().includes(needle) || k.toLowerCase().includes(needle)) : all;
   const checked = (k: string) => !selected || selected.has(k);
   const commit = (keep: Set<string>) => onModelChange(all.every(([k]) => keep.has(k)) ? null : { values: [...keep] });
   const current = () => new Set(selected ?? all.map(([k]) => k));
