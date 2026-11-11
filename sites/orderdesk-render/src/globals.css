@@ -409,3 +409,17 @@ body{background:#eef1f6;font-size:14px}
 @media (max-width:1500px){.pl-tabs{flex-wrap:wrap}.pl-tabnote{flex-basis:100%;order:10;margin-left:0}}
 .pl-break{display:none}
 @media (max-width:1500px){.pl-tabs{row-gap:4px}.pl-break{display:block;flex-basis:100%;height:0;order:9}.pl-tabnote{flex:1 1 0;flex-basis:0;order:10;margin-left:2px}.pl-tabs .pl-sources,.pl-tabs .pl-export,.pl-tabs .icon-button{order:11}}
+
+/* Excel-style column filter */
+.vf{width:250px;padding:8px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#1d2433}
+.vf-search{border:1px solid #d3d9e3;border-radius:5px;padding:5px 8px;font-size:12.5px;outline:none}.vf-search:focus{border-color:#2f5be0}
+.vf-row{display:flex;align-items:center;gap:7px;padding:2px 4px;border-radius:4px;cursor:pointer;min-width:0}
+.vf-row:hover{background:#eef4ff}
+.vf-row em{font-style:normal;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vf-row span{color:#8a96a8;font-size:11px;font-variant-numeric:tabular-nums}
+.vf-all{border-bottom:1px solid #e6e9ef;padding-bottom:5px;font-weight:700}.vf-all span{margin-left:auto}
+.vf-list{max-height:260px;overflow:auto}
+.vf-empty{color:#8a96a8;padding:6px 4px;margin:0}
+.vf-actions{display:flex;justify-content:flex-end;gap:6px;border-top:1px solid #e6e9ef;padding-top:6px}
+.vf-actions button{border:1px solid #c9d6f5;background:#fff;color:#1f4fbf;border-radius:5px;padding:2px 9px;font-size:12px}.vf-actions button:disabled{opacity:.45;cursor:default}
+.pl-clear-filters{display:inline-flex;align-items:center;gap:4px;border:1px solid #f1c6c6;background:#fff5f5;color:#c92a2a;border-radius:5px;padding:2px 8px;font-size:12px;white-space:nowrap}

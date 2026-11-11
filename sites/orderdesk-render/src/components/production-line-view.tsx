@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { themeQuartz, type ColDef, type ColGroupDef } from 'ag-grid-community';
 import { Button } from '@/components/ui/button';
+import ValueFilter from '@/components/value-filter';
 import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, ListFilter, RefreshCw, AlertTriangle } from 'lucide-react';
 
 type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
@@ -73,6 +74,9 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const [group, setGroup] = useState('au'), [line, setLine] = useState('All'), [chip, setChip] = useState(''), [sort, setSort] = useState<'status' | 'date'>('status');
   const [query, setQuery] = useState(''), [dealer, setDealer] = useState(''), [detail, setDetail] = useState<Row | null>(null);
   const grid = useRef<AgGridReact<Row>>(null);
+  const [shown, setShown] = useState<number | null>(null), [colFilters, setColFilters] = useState(0);
+  const syncShown = () => { const api = grid.current?.api; if (!api) return; const n = Object.keys(api.getFilterModel() || {}).length; setColFilters(n); setShown(n ? api.getDisplayedRowCount() : null); };
+  const clearColFilters = () => { grid.current?.api.setFilterModel(null); };
   async function load(refresh = false) {
     setBusy(true); setError('');
     try {
@@ -143,11 +147,12 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     ] },
   ], [zh, group, exec, searching, data]);
 
+  const defaultColDef = useMemo<ColDef<Row>>(() => ({ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
   function exportCsv() { grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${g?.id || 'search'}-${data?.today || ''}.csv` }); }
   const src = data?.sources || {};
   const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI' };
   const avg = g?.phase ? data?.averages?.[g.phase] : null;
-  const pick = (id: string) => { setGroup(id); setChip(''); setQuery(''); };
+  const pick = (id: string) => { setGroup(id); setChip(''); setQuery(''); clearColFilters(); };
   const srcText = (k: string) => src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '内网电脑还没有推送' : 'no upload from the in-network PC yet') : src[k]?.error ? `${zh ? '读取失败，显示上次数据' : 'failed, showing last copy'}：${src[k].error}` : time(src[k]?.at);
   const card = (ids: string[], Icon: any, step: string, sub: string, target: string) =>
     <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => pick(target)}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
@@ -165,7 +170,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       {groups.map(x => { const on = group === x.id && !searching;
         return <button key={x.id} role="tab" aria-selected={on} className={`pl-tab ${x.id} ${on ? 'on' : ''}`} onClick={() => pick(x.id)}>{zh ? x.zh : x.en}<b>{(counts[x.id] ?? 0).toLocaleString()}</b></button>; })}
       <i className="pl-break" aria-hidden="true" />
-      <span className="pl-tabnote" title={note}>{searching && <strong>{zh ? `搜索「${query}」` : `Search "${query}"`}</strong>}<b>{visible.length.toLocaleString()}</b>{zh ? ' 条' : ' rows'} · {note}{avg && avg.days != null && !searching ? ` · ${zh ? '已完成节点平均' : 'avg completed stage'} ${avg.days} ${zh ? '天' : 'd'}` : ''}</span>
+      <span className="pl-tabnote" title={note}>{searching && <strong>{zh ? `搜索「${query}」` : `Search "${query}"`}</strong>}{shown != null && <b>{shown.toLocaleString()} / </b>}<b>{visible.length.toLocaleString()}</b>{zh ? ' 条' : ' rows'} · {note}{avg && avg.days != null && !searching ? ` · ${zh ? '已完成节点平均' : 'avg completed stage'} ${avg.days} ${zh ? '天' : 'd'}` : ''}</span>
       <div className="pl-sources">
         {Object.entries(srcLabel).map(([k, l]) => <span key={k} className={src[k]?.error ? 'bad' : 'ok'} title={`${l} · ${srcText(k)}`}>{l}{src[k]?.error ? ` · ${src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : (zh ? '有问题' : 'issue')}` : ''}</span>)}
       </div>
@@ -176,6 +181,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
       {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}
       <div className="pl-toolbar-right">
+        {colFilters > 0 && <button className="pl-clear-filters" onClick={clearColFilters}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
         <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
         <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
         <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '按状态排序' : 'Sort by status'}</option><option value="date">{zh ? '按国内上线排序' : 'Sort by CN start'}</option></select></label>
@@ -185,7 +191,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     {!data && !error && <div className="pl-loading">{zh ? '正在读取 Dealer Portal、Longtree 和澳洲生产系统…第一次大约需要 30–40 秒' : 'Loading Dealer Portal, Longtree and AU production… the first load takes ~30–40 s'}</div>}
     <div className="schedule-grid">
       <AgGridReact<Row> ref={grid} theme={gridTheme} rowData={visible} columnDefs={columns} getRowId={p => p.data.id}
-        defaultColDef={{ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }}
+        defaultColDef={defaultColDef} onFilterChanged={syncShown} onModelUpdated={syncShown}
         rowHeight={42} headerHeight={34} groupHeaderHeight={24} tooltipShowDelay={250} enableCellTextSelection
         onRowDoubleClicked={e => e.data && setDetail(e.data)}
         overlayNoRowsTemplate={`<span style="color:#61718a">${zh ? '当前筛选下没有记录' : 'No matching records'}</span>`} />
