@@ -12,7 +12,7 @@ import { applyReport, dayInSydney, reportFingerprint, importProductionSources } 
 import { buildOrderlist } from '../lib/orderlist-export.mjs';
 import { forecastResolver } from '../lib/schedule.mjs';
 import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
-import { createProductionLineSource, buildProductionLine, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
+import { createProductionLineSource, buildProductionLine, loadRollingPlan, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
 import { createSapSource, SAP_MAX_BYTES } from '../lib/sap-grgi.mjs';
 import { agentAuthorized } from '../lib/planning-agent.mjs';
@@ -99,13 +99,14 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
 
   // Production line (产线): Longtree + AU production API + Portal GR/GI, read-only, cached 15 minutes.
   const productionLine = createProductionLineSource(env, { portal, sap });
+  const rollingPlan = loadRollingPlan();
   if (env.NODE_ENV === 'production') productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); // warm up at start
   app.get('/api/production-line', async c => {
     try {
       const today = dayInSydney(new Date());
       const sources = await productionLine.current({ force: c.req.query('refresh') === '1', today });
       const { state } = await store.readState();
-      const line = buildProductionLine({ orders: state?.orders || {}, ...sources, today });
+      const line = buildProductionLine({ orders: state?.orders || {}, ...sources, today, plan: rollingPlan });
       return json({ ...line, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
   });

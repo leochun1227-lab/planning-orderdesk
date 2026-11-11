@@ -8,6 +8,15 @@
 // production counts as in the AU factory even before the GR date reaches datetrack.
 import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
+import { readFileSync } from 'node:fs';
+
+// One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
+// exactly while it is active. Delete or replace data/longtree-plan-*.json to change it.
+export function loadRollingPlan(url = new URL('../data/longtree-plan-2026-11-12.json', import.meta.url)) {
+  try { const doc = JSON.parse(readFileSync(url, 'utf8')); return { ...doc, byChassis: new Map(doc.rows.map(r => [normalizeChassis(r.chassis), r])) }; } catch { return null; }
+}
+const ROLLING = new Set(['locked', 'rolling']);
+const EXECUTION = new Set(['au', 'sea', 'cn']);
 
 export const STAGES = [
   { id: 'cnWaiting', group: 'cn', zh: 'Longtree 未开始', en: 'Not started (Longtree)' },
@@ -119,8 +128,8 @@ export function stageOf(order, lt = {}, au, portal = {}, today) {
  * the AU factory's current location/station, SAP GR/GI and the Orderdesk order.
  */
 export const BOARD_GROUPS = [
-  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: '澳洲工厂车辆 · 实际上线取 Production Start，不将到厂日期当作上线日期。', phase: 'au' },
-  { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '国内出厂至澳洲工厂接收 · 包括港口等待、海运及入厂前转运。', phase: 'sea' },
+  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR（或完工入库）的车都算澳洲生产，不看其他来源 · 实际上线取 Production Start。', phase: 'au' },
+  { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '已发运（飞书有发运 / 离港 / 到港日期，或 Portal 已在海运 / 澳洲）但 SAP 还没有 GR。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆 · 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: '已确认待上线 · 仅以现有 Schedule Confirmed = Yes 判断锁定。' },
   { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '滚动安排待确认 · 不根据日期自动改写确认状态。' },
@@ -128,18 +137,158 @@ export const BOARD_GROUPS = [
   { id: 'customers', band: 'preschedule', zh: 'Customer 订单池', en: 'Customer pool', note: '客户订单独立成池，Stock 不进入 Customer 订单池。' },
   { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '国内计划上线在 60 天之后的车，或计划日期待补。' },
 ];
-export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings }) {
+
+// ---- Orderdesk rules on top of the Portal board ------------------------------------------------
+// Two grouping rules differ from the Dealer Portal on purpose (SAP and Longtree are fresher than
+// datetrack): a vehicle with a SAP GR (or AU finished-goods receipt) is AU production, whatever
+// else says; a vehicle that has shipped (Longtree, or Portal already past China) without a GR is
+// shipping. Everything else keeps the Portal group. Rows that move get their plan / expected dates
+// recomputed the Portal way for the new group; untouched rows keep the Portal numbers exactly.
+export const REGENT_STATUSES = [
+  { key: 'finished', label: 'Finished', phase: 'au' },
+  { key: 'ready for dispatch', label: 'Ready for Dispatch', phase: 'au' },
+  { key: 'production commenced regent', label: 'Production Commenced Regent', phase: 'au' },
+  { key: 'van arrived', label: 'Van Arrived', phase: 'au' },
+  { key: 'van on the sea', label: 'Van on the sea', phase: 'sea' },
+  { key: 'production commenced longtree', label: 'Production Commenced Longtree', phase: 'cn' },
+  { key: 'po sent to lt', label: 'PO sent to LT', phase: 'pre' },
+  { key: 'signoff', label: 'Signoff', phase: 'pre' },
+];
+const PHASE_ORDER = ['pre', 'cn', 'sea', 'au'];
+const CRM_GRACE_DAYS = 7;
+/** CRM Regent production status; blank CRM status falls back to PO sent → "PO sent to LT", signed → "Signoff". */
+export function regentStatus(order) {
+  if (!order) return { label: '', rank: 99, phase: '', derived: false };
+  const raw = String(order.productionStatus || '').trim();
+  const key = raw.toLowerCase().replace(/\s+/g, ' ');
+  const i = REGENT_STATUSES.findIndex(s => key === s.key || key.startsWith(s.key));
+  if (i >= 0) return { label: raw, rank: i, phase: REGENT_STATUSES[i].phase, derived: false };
+  if (raw) return { label: raw, rank: 90, phase: '', derived: false };
+  const j = order.purchaseAt ? 6 : order.signedAt ? 7 : -1;
+  return j < 0 ? { label: '', rank: 99, phase: '', derived: false } : { label: REGENT_STATUSES[j].label, rank: j, phase: 'pre', derived: true };
+}
+/** Longtree progress, earliest → latest. Furniture starts before chassis welding; ETD/ETA count once set. */
+export const LONGTREE_PROGRESS = [
+  ['orderAt', '订单接收', 'Order received', true], ['furnitureAt', '家具上线', 'Furniture', true], ['weldAt', '钣焊上线', 'Welding', true],
+  ['assemblyAt', '总装上线', 'Assembly', true], ['finishedAt', '总装入库', 'Finished', true], ['shippedAt', '发运', 'Shipped', true],
+  ['etd', '预计离港', 'ETD', false], ['atd', '实际离港', 'Left CN port', true], ['eta', '预计到港', 'ETA', false], ['ata', '实际到港', 'Arrived AU port', true],
+];
+export function longtreeProgress(lt = {}, today) {
+  for (let i = LONGTREE_PROGRESS.length - 1; i >= 0; i--) {
+    const [field, , , actual] = LONGTREE_PROGRESS[i], d = lt[field];
+    if (d && (!actual || d <= today)) return { rank: i + 1, field, date: d };
+  }
+  return { rank: 0, field: '', date: '' };
+}
+const DAY = 86400000;
+const addDays = (d, n) => (d ? new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10) : '');
+const latest = (...ds) => ds.filter(Boolean).sort().at(-1) || '';
+function trackDay(v, today) {
+  if (v == null || v === '') return '';
+  const n = v && typeof v === 'object' && '_seconds' in v ? Number(v._seconds) : typeof v === 'number' ? v : NaN;
+  let d = '';
+  if (Number.isFinite(n) && n >= 1e8) d = dayIn(n < 1e12 ? n * 1000 : n, 'Australia/Sydney');
+  else { const t = String(v).trim(), a = t.match(/^(\d{4})-(\d{2})-(\d{2})/), b = t.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/); d = a ? iso(+a[1], +a[2], +a[3]) : b ? iso(+b[3], +b[2], +b[1]) : ''; }
+  return d && d <= today ? d : '';
+}
+/** The Portal's per-group plan / expected arithmetic (buildProductionBoard), for a row placed in another group. */
+export function datesForGroup(b, group, today, settings = {}, lt = {}, sap = {}) {
+  const cn = settings.cnDays ?? 20, sea = settings.seaDays ?? 50, au = settings.auDays ?? 40, cnMrp = settings.cnMrpDays ?? 5, auMrp = settings.auMrpDays ?? 5;
+  const tr = b.track || {}, past = d => (d && d <= today ? d : '');
+  const weld = b.cnActual || past(lt.weldAt), built = trackDay(tr.finishGoods, today) || past(lt.finishedAt), left = trackDay(tr.leavingFactory, today) || past(lt.shippedAt);
+  const received = trackDay(tr['Received in Melbourne'], today) || past(sap.grAt) || past(sap.fgAt), started = b.auActual || '', ready = trackDay(tr['Delivery Ready'], today);
+  const T = b.cnPlanStart, C = b.cnPlanEnd, m = b.auPlanStart, B = b.auPlanEnd;
+  const cnStart = weld || (T ? latest(T, today) : '');
+  const cnEnd = built || (cnStart ? latest(C, addDays(cnStart, cn), group === 'cn' ? today : '') : '');
+  const leaving = left || cnEnd;
+  const arrive = received || (leaving ? latest(addDays(leaving, sea), group === 'sea' ? today : '') : '');
+  const auStart = started || latest(m, arrive);
+  const auEnd = ready || (auStart ? latest(B, addDays(auStart, au), group === 'au' ? today : '') : '');
+  const planStart = group === 'au' ? m : group === 'sea' ? C : T;
+  const planEnd = group === 'cn' ? C : group === 'sea' ? addDays(C, sea) : B;
+  const expectedEnd = group === 'cn' ? cnEnd : group === 'sea' ? arrive : auEnd;
+  const gap = planEnd && expectedEnd ? Math.round((Date.parse(expectedEnd) - Date.parse(planEnd)) / DAY) : null;
+  return { cnStart, auStart, planStart, planEnd, expectedEnd, delay: gap == null ? null : Math.max(0, gap), cnMrp: addDays(weld || cnStart, -cnMrp), auMrp: addDays(started || auStart, -auMrp), cnActual: weld || b.cnActual };
+}
+const SHIPPED_PORTAL = new Set(['au', 'sea']);
+export function groupFor(b, lt = {}, sap = {}, today) {
+  if (b.empty || !b.chassis) return b.group;
+  if (sap.grAt || sap.fgAt) return 'au';
+  const shipped = [lt.shippedAt, lt.atd, lt.ata].some(d => d && d <= today);
+  if (shipped || SHIPPED_PORTAL.has(b.group)) return 'sea';
+  return b.group;
+}
+/** Checks that point at a wrong or missing record somewhere. error = something is wrong; warn = needs a look. */
+export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
+  const out = [], add = (code, level, zh, en) => out.push({ code, level, zh, en });
+  if (b.empty || !b.chassis) return out;
+  const past = d => (d && d <= today ? d : '');
+  const gr = sap.grAt, inFactory = au && AU_LOCATIONS.has(String(au.location || '').toLowerCase());
+  if (!gr) {
+    const why = [];
+    if (inFactory) why.push([`生产系统：${au.location}${au.station ? ' · ' + au.station : ''}`, `production API: ${au.location}${au.station ? ' · ' + au.station : ''}`]);
+    if (b.auActual) why.push([`Portal 生产上线 ${b.auActual}`, `Portal production start ${b.auActual}`]);
+    if (regent.phase === 'au') why.push([`CRM：${regent.label}`, `CRM: ${regent.label}`]);
+    if (sap.fgAt) why.push([`完工入库 ${sap.fgAt}`, `finished-goods receipt ${sap.fgAt}`]);
+    if (why.length) add('inFactoryNoGr', 'error', `已在澳洲工厂/生产，SAP 没有 GR（${why.map(w => w[0]).join('；')}）`, `In the AU factory but no SAP GR (${why.map(w => w[1]).join('; ')})`);
+    else if (past(lt?.ata)) { const d = daysBetween(lt.ata, today); if (d > 14) add('arrivedNoGr', 'warn', `到港 ${d} 天，SAP 还没有 GR`, `Arrived ${d} days ago, no SAP GR yet`); }
+  }
+  if (sap.giAt) add('giOpen', 'warn', `SAP 已 GI（${sap.giAt}），Portal 还没标发运`, `SAP GI on ${sap.giAt}, Portal not dispatched yet`);
+  if (gr && lt && !lt.shippedAt && !lt.atd && !lt.ata) add('grNoShip', 'warn', '有 GR，但飞书没有发运 / 离港 / 到港日期', 'GR done, but Longtree has no ship / departure / arrival date');
+  // CRM status against the facts. CRM "Van Arrived" = received at Regent (GR); arriving at the
+  // Melbourne port is still "Van on the sea". Blank CRM status (shown as PO sent / Signoff) is not checked.
+  const shipDay = past(lt?.shippedAt) || past(lt?.atd) || past(lt?.ata), cnDay = [lt?.furnitureAt, lt?.weldAt, lt?.assemblyAt, lt?.finishedAt].map(past).filter(Boolean).sort()[0] || '';
+  const [fact, since] = gr || sap.fgAt ? ['au', gr || sap.fgAt] : shipDay ? ['sea', shipDay] : cnDay ? ['cn', cnDay] : ['pre', ''];
+  if (regent.phase && !regent.derived && (lt || gr)) {
+    const c = PHASE_ORDER.indexOf(regent.phase), f = PHASE_ORDER.indexOf(fact), late = daysBetween(since, today) ?? 0;
+    const factZh = { au: `已 GR（${since}）`, sea: `已发运（${since}）`, cn: `国内已上线（${since}）` }[fact], factEn = { au: `GR on ${since}`, sea: `shipped ${since}`, cn: `in Longtree production since ${since}` }[fact];
+    if (c < f && late > CRM_GRACE_DAYS) add('crmBehind', 'warn', `CRM 状态落后：CRM 还是「${regent.label}」，实际${factZh}`, `CRM behind: still "${regent.label}", actually ${factEn}`);
+    else if (c > f && regent.phase !== 'au' && lt) add('crmAhead', 'warn', `CRM 状态超前：CRM「${regent.label}」，飞书 / SAP 还没有对应日期`, `CRM ahead: "${regent.label}", no matching Longtree / SAP date`);
+  }
+  // Longtree dates that cannot be right.
+  if (lt) {
+    const bad = [];
+    for (const [a, z, la, lz] of [['weldAt', 'assemblyAt', '钣焊上线', '总装上线'], ['assemblyAt', 'finishedAt', '总装上线', '总装入库'], ['finishedAt', 'shippedAt', '总装入库', '发运'], ['shippedAt', 'atd', '发运', '实际离港'], ['atd', 'ata', '实际离港', '实际到港']])
+      if (lt[a] && lt[z] && lt[z] < lt[a]) bad.push(`${lz} ${lt[z]} 早于${la} ${lt[a]}`);
+    for (const [f, l] of [['finishedAt', '总装入库'], ['shippedAt', '发运'], ['atd', '实际离港'], ['ata', '实际到港']]) if (lt[f] && lt[f] > today) bad.push(`${l} ${lt[f]} 在未来`);
+    if (gr && lt.ata && gr < lt.ata) bad.push(`GR ${gr} 早于实际到港 ${lt.ata}`);
+    if (bad.length) add('dateOrder', 'warn', `日期不对：${bad.join('；')}`, `Date problem: ${bad.join('; ')}`);
+  }
+  return out;
+}
+
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null }) {
+  const activePlan = plan && (!plan.activeUntil || today <= plan.activeUntil) ? plan : null;
+  const seen = new Map();
+  for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
   const orderByChassis = new Map(Object.values(orders || {}).filter(o => o && o.status !== 'cancelled').map(o => [normalizeChassis(o.chassis), o]));
   const counts = Object.fromEntries(BOARD_GROUPS.map(g => [g.id, 0]));
   const rows = [];
-  for (const b of board.rows) {
-    counts[b.group] = (counts[b.group] || 0) + 1;
-    const chassis = b.empty ? '' : normalizeChassis(b.chassis);
+  for (const raw of board.rows) {
+    const chassis = raw.empty ? '' : normalizeChassis(raw.chassis);
     const order = chassis ? orderByChassis.get(chassis) : undefined;
     const lt = chassis ? longtree.get(chassis) : undefined, au = chassis ? prod.get(chassis) : undefined, p = (chassis && portal.get(chassis)) || {};
+    let group = groupFor(raw, lt || {}, p, today), source = raw, planRow = null, notInPlan = false;
+    if (activePlan && chassis && !EXECUTION.has(group)) {
+      planRow = activePlan.byChassis.get(chassis) || null;
+      if (planRow) {
+        group = raw.locked ? 'locked' : 'rolling';
+        source = { ...raw, cnPlanStart: planRow.weldPlan || planRow.assemblyPlan || raw.cnPlanStart, cnPlanEnd: planRow.finishPlan || raw.cnPlanEnd };
+      } else if (ROLLING.has(group)) { group = 'later'; notInPlan = true; }
+    }
+    const moved = group !== raw.group || source !== raw;
+    const b = !moved ? raw : { ...source, ...datesForGroup(source, group, today, settings, lt || {}, p), overdue: Boolean(ROLLING.has(group) && source.cnPlanStart && source.cnPlanStart < today) };
+    counts[group] = (counts[group] || 0) + 1;
+    const regent = regentStatus(order), progress = longtreeProgress(lt || {}, today);
     const live = chassis ? stageOf(order || {}, lt, au, p, today) : null;
     rows.push({
-      id: b.id, chassis: b.chassis || '', empty: Boolean(b.empty), line: b.line || '', source: b.source || '', group: b.group, status: b.status || '',
+      id: b.id, chassis: b.chassis || '', empty: Boolean(b.empty), line: b.line || '', source: b.source || '', group, portalGroup: raw.group, status: b.status || '',
+      regent: regent.label, regentRank: regent.rank, regentDerived: regent.derived, ltRank: progress.rank, ltField: progress.field, ltDate: progress.date,
+      planOrder: planRow && ROLLING.has(group) ? planRow.order : null, planRef: planRow ? planRow.months.join(' / ') : '', planWeld: planRow?.weldPlan || '', planAssembly: planRow?.assemblyPlan || '',
+      issues: [
+        ...((seen.get(chassis) || []).length > 1 ? [{ code: 'duplicate', level: 'error', zh: `车架号在产线出现 ${seen.get(chassis).length} 次（${seen.get(chassis).map(x => BOARD_GROUPS.find(gr => gr.id === x)?.zh || x).join('、')}）`, en: `Chassis appears ${seen.get(chassis).length} times on the line (${seen.get(chassis).join(', ')})` }] : []),
+        ...(notInPlan ? [{ code: 'notInPlan', level: 'warn', zh: `不在 Longtree 11 / 12 月排产计划里（Portal 国内计划上线 ${raw.cnPlanStart || '—'}，原在${raw.group === 'locked' ? '排产锁定线' : '滚动排产线'}）`, en: `Not in the Longtree Nov / Dec plan (Portal CN plan start ${raw.cnPlanStart || '—'}, was ${raw.group})` }] : []),
+        ...issuesFor({ b, group, lt, au, sap: p, regent, today })],
       dealer: b.dealer || '', model: b.model || '', range: b.range || '', customer: order?.customer || b.customer || '', orderId: order ? chassis : '',
       production: b.production ? { status: b.production.status || '', stage: b.production.stage || '', location: b.production.location || '' } : null,
       cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: b.cnPlanEnd, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
@@ -153,7 +302,14 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       },
     });
   }
-  return { today, counts, completed: board.completed, averages: board.averages, settings, rows };
+  return { today, counts, completed: board.completed, averages: board.averages, settings, rows: sortLineRows(rows),
+    plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
+}
+/** Regent status (Finished first) → Longtree progress (latest node first) → that node's date → CN start. */
+export function sortLineRows(rows) {
+  const planKey = r => (ROLLING.has(r.group) ? r.planOrder ?? 1e9 : 0);
+  return rows.map((r, i) => ({ r, i })).sort((a, z) => planKey(a.r) - planKey(z.r) || (a.r.regentRank ?? 99) - (z.r.regentRank ?? 99) || (z.r.ltRank ?? 0) - (a.r.ltRank ?? 0)
+    || (a.r.ltDate || '9999').localeCompare(z.r.ltDate || '9999') || (a.r.cnStart || '9999').localeCompare(z.r.cnStart || '9999') || a.i - z.i).map(x => x.r);
 }
 
 // ---- live sources (server side) ---------------------------------------------------------------

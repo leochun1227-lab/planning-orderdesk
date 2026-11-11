@@ -444,3 +444,8 @@ body{background:#eef1f6;font-size:14px}
 .view-schedule .schedule-grid{height:calc(100vh - 180px)}
 .view-schedule .sv-count{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;height:28px}
 .view-schedule .schedule-toolbar .search{width:190px}.view-schedule .schedule-toolbar .dealer-filter select{max-width:150px}
+.pl-issues{display:flex;flex-wrap:wrap;gap:3px;align-items:center;height:100%;align-content:center}
+.pl-issue{font-size:11px;font-weight:700;line-height:16px;padding:0 5px;border-radius:4px;white-space:nowrap}
+.pl-issue.error{background:#ffe3e3;color:#c92a2a}.pl-issue.warn{background:#fff3bf;color:#8a5a00}
+.pl-derived{color:#7b8799;font-style:italic}
+.pl-issue-list{margin:8px 0;padding-left:18px;font-size:12.5px}.pl-issue-list li{margin:2px 0}.pl-issue-list li.error{color:#c92a2a;font-weight:600}.pl-issue-list li.warn{color:#8a5a00}

@@ -1,0 +1,8955 @@
+{
+"name": "Longtree 2026年11月 / 12月排产计划",
+"files": [
+"2026年11月排产计划（20261104 版）",
+"2026年12月排产计划（20261202 版）"
+],
+"note": "一次性快照：滚动 60 天（锁定 + 滚动）按这个顺序排；11 月表在前，12 月表新增的车接在后面。同一台车出现在两个月的表里（小车间 / 总装跨月）只算一次。",
+"activeUntil": "2026-12-31",
+"rows": [
+{
+"chassis": "SRC264436",
+"order": 1,
+"sheet": "2026-11",
+"seq": 1,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-11#1"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC264065",
+"order": 2,
+"sheet": "2026-11",
+"seq": 2,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-11#2"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC264483",
+"order": 3,
+"sheet": "2026-11",
+"seq": 3,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-11#3"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRT265322",
+"order": 4,
+"sheet": "2026-11",
+"seq": 4,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#4"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC265750",
+"order": 5,
+"sheet": "2026-11",
+"seq": 5,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#5"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRP264812",
+"order": 6,
+"sheet": "2026-11",
+"seq": 6,
+"model": "SRP18F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#6"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC265008",
+"order": 7,
+"sheet": "2026-11",
+"seq": 7,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-11#7"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC265194",
+"order": 8,
+"sheet": "2026-11",
+"seq": 8,
+"model": "SRC14",
+"type": "管理订单",
+"months": [
+"2026-11#8"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRT265499",
+"order": 9,
+"sheet": "2026-11",
+"seq": 9,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#9"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRT265532",
+"order": 10,
+"sheet": "2026-11",
+"seq": 10,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#10"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRT265548",
+"order": 11,
+"sheet": "2026-11",
+"seq": 11,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#11"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRT265650",
+"order": 12,
+"sheet": "2026-11",
+"seq": 12,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#12"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRS265663",
+"order": 13,
+"sheet": "2026-11",
+"seq": 13,
+"model": "SRS12",
+"type": "管理订单",
+"months": [
+"2026-11#13"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC265279",
+"order": 14,
+"sheet": "2026-11",
+"seq": 14,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-11#14"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRM265248",
+"order": 15,
+"sheet": "2026-11",
+"seq": 15,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#15"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-20",
+"finishPlan": "2026-11-02"
+},
+{
+"chassis": "SRC265935",
+"order": 16,
+"sheet": "2026-11",
+"seq": 16,
+"model": "SRC21",
+"type": "客户订单",
+"months": [
+"2026-11#16"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRT263341",
+"order": 17,
+"sheet": "2026-11",
+"seq": 17,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#17"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRC265275",
+"order": 18,
+"sheet": "2026-11",
+"seq": 18,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-11#18"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRC265969",
+"order": 19,
+"sheet": "2026-11",
+"seq": 19,
+"model": "SRC19",
+"type": "客户订单",
+"months": [
+"2026-11#19"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRC265993",
+"order": 20,
+"sheet": "2026-11",
+"seq": 20,
+"model": "SRC22F 2 Bunks",
+"type": "客户订单",
+"months": [
+"2026-11#20"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRC265943",
+"order": 21,
+"sheet": "2026-11",
+"seq": 21,
+"model": "SRC22F 3 Bunks",
+"type": "客户订单",
+"months": [
+"2026-11#21"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRC265719",
+"order": 22,
+"sheet": "2026-11",
+"seq": 22,
+"model": "SRC20F 2 Bunks",
+"type": "客户订单",
+"months": [
+"2026-11#22"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRH264627",
+"order": 23,
+"sheet": "2026-11",
+"seq": 23,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#23"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRT265598",
+"order": 24,
+"sheet": "2026-11",
+"seq": 24,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#24"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRT265567",
+"order": 25,
+"sheet": "2026-11",
+"seq": 25,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-11#25"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRT265366",
+"order": 26,
+"sheet": "2026-11",
+"seq": 26,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#26"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRC265946",
+"order": 27,
+"sheet": "2026-11",
+"seq": 27,
+"model": "SRC22S",
+"type": "客户订单",
+"months": [
+"2026-11#27"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRT265682",
+"order": 28,
+"sheet": "2026-11",
+"seq": 28,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#28"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRM265342",
+"order": 29,
+"sheet": "2026-11",
+"seq": 29,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#29"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRM265198",
+"order": 30,
+"sheet": "2026-11",
+"seq": 30,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#30"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-21",
+"finishPlan": "2026-11-03"
+},
+{
+"chassis": "SRS265051",
+"order": 31,
+"sheet": "2026-11",
+"seq": 31,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#31"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT265634",
+"order": 32,
+"sheet": "2026-11",
+"seq": 32,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-11#32"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT265805",
+"order": 33,
+"sheet": "2026-11",
+"seq": 33,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#33"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRP265052",
+"order": 34,
+"sheet": "2026-11",
+"seq": 34,
+"model": "SRP17",
+"type": "管理订单",
+"months": [
+"2026-11#34"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT265980",
+"order": 35,
+"sheet": "2026-11",
+"seq": 35,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#35"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRC266046",
+"order": 36,
+"sheet": "2026-11",
+"seq": 36,
+"model": "SRC19",
+"type": "客户订单",
+"months": [
+"2026-11#36"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRC264792",
+"order": 37,
+"sheet": "2026-11",
+"seq": 37,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#37"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT266031",
+"order": 38,
+"sheet": "2026-11",
+"seq": 38,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#38"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRC265058",
+"order": 39,
+"sheet": "2026-11",
+"seq": 39,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-11#39"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRC264764",
+"order": 40,
+"sheet": "2026-11",
+"seq": 40,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-11#40"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT265554",
+"order": 41,
+"sheet": "2026-11",
+"seq": 41,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#41"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT265708",
+"order": 42,
+"sheet": "2026-11",
+"seq": 42,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#42"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRT265367",
+"order": 43,
+"sheet": "2026-11",
+"seq": 43,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#43"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRH264656",
+"order": 44,
+"sheet": "2026-11",
+"seq": 44,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#44"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRM265141",
+"order": 45,
+"sheet": "2026-11",
+"seq": 45,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#45"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-22",
+"finishPlan": "2026-11-04"
+},
+{
+"chassis": "SRH264657",
+"order": 46,
+"sheet": "2026-11",
+"seq": 46,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#46"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRH264660",
+"order": 47,
+"sheet": "2026-11",
+"seq": 47,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#47"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRC265059",
+"order": 48,
+"sheet": "2026-11",
+"seq": 48,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-11#48"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRP266020",
+"order": 49,
+"sheet": "2026-11",
+"seq": 49,
+"model": "SRP20",
+"type": "客户订单",
+"months": [
+"2026-11#49"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRP266032",
+"order": 50,
+"sheet": "2026-11",
+"seq": 50,
+"model": "SRP17",
+"type": "客户订单",
+"months": [
+"2026-11#50"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRP265265",
+"order": 51,
+"sheet": "2026-11",
+"seq": 51,
+"model": "SRP20",
+"type": "客户订单",
+"months": [
+"2026-11#51"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRH264667",
+"order": 52,
+"sheet": "2026-11",
+"seq": 52,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#52"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRH264668",
+"order": 53,
+"sheet": "2026-11",
+"seq": 53,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#53"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRH264672",
+"order": 54,
+"sheet": "2026-11",
+"seq": 54,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#54"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRH264673",
+"order": 55,
+"sheet": "2026-11",
+"seq": 55,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#55"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRT265693",
+"order": 56,
+"sheet": "2026-11",
+"seq": 56,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-11#56"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRT265599",
+"order": 57,
+"sheet": "2026-11",
+"seq": 57,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#57"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRT265615",
+"order": 58,
+"sheet": "2026-11",
+"seq": 58,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#58"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRM265106",
+"order": 59,
+"sheet": "2026-11",
+"seq": 59,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#59"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRM265229",
+"order": 60,
+"sheet": "2026-11",
+"seq": 60,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#60"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-23",
+"finishPlan": "2026-11-05"
+},
+{
+"chassis": "SRT265616",
+"order": 61,
+"sheet": "2026-11",
+"seq": 61,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#61"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRL265288",
+"order": 62,
+"sheet": "2026-11",
+"seq": 62,
+"model": "SRL206",
+"type": "管理订单",
+"months": [
+"2026-11#62"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRC265063",
+"order": 63,
+"sheet": "2026-11",
+"seq": 63,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-11#63"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRC265083",
+"order": 64,
+"sheet": "2026-11",
+"seq": 64,
+"model": "SRC22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#64"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRT266022",
+"order": 65,
+"sheet": "2026-11",
+"seq": 65,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#65"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRT266023",
+"order": 66,
+"sheet": "2026-11",
+"seq": 66,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#66"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRH264629",
+"order": 67,
+"sheet": "2026-11",
+"seq": 67,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#67"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRH264633",
+"order": 68,
+"sheet": "2026-11",
+"seq": 68,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#68"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRH264635",
+"order": 69,
+"sheet": "2026-11",
+"seq": 69,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#69"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRH264637",
+"order": 70,
+"sheet": "2026-11",
+"seq": 70,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#70"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRH264675",
+"order": 71,
+"sheet": "2026-11",
+"seq": 71,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#71"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRH264678",
+"order": 72,
+"sheet": "2026-11",
+"seq": 72,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#72"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRT265617",
+"order": 73,
+"sheet": "2026-11",
+"seq": 73,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-11#73"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRT265619",
+"order": 74,
+"sheet": "2026-11",
+"seq": 74,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-11#74"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRM265231",
+"order": 75,
+"sheet": "2026-11",
+"seq": 75,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#75"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-24",
+"finishPlan": "2026-11-06"
+},
+{
+"chassis": "SRT265621",
+"order": 76,
+"sheet": "2026-11",
+"seq": 76,
+"model": "SRT22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#76"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRT263950",
+"order": 77,
+"sheet": "2026-11",
+"seq": 77,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#77"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRC264815",
+"order": 78,
+"sheet": "2026-11",
+"seq": 78,
+"model": "SRC22S",
+"type": "客户订单",
+"months": [
+"2026-11#78"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRC265300",
+"order": 79,
+"sheet": "2026-11",
+"seq": 79,
+"model": "SRC17",
+"type": "客户订单",
+"months": [
+"2026-11#79"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRC265299",
+"order": 80,
+"sheet": "2026-11",
+"seq": 80,
+"model": "SRC14",
+"type": "客户订单",
+"months": [
+"2026-11#80"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRC265305",
+"order": 81,
+"sheet": "2026-11",
+"seq": 81,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-11#81"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRT265736",
+"order": 82,
+"sheet": "2026-11",
+"seq": 82,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#82"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRH264636",
+"order": 83,
+"sheet": "2026-11",
+"seq": 83,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#83"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRH264681",
+"order": 84,
+"sheet": "2026-11",
+"seq": 84,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#84"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRH264683",
+"order": 85,
+"sheet": "2026-11",
+"seq": 85,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#85"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRH264685",
+"order": 86,
+"sheet": "2026-11",
+"seq": 86,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#86"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRH264687",
+"order": 87,
+"sheet": "2026-11",
+"seq": 87,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#87"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRT265584",
+"order": 88,
+"sheet": "2026-11",
+"seq": 88,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-11#88"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRM265232",
+"order": 89,
+"sheet": "2026-11",
+"seq": 89,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#89"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRM265230",
+"order": 90,
+"sheet": "2026-11",
+"seq": 90,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#90"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-26",
+"finishPlan": "2026-11-09"
+},
+{
+"chassis": "SRT265965",
+"order": 91,
+"sheet": "2026-11",
+"seq": 91,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#91"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRT265737",
+"order": 92,
+"sheet": "2026-11",
+"seq": 92,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#92"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRT265099",
+"order": 93,
+"sheet": "2026-11",
+"seq": 93,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#93"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH265711",
+"order": 94,
+"sheet": "2026-11",
+"seq": 94,
+"model": "SRH16F 1 Bunk",
+"type": "客户订单",
+"months": [
+"2026-11#94"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRC265061",
+"order": 95,
+"sheet": "2026-11",
+"seq": 95,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-11#95"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRC265304",
+"order": 96,
+"sheet": "2026-11",
+"seq": 96,
+"model": "SRC21S",
+"type": "客户订单",
+"months": [
+"2026-11#96"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRT265296",
+"order": 97,
+"sheet": "2026-11",
+"seq": 97,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#97"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRT265749",
+"order": 98,
+"sheet": "2026-11",
+"seq": 98,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#98"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264638",
+"order": 99,
+"sheet": "2026-11",
+"seq": 99,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#99"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264641",
+"order": 100,
+"sheet": "2026-11",
+"seq": 100,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#100"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264642",
+"order": 101,
+"sheet": "2026-11",
+"seq": 101,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#101"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264643",
+"order": 102,
+"sheet": "2026-11",
+"seq": 102,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#102"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264644",
+"order": 103,
+"sheet": "2026-11",
+"seq": 103,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#103"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264645",
+"order": 104,
+"sheet": "2026-11",
+"seq": 104,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#104"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRM265233",
+"order": 105,
+"sheet": "2026-11",
+"seq": 105,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#105"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-27",
+"finishPlan": "2026-11-10"
+},
+{
+"chassis": "SRH264646",
+"order": 106,
+"sheet": "2026-11",
+"seq": 106,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#106"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRC260001",
+"order": 107,
+"sheet": "2026-11",
+"seq": 107,
+"model": "2027 SRC14",
+"type": "样车订单",
+"months": [
+"2026-11#107"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRC260002",
+"order": 108,
+"sheet": "2026-11",
+"seq": 108,
+"model": "2027 SRC16",
+"type": "样车订单",
+"months": [
+"2026-11#108"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRC260003",
+"order": 109,
+"sheet": "2026-11",
+"seq": 109,
+"model": "2027 SRC17",
+"type": "样车订单",
+"months": [
+"2026-11#109"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH265670",
+"order": 110,
+"sheet": "2026-11",
+"seq": 110,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#110"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRC265060",
+"order": 111,
+"sheet": "2026-11",
+"seq": 111,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-11#111"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRT265047",
+"order": 112,
+"sheet": "2026-11",
+"seq": 112,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#112"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRT265134",
+"order": 113,
+"sheet": "2026-11",
+"seq": 113,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#113"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH264632",
+"order": 114,
+"sheet": "2026-11",
+"seq": 114,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#114"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH264640",
+"order": 115,
+"sheet": "2026-11",
+"seq": 115,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#115"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH264647",
+"order": 116,
+"sheet": "2026-11",
+"seq": 116,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#116"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH264676",
+"order": 117,
+"sheet": "2026-11",
+"seq": 117,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#117"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH264651",
+"order": 118,
+"sheet": "2026-11",
+"seq": 118,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#118"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRM265113",
+"order": 119,
+"sheet": "2026-11",
+"seq": 119,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#119"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRM265513",
+"order": 120,
+"sheet": "2026-11",
+"seq": 120,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#120"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-28",
+"finishPlan": "2026-11-11"
+},
+{
+"chassis": "SRH264653",
+"order": 121,
+"sheet": "2026-11",
+"seq": 121,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#121"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRT265735",
+"order": 122,
+"sheet": "2026-11",
+"seq": 122,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#122"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRC260004",
+"order": 123,
+"sheet": "2026-11",
+"seq": 123,
+"model": "2027 SRC18",
+"type": "样车订单",
+"months": [
+"2026-11#123"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRC265085",
+"order": 124,
+"sheet": "2026-11",
+"seq": 124,
+"model": "SRC20F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#124"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRC265285",
+"order": 125,
+"sheet": "2026-11",
+"seq": 125,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-11#125"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRP265079",
+"order": 126,
+"sheet": "2026-11",
+"seq": 126,
+"model": "SRP20",
+"type": "管理订单",
+"months": [
+"2026-11#126"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRC265457",
+"order": 127,
+"sheet": "2026-11",
+"seq": 127,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-11#127"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRT265019",
+"order": 128,
+"sheet": "2026-11",
+"seq": 128,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#128"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRH264652",
+"order": 129,
+"sheet": "2026-11",
+"seq": 129,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#129"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRH264654",
+"order": 130,
+"sheet": "2026-11",
+"seq": 130,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#130"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRT265741",
+"order": 131,
+"sheet": "2026-11",
+"seq": 131,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-11#131"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRT265764",
+"order": 132,
+"sheet": "2026-11",
+"seq": 132,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#132"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRT265768",
+"order": 133,
+"sheet": "2026-11",
+"seq": 133,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#133"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRT265769",
+"order": 134,
+"sheet": "2026-11",
+"seq": 134,
+"model": "SRT22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#134"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRM265126",
+"order": 135,
+"sheet": "2026-11",
+"seq": 135,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#135"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-29",
+"finishPlan": "2026-11-12"
+},
+{
+"chassis": "SRL265414",
+"order": 136,
+"sheet": "2026-11",
+"seq": 136,
+"model": "SRL220S",
+"type": "管理订单",
+"months": [
+"2026-11#136"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRC260006",
+"order": 137,
+"sheet": "2026-11",
+"seq": 137,
+"model": "2027 SRC20",
+"type": "样车订单",
+"months": [
+"2026-11#137"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRC260008",
+"order": 138,
+"sheet": "2026-11",
+"seq": 138,
+"model": "2027 SRC21",
+"type": "样车订单",
+"months": [
+"2026-11#138"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRC265416",
+"order": 139,
+"sheet": "2026-11",
+"seq": 139,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-11#139"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRC265461",
+"order": 140,
+"sheet": "2026-11",
+"seq": 140,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-11#140"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264659",
+"order": 141,
+"sheet": "2026-11",
+"seq": 141,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#141"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264664",
+"order": 142,
+"sheet": "2026-11",
+"seq": 142,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#142"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264677",
+"order": 143,
+"sheet": "2026-11",
+"seq": 143,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#143"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264679",
+"order": 144,
+"sheet": "2026-11",
+"seq": 144,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#144"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264680",
+"order": 145,
+"sheet": "2026-11",
+"seq": 145,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#145"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264686",
+"order": 146,
+"sheet": "2026-11",
+"seq": 146,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#146"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRT265635",
+"order": 147,
+"sheet": "2026-11",
+"seq": 147,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#147"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRT265637",
+"order": 148,
+"sheet": "2026-11",
+"seq": 148,
+"model": "SRT19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#148"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRM265142",
+"order": 149,
+"sheet": "2026-11",
+"seq": 149,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#149"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRM265199",
+"order": 150,
+"sheet": "2026-11",
+"seq": 150,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#150"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-10-30",
+"finishPlan": "2026-11-16"
+},
+{
+"chassis": "SRH264655",
+"order": 151,
+"sheet": "2026-11",
+"seq": 151,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#151"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRC260005",
+"order": 152,
+"sheet": "2026-11",
+"seq": 152,
+"model": "2027 SRC19",
+"type": "样车订单",
+"months": [
+"2026-11#152"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRC260007",
+"order": 153,
+"sheet": "2026-11",
+"seq": 153,
+"model": "2027 SRC20F 2 Bunks",
+"type": "样车订单",
+"months": [
+"2026-11#153"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRC260009",
+"order": 154,
+"sheet": "2026-11",
+"seq": 154,
+"model": "2027 SRC21C",
+"type": "样车订单",
+"months": [
+"2026-11#154"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRC260010",
+"order": 155,
+"sheet": "2026-11",
+"seq": 155,
+"model": "2027 SRC21S",
+"type": "样车订单",
+"months": [
+"2026-11#155"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRC260011",
+"order": 156,
+"sheet": "2026-11",
+"seq": 156,
+"model": "2027 SRC22",
+"type": "样车订单",
+"months": [
+"2026-11#156"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264648",
+"order": 157,
+"sheet": "2026-11",
+"seq": 157,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#157"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264662",
+"order": 158,
+"sheet": "2026-11",
+"seq": 158,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#158"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264663",
+"order": 159,
+"sheet": "2026-11",
+"seq": 159,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#159"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264665",
+"order": 160,
+"sheet": "2026-11",
+"seq": 160,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#160"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264671",
+"order": 161,
+"sheet": "2026-11",
+"seq": 161,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#161"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264674",
+"order": 162,
+"sheet": "2026-11",
+"seq": 162,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#162"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264682",
+"order": 163,
+"sheet": "2026-11",
+"seq": 163,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#163"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264684",
+"order": 164,
+"sheet": "2026-11",
+"seq": 164,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#164"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRM265220",
+"order": 165,
+"sheet": "2026-11",
+"seq": 165,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#165"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-02",
+"finishPlan": "2026-11-17"
+},
+{
+"chassis": "SRH264688",
+"order": 166,
+"sheet": "2026-11",
+"seq": 166,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#166"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRC260012",
+"order": 167,
+"sheet": "2026-11",
+"seq": 167,
+"model": "2027 SRC22F 2 Bunks",
+"type": "样车订单",
+"months": [
+"2026-11#167"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRC260013",
+"order": 168,
+"sheet": "2026-11",
+"seq": 168,
+"model": "2027 SRC22F 3 Bunks",
+"type": "样车订单",
+"months": [
+"2026-11#168"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRC260014",
+"order": 169,
+"sheet": "2026-11",
+"seq": 169,
+"model": "2027 SRC22S",
+"type": "样车订单",
+"months": [
+"2026-11#169"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRC260015",
+"order": 170,
+"sheet": "2026-11",
+"seq": 170,
+"model": "2027 SRC23",
+"type": "样车订单",
+"months": [
+"2026-11#170"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRP260019",
+"order": 171,
+"sheet": "2026-11",
+"seq": 171,
+"model": "2027 SRP14",
+"type": "样车订单",
+"months": [
+"2026-11#171"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRH264689",
+"order": 172,
+"sheet": "2026-11",
+"seq": 172,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#172"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRH264690",
+"order": 173,
+"sheet": "2026-11",
+"seq": 173,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#173"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRH265738",
+"order": 174,
+"sheet": "2026-11",
+"seq": 174,
+"model": "SRH15",
+"type": "客户订单",
+"months": [
+"2026-11#174"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRH265939",
+"order": 175,
+"sheet": "2026-11",
+"seq": 175,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#175"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRP260020",
+"order": 176,
+"sheet": "2026-11",
+"seq": 176,
+"model": "2027 SRP17",
+"type": "样车订单",
+"months": [
+"2026-11#176"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRP260021",
+"order": 177,
+"sheet": "2026-11",
+"seq": 177,
+"model": "2027 SRP18F 2 Bunks",
+"type": "样车订单",
+"months": [
+"2026-11#177"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRP260022",
+"order": 178,
+"sheet": "2026-11",
+"seq": 178,
+"model": "2027 SRP19",
+"type": "样车订单",
+"months": [
+"2026-11#178"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRM265371",
+"order": 179,
+"sheet": "2026-11",
+"seq": 179,
+"model": "SRM22.2",
+"type": "管理订单",
+"months": [
+"2026-11#179"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRM265246",
+"order": 180,
+"sheet": "2026-11",
+"seq": 180,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#180"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-03",
+"finishPlan": "2026-11-18"
+},
+{
+"chassis": "SRP260023",
+"order": 181,
+"sheet": "2026-11",
+"seq": 181,
+"model": "2027 SRP19F 2 Bunks",
+"type": "样车订单",
+"months": [
+"2026-11#181"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRP266052",
+"order": 182,
+"sheet": "2026-11",
+"seq": 182,
+"model": "SRP14",
+"type": "客户订单",
+"months": [
+"2026-11#182"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH266000",
+"order": 183,
+"sheet": "2026-11",
+"seq": 183,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#183"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH265940",
+"order": 184,
+"sheet": "2026-11",
+"seq": 184,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#184"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH264691",
+"order": 185,
+"sheet": "2026-11",
+"seq": 185,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#185"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH264692",
+"order": 186,
+"sheet": "2026-11",
+"seq": 186,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#186"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH264693",
+"order": 187,
+"sheet": "2026-11",
+"seq": 187,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#187"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH264694",
+"order": 188,
+"sheet": "2026-11",
+"seq": 188,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#188"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRH264695",
+"order": 189,
+"sheet": "2026-11",
+"seq": 189,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#189"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRP260024",
+"order": 190,
+"sheet": "2026-11",
+"seq": 190,
+"model": "2027 SRP20",
+"type": "样车订单",
+"months": [
+"2026-11#190"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRC260016",
+"order": 191,
+"sheet": "2026-11",
+"seq": 191,
+"model": "2027 SRC14",
+"type": "样车订单",
+"months": [
+"2026-11#191"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRC260017",
+"order": 192,
+"sheet": "2026-11",
+"seq": 192,
+"model": "2027 SRC19",
+"type": "样车订单",
+"months": [
+"2026-11#192"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRC260018",
+"order": 193,
+"sheet": "2026-11",
+"seq": 193,
+"model": "2027 SRC23",
+"type": "样车订单",
+"months": [
+"2026-11#193"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRT265770",
+"order": 194,
+"sheet": "2026-11",
+"seq": 194,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-11#194"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRM265314",
+"order": 195,
+"sheet": "2026-11",
+"seq": 195,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#195"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-04",
+"finishPlan": "2026-11-19"
+},
+{
+"chassis": "SRT265622",
+"order": 196,
+"sheet": "2026-11",
+"seq": 196,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#196"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRT265623",
+"order": 197,
+"sheet": "2026-11",
+"seq": 197,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#197"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRT265798",
+"order": 198,
+"sheet": "2026-11",
+"seq": 198,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#198"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRT265638",
+"order": 199,
+"sheet": "2026-11",
+"seq": 199,
+"model": "SRT19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#199"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRT265639",
+"order": 200,
+"sheet": "2026-11",
+"seq": 200,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#200"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264696",
+"order": 201,
+"sheet": "2026-11",
+"seq": 201,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#201"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264697",
+"order": 202,
+"sheet": "2026-11",
+"seq": 202,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#202"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRT265297",
+"order": 203,
+"sheet": "2026-11",
+"seq": 203,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#203"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264698",
+"order": 204,
+"sheet": "2026-11",
+"seq": 204,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#204"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264699",
+"order": 205,
+"sheet": "2026-11",
+"seq": 205,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#205"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264700",
+"order": 206,
+"sheet": "2026-11",
+"seq": 206,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#206"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264701",
+"order": 207,
+"sheet": "2026-11",
+"seq": 207,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#207"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264702",
+"order": 208,
+"sheet": "2026-11",
+"seq": 208,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#208"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRM265534",
+"order": 209,
+"sheet": "2026-11",
+"seq": 209,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#209"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRM265125",
+"order": 210,
+"sheet": "2026-11",
+"seq": 210,
+"model": "SRM22.2",
+"type": "客户订单",
+"months": [
+"2026-11#210"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-11-05",
+"finishPlan": "2026-11-23"
+},
+{
+"chassis": "SRH264703",
+"order": 211,
+"sheet": "2026-11",
+"seq": 211,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#211"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264704",
+"order": 212,
+"sheet": "2026-11",
+"seq": 212,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#212"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264831",
+"order": 213,
+"sheet": "2026-11",
+"seq": 213,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#213"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264833",
+"order": 214,
+"sheet": "2026-11",
+"seq": 214,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#214"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264837",
+"order": 215,
+"sheet": "2026-11",
+"seq": 215,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#215"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264849",
+"order": 216,
+"sheet": "2026-11",
+"seq": 216,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#216"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264855",
+"order": 217,
+"sheet": "2026-11",
+"seq": 217,
+"model": "SRH14",
+"type": "管理订单",
+"months": [
+"2026-11#217"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264858",
+"order": 218,
+"sheet": "2026-11",
+"seq": 218,
+"model": "SRH14",
+"type": "管理订单",
+"months": [
+"2026-11#218"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264860",
+"order": 219,
+"sheet": "2026-11",
+"seq": 219,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#219"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264861",
+"order": 220,
+"sheet": "2026-11",
+"seq": 220,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#220"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264975",
+"order": 221,
+"sheet": "2026-11",
+"seq": 221,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#221"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264978",
+"order": 222,
+"sheet": "2026-11",
+"seq": 222,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#222"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264981",
+"order": 223,
+"sheet": "2026-11",
+"seq": 223,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#223"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH264984",
+"order": 224,
+"sheet": "2026-11",
+"seq": 224,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#224"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRM265127",
+"order": 225,
+"sheet": "2026-11",
+"seq": 225,
+"model": "SRM22.2",
+"type": "客户订单",
+"months": [
+"2026-11#225"
+],
+"weldPlan": "2026-11-02",
+"assemblyPlan": "2026-11-06",
+"finishPlan": "2026-11-24"
+},
+{
+"chassis": "SRH265439",
+"order": 226,
+"sheet": "2026-11",
+"seq": 226,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#226"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265431",
+"order": 227,
+"sheet": "2026-11",
+"seq": 227,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#227"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265432",
+"order": 228,
+"sheet": "2026-11",
+"seq": 228,
+"model": "SRH14",
+"type": "管理订单",
+"months": [
+"2026-11#228"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265433",
+"order": 229,
+"sheet": "2026-11",
+"seq": 229,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#229"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265434",
+"order": 230,
+"sheet": "2026-11",
+"seq": 230,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#230"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265435",
+"order": 231,
+"sheet": "2026-11",
+"seq": 231,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#231"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265436",
+"order": 232,
+"sheet": "2026-11",
+"seq": 232,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#232"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRT265640",
+"order": 233,
+"sheet": "2026-11",
+"seq": 233,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#233"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRT265641",
+"order": 234,
+"sheet": "2026-11",
+"seq": 234,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#234"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRT265642",
+"order": 235,
+"sheet": "2026-11",
+"seq": 235,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#235"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265437",
+"order": 236,
+"sheet": "2026-11",
+"seq": 236,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#236"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265438",
+"order": 237,
+"sheet": "2026-11",
+"seq": 237,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#237"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265402",
+"order": 238,
+"sheet": "2026-11",
+"seq": 238,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#238"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRM265656",
+"order": 239,
+"sheet": "2026-11",
+"seq": 239,
+"model": "SRM22.2",
+"type": "客户订单",
+"months": [
+"2026-11#239"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRM265669",
+"order": 240,
+"sheet": "2026-11",
+"seq": 240,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#240"
+],
+"weldPlan": "2026-11-03",
+"assemblyPlan": "2026-11-09",
+"finishPlan": "2026-11-25"
+},
+{
+"chassis": "SRH265403",
+"order": 241,
+"sheet": "2026-11",
+"seq": 241,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#241"
+],
+"weldPlan": "2026-11-04",
+"assemblyPlan": "2026-11-10",
+"finishPlan": "2026-11-26"
+},
+{
+"chassis": "SRH265404",
+"order": 242,
+"sheet": "2026-11",
+"seq": 242,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#242"
+],
+"weldPlan": "2026-11-04",
+"assemblyPlan": "2026-11-10",
+"finishPlan": "2026-11-26"
+},
+{
+"chassis": "SRH265405",
+"order": 243,
+"sheet": "2026-11",
+"seq": 243,
+"model": "SRH14",
+"type": "管理订单",
+"months": [
+"2026-11#243"
+],
+"weldPlan": "2026-11-04",
+"assemblyPlan": "2026-11-10",
+"finishPlan": "2026-11-26"
+},
+{
+"chassis": "SRH265406",
+"order": 244,
+"sheet": "2026-11",
+"seq": 244,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-11#244"
+],
+"weldPlan": "2026-11-04",
+"assemblyPlan": "2026-11-10",
+"finishPlan": "2026-11-26"
+},
+{
+"chassis": "SRM265713",
+"order": 245,
+"sheet": "2026-11",
+"seq": 245,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#245"
+],
+"weldPlan": "2026-11-04",
+"assemblyPlan": "2026-11-10",
+"finishPlan": "2026-11-26"
+},
+{
+"chassis": "SRV265934",
+"order": 246,
+"sheet": "2026-11",
+"seq": 246,
+"model": "SRV19.1",
+"type": "客户订单",
+"months": [
+"2026-11#246"
+],
+"weldPlan": "2026-10-22",
+"assemblyPlan": "",
+"finishPlan": ""
+},
+{
+"chassis": "SRC265062",
+"order": 247,
+"sheet": "2026-11",
+"seq": 1,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-11#1",
+"2026-12#1"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRC265286",
+"order": 248,
+"sheet": "2026-11",
+"seq": 2,
+"model": "SRC20F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#2",
+"2026-12#2"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRC265287",
+"order": 249,
+"sheet": "2026-11",
+"seq": 3,
+"model": "SRC22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#3",
+"2026-12#3"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRC265349",
+"order": 250,
+"sheet": "2026-11",
+"seq": 4,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-11#4",
+"2026-12#4"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRC265350",
+"order": 251,
+"sheet": "2026-11",
+"seq": 5,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-11#5",
+"2026-12#5"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRH265133",
+"order": 252,
+"sheet": "2026-11",
+"seq": 6,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#6",
+"2026-12#6"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRC265415",
+"order": 253,
+"sheet": "2026-11",
+"seq": 7,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-11#7",
+"2026-12#7"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRT265643",
+"order": 254,
+"sheet": "2026-11",
+"seq": 8,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-11#8",
+"2026-12#8"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRT265610",
+"order": 255,
+"sheet": "2026-11",
+"seq": 9,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#9",
+"2026-12#9"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRT265611",
+"order": 256,
+"sheet": "2026-11",
+"seq": 10,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#10",
+"2026-12#10"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRH265409",
+"order": 257,
+"sheet": "2026-11",
+"seq": 11,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#11",
+"2026-12#11"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRH265410",
+"order": 258,
+"sheet": "2026-11",
+"seq": 12,
+"model": "SRH14",
+"type": "管理订单",
+"months": [
+"2026-11#12",
+"2026-12#12"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRH265411",
+"order": 259,
+"sheet": "2026-11",
+"seq": 13,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#13",
+"2026-12#13"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRM265724",
+"order": 260,
+"sheet": "2026-11",
+"seq": 14,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#14",
+"2026-12#14"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRM265751",
+"order": 261,
+"sheet": "2026-11",
+"seq": 15,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#15",
+"2026-12#15"
+],
+"weldPlan": "2026-11-05",
+"assemblyPlan": "2026-11-11",
+"finishPlan": "2026-12-01"
+},
+{
+"chassis": "SRP265086",
+"order": 262,
+"sheet": "2026-11",
+"seq": 16,
+"model": "SRP19F 2 Bunks",
+"type": "管理订单 热镀锌",
+"months": [
+"2026-11#16",
+"2026-12#16"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRS265218",
+"order": 263,
+"sheet": "2026-11",
+"seq": 17,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#17",
+"2026-12#17"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRC265459",
+"order": 264,
+"sheet": "2026-11",
+"seq": 18,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-11#18",
+"2026-12#18"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRC265505",
+"order": 265,
+"sheet": "2026-11",
+"seq": 19,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-11#19",
+"2026-12#19"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRC264770",
+"order": 266,
+"sheet": "2026-11",
+"seq": 20,
+"model": "SRC24",
+"type": "客户订单",
+"months": [
+"2026-11#20",
+"2026-12#20"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRC266041",
+"order": 267,
+"sheet": "2026-11",
+"seq": 21,
+"model": "SRC22S",
+"type": "客户订单",
+"months": [
+"2026-11#21",
+"2026-12#21"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRC266045",
+"order": 268,
+"sheet": "2026-11",
+"seq": 22,
+"model": "SRC22S",
+"type": "客户订单",
+"months": [
+"2026-11#22",
+"2026-12#22"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRH264609",
+"order": 269,
+"sheet": "2026-11",
+"seq": 23,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#23",
+"2026-12#23"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRT265644",
+"order": 270,
+"sheet": "2026-11",
+"seq": 24,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-11#24",
+"2026-12#24"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRT265612",
+"order": 271,
+"sheet": "2026-11",
+"seq": 25,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#25",
+"2026-12#25"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRT265823",
+"order": 272,
+"sheet": "2026-11",
+"seq": 26,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#26",
+"2026-12#26"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRT265825",
+"order": 273,
+"sheet": "2026-11",
+"seq": 27,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#27",
+"2026-12#27"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRH265412",
+"order": 274,
+"sheet": "2026-11",
+"seq": 28,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#28",
+"2026-12#28"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRH265452",
+"order": 275,
+"sheet": "2026-11",
+"seq": 29,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#29",
+"2026-12#29"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRM265753",
+"order": 276,
+"sheet": "2026-11",
+"seq": 30,
+"model": "SRM22.2",
+"type": "客户订单",
+"months": [
+"2026-11#30",
+"2026-12#30"
+],
+"weldPlan": "2026-11-06",
+"assemblyPlan": "2026-11-12",
+"finishPlan": "2026-12-02"
+},
+{
+"chassis": "SRC266047",
+"order": 277,
+"sheet": "2026-11",
+"seq": 31,
+"model": "SRC22",
+"type": "客户订单",
+"months": [
+"2026-11#31",
+"2026-12#31"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRC266055",
+"order": 278,
+"sheet": "2026-11",
+"seq": 32,
+"model": "SRC17",
+"type": "客户订单",
+"months": [
+"2026-11#32",
+"2026-12#32"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRT265815",
+"order": 279,
+"sheet": "2026-11",
+"seq": 33,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#33",
+"2026-12#33"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRC266075",
+"order": 280,
+"sheet": "2026-11",
+"seq": 34,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#34",
+"2026-12#34"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRC265335",
+"order": 281,
+"sheet": "2026-11",
+"seq": 35,
+"model": "SRC22S",
+"type": "管理订单 热镀锌",
+"months": [
+"2026-11#35",
+"2026-12#35"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRT266085",
+"order": 282,
+"sheet": "2026-11",
+"seq": 36,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#36",
+"2026-12#36"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRT266088",
+"order": 283,
+"sheet": "2026-11",
+"seq": 37,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#37",
+"2026-12#37"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRT265838",
+"order": 284,
+"sheet": "2026-11",
+"seq": 38,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#38",
+"2026-12#38"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRT265849",
+"order": 285,
+"sheet": "2026-11",
+"seq": 39,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#39",
+"2026-12#39"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRT265857",
+"order": 286,
+"sheet": "2026-11",
+"seq": 40,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#40",
+"2026-12#40"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRH265453",
+"order": 287,
+"sheet": "2026-11",
+"seq": 41,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#41",
+"2026-12#41"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRH265454",
+"order": 288,
+"sheet": "2026-11",
+"seq": 42,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#42",
+"2026-12#42"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRH265464",
+"order": 289,
+"sheet": "2026-11",
+"seq": 43,
+"model": "SRH13",
+"type": "管理订单",
+"months": [
+"2026-11#43",
+"2026-12#43"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRM265792",
+"order": 290,
+"sheet": "2026-11",
+"seq": 44,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#44",
+"2026-12#44"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "SRM265803",
+"order": 291,
+"sheet": "2026-11",
+"seq": 45,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#45",
+"2026-12#45"
+],
+"weldPlan": "2026-11-09",
+"assemblyPlan": "2026-11-16",
+"finishPlan": "2026-12-03"
+},
+{
+"chassis": "NGC265672",
+"order": 292,
+"sheet": "2026-11",
+"seq": 46,
+"model": "NGC16",
+"type": "管理订单",
+"months": [
+"2026-11#46",
+"2026-12#46"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "NGC265673",
+"order": 293,
+"sheet": "2026-11",
+"seq": 47,
+"model": "NGC18",
+"type": "管理订单",
+"months": [
+"2026-11#47",
+"2026-12#47"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRS265221",
+"order": 294,
+"sheet": "2026-11",
+"seq": 48,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#48",
+"2026-12#48"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRC265933",
+"order": 295,
+"sheet": "2026-11",
+"seq": 49,
+"model": "SRC21",
+"type": "客户订单",
+"months": [
+"2026-11#49",
+"2026-12#49"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "NGC265674",
+"order": 296,
+"sheet": "2026-11",
+"seq": 50,
+"model": "NGC19F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#50",
+"2026-12#50"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "NGC265675",
+"order": 297,
+"sheet": "2026-11",
+"seq": 51,
+"model": "NGC19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#51",
+"2026-12#51"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRS265327",
+"order": 298,
+"sheet": "2026-11",
+"seq": 52,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#52",
+"2026-12#52"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "NGB265715",
+"order": 299,
+"sheet": "2026-11",
+"seq": 53,
+"model": "NGB21S",
+"type": "管理订单",
+"months": [
+"2026-11#53",
+"2026-12#53"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRT265858",
+"order": 300,
+"sheet": "2026-11",
+"seq": 54,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#54",
+"2026-12#54"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRT265886",
+"order": 301,
+"sheet": "2026-11",
+"seq": 55,
+"model": "SRT19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#55",
+"2026-12#55"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRT265583",
+"order": 302,
+"sheet": "2026-11",
+"seq": 56,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-11#56",
+"2026-12#56"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRT265878",
+"order": 303,
+"sheet": "2026-11",
+"seq": 57,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#57",
+"2026-12#57"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRH265455",
+"order": 304,
+"sheet": "2026-11",
+"seq": 58,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#58",
+"2026-12#58"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRH265706",
+"order": 305,
+"sheet": "2026-11",
+"seq": 59,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#59",
+"2026-12#59"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "SRM265804",
+"order": 306,
+"sheet": "2026-11",
+"seq": 60,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#60",
+"2026-12#60"
+],
+"weldPlan": "2026-11-10",
+"assemblyPlan": "2026-11-17",
+"finishPlan": "2026-12-04"
+},
+{
+"chassis": "NGB265716",
+"order": 307,
+"sheet": "2026-11",
+"seq": 61,
+"model": "NGB21F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#61",
+"2026-12#61"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRS265465",
+"order": 308,
+"sheet": "2026-11",
+"seq": 62,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#62",
+"2026-12#62"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "NGB265717",
+"order": 309,
+"sheet": "2026-11",
+"seq": 63,
+"model": "NGB19",
+"type": "管理订单",
+"months": [
+"2026-11#63",
+"2026-12#63"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "NGC265705",
+"order": 310,
+"sheet": "2026-11",
+"seq": 64,
+"model": "NGC22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#64",
+"2026-12#64"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRS265604",
+"order": 311,
+"sheet": "2026-11",
+"seq": 65,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#65",
+"2026-12#65"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "NGC265712",
+"order": 312,
+"sheet": "2026-11",
+"seq": 66,
+"model": "NGC21S",
+"type": "管理订单",
+"months": [
+"2026-11#66",
+"2026-12#66"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "NGC265714",
+"order": 313,
+"sheet": "2026-11",
+"seq": 67,
+"model": "NGC24",
+"type": "管理订单",
+"months": [
+"2026-11#67",
+"2026-12#67"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRT265882",
+"order": 314,
+"sheet": "2026-11",
+"seq": 68,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-11#68",
+"2026-12#68"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRT265883",
+"order": 315,
+"sheet": "2026-11",
+"seq": 69,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#69",
+"2026-12#69"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRT265880",
+"order": 316,
+"sheet": "2026-11",
+"seq": 70,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#70",
+"2026-12#70"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRH265707",
+"order": 317,
+"sheet": "2026-11",
+"seq": 71,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#71",
+"2026-12#71"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRH265734",
+"order": 318,
+"sheet": "2026-11",
+"seq": 72,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#72",
+"2026-12#72"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRH265740",
+"order": 319,
+"sheet": "2026-11",
+"seq": 73,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#73",
+"2026-12#73"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRM265813",
+"order": 320,
+"sheet": "2026-11",
+"seq": 74,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#74",
+"2026-12#74"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRM265816",
+"order": 321,
+"sheet": "2026-11",
+"seq": 75,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#75",
+"2026-12#75"
+],
+"weldPlan": "2026-11-11",
+"assemblyPlan": "2026-11-18",
+"finishPlan": "2026-12-07"
+},
+{
+"chassis": "SRS265605",
+"order": 322,
+"sheet": "2026-11",
+"seq": 76,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#76",
+"2026-12#76"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRC266079",
+"order": 323,
+"sheet": "2026-11",
+"seq": 77,
+"model": "SRC17",
+"type": "客户订单",
+"months": [
+"2026-11#77",
+"2026-12#77"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRT264766",
+"order": 324,
+"sheet": "2026-11",
+"seq": 78,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#78",
+"2026-12#78"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRT265100",
+"order": 325,
+"sheet": "2026-11",
+"seq": 79,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#79",
+"2026-12#79"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRC266091",
+"order": 326,
+"sheet": "2026-11",
+"seq": 80,
+"model": "SRC22",
+"type": "客户订单",
+"months": [
+"2026-11#80",
+"2026-12#80"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRS265606",
+"order": 327,
+"sheet": "2026-11",
+"seq": 81,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#81",
+"2026-12#81"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRC266101",
+"order": 328,
+"sheet": "2026-11",
+"seq": 82,
+"model": "SRC24",
+"type": "客户订单",
+"months": [
+"2026-11#82",
+"2026-12#82"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRC266051",
+"order": 329,
+"sheet": "2026-11",
+"seq": 83,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-11#83",
+"2026-12#83"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRT265929",
+"order": 330,
+"sheet": "2026-11",
+"seq": 84,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#84",
+"2026-12#84"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRT265915",
+"order": 331,
+"sheet": "2026-11",
+"seq": 85,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#85",
+"2026-12#85"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRT265730",
+"order": 332,
+"sheet": "2026-11",
+"seq": 86,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#86",
+"2026-12#86"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRT265956",
+"order": 333,
+"sheet": "2026-11",
+"seq": 87,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#87",
+"2026-12#87"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRH265746",
+"order": 334,
+"sheet": "2026-11",
+"seq": 88,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#88",
+"2026-12#88"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRH265793",
+"order": 335,
+"sheet": "2026-11",
+"seq": 89,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#89",
+"2026-12#89"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRM265957",
+"order": 336,
+"sheet": "2026-11",
+"seq": 90,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-11#90",
+"2026-12#90"
+],
+"weldPlan": "2026-11-12",
+"assemblyPlan": "2026-11-19",
+"finishPlan": "2026-12-08"
+},
+{
+"chassis": "SRC266131",
+"order": 337,
+"sheet": "2026-11",
+"seq": 91,
+"model": "SRC14",
+"type": "客户订单",
+"months": [
+"2026-11#91",
+"2026-12#91"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRP266054",
+"order": 338,
+"sheet": "2026-11",
+"seq": 92,
+"model": "SRP17",
+"type": "客户订单",
+"months": [
+"2026-11#92",
+"2026-12#92"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRS265607",
+"order": 339,
+"sheet": "2026-11",
+"seq": 93,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#93",
+"2026-12#93"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRC266104",
+"order": 340,
+"sheet": "2026-11",
+"seq": 94,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-11#94",
+"2026-12#94"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT265646",
+"order": 341,
+"sheet": "2026-11",
+"seq": 95,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#95",
+"2026-12#95"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT266092",
+"order": 342,
+"sheet": "2026-11",
+"seq": 96,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#96",
+"2026-12#96"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT266115",
+"order": 343,
+"sheet": "2026-11",
+"seq": 97,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#97",
+"2026-12#97"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT265958",
+"order": 344,
+"sheet": "2026-11",
+"seq": 98,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#98",
+"2026-12#98"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT265972",
+"order": 345,
+"sheet": "2026-11",
+"seq": 99,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#99",
+"2026-12#99"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT265973",
+"order": 346,
+"sheet": "2026-11",
+"seq": 100,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#100",
+"2026-12#100"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRH265797",
+"order": 347,
+"sheet": "2026-11",
+"seq": 101,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#101",
+"2026-12#101"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRH265822",
+"order": 348,
+"sheet": "2026-11",
+"seq": 102,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#102",
+"2026-12#102"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRH265847",
+"order": 349,
+"sheet": "2026-11",
+"seq": 103,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#103",
+"2026-12#103"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRM265124",
+"order": 350,
+"sheet": "2026-11",
+"seq": 104,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#104",
+"2026-12#104"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRM265172",
+"order": 351,
+"sheet": "2026-11",
+"seq": 105,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#105",
+"2026-12#105"
+],
+"weldPlan": "2026-11-16",
+"assemblyPlan": "2026-11-23",
+"finishPlan": "2026-12-09"
+},
+{
+"chassis": "SRT265267",
+"order": 352,
+"sheet": "2026-11",
+"seq": 106,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#106",
+"2026-12#106"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRT265293",
+"order": 353,
+"sheet": "2026-11",
+"seq": 107,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#107",
+"2026-12#107"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRC266110",
+"order": 354,
+"sheet": "2026-11",
+"seq": 108,
+"model": "SRC21",
+"type": "客户订单",
+"months": [
+"2026-11#108",
+"2026-12#108"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRP266121",
+"order": 355,
+"sheet": "2026-11",
+"seq": 109,
+"model": "SRP17",
+"type": "客户订单",
+"months": [
+"2026-11#109",
+"2026-12#109"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRS265772",
+"order": 356,
+"sheet": "2026-11",
+"seq": 110,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#110",
+"2026-12#110"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRS265786",
+"order": 357,
+"sheet": "2026-11",
+"seq": 111,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#111",
+"2026-12#111"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRC264786",
+"order": 358,
+"sheet": "2026-11",
+"seq": 112,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#112",
+"2026-12#112"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRC265332",
+"order": 359,
+"sheet": "2026-11",
+"seq": 113,
+"model": "SRC21S",
+"type": "客户订单",
+"months": [
+"2026-11#113",
+"2026-12#113"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRT265990",
+"order": 360,
+"sheet": "2026-11",
+"seq": 114,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#114",
+"2026-12#114"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRT265991",
+"order": 361,
+"sheet": "2026-11",
+"seq": 115,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#115",
+"2026-12#115"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRT265992",
+"order": 362,
+"sheet": "2026-11",
+"seq": 116,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#116",
+"2026-12#116"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRT266008",
+"order": 363,
+"sheet": "2026-11",
+"seq": 117,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#117",
+"2026-12#117"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRH265848",
+"order": 364,
+"sheet": "2026-11",
+"seq": 118,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-11#118",
+"2026-12#118"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRH265856",
+"order": 365,
+"sheet": "2026-11",
+"seq": 119,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#119",
+"2026-12#119"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRM265216",
+"order": 366,
+"sheet": "2026-11",
+"seq": 120,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#120",
+"2026-12#120"
+],
+"weldPlan": "2026-11-17",
+"assemblyPlan": "2026-11-24",
+"finishPlan": "2026-12-10"
+},
+{
+"chassis": "SRC265718",
+"order": 367,
+"sheet": "2026-11",
+"seq": 121,
+"model": "SRC21",
+"type": "客户订单",
+"months": [
+"2026-11#121",
+"2026-12#121"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRS265908",
+"order": 368,
+"sheet": "2026-11",
+"seq": 122,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#122",
+"2026-12#122"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRS265585",
+"order": 369,
+"sheet": "2026-11",
+"seq": 123,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#123",
+"2026-12#123"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRP265324",
+"order": 370,
+"sheet": "2026-11",
+"seq": 124,
+"model": "SRP19",
+"type": "客户订单",
+"months": [
+"2026-11#124",
+"2026-12#124"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRL266116",
+"order": 371,
+"sheet": "2026-11",
+"seq": 125,
+"model": "SRL220S",
+"type": "客户订单",
+"months": [
+"2026-11#125",
+"2026-12#125"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRP265687",
+"order": 372,
+"sheet": "2026-11",
+"seq": 126,
+"model": "SRP17",
+"type": "客户订单",
+"months": [
+"2026-11#126",
+"2026-12#126"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRC265351",
+"order": 373,
+"sheet": "2026-11",
+"seq": 127,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-11#127",
+"2026-12#127"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRT266010",
+"order": 374,
+"sheet": "2026-11",
+"seq": 128,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#128",
+"2026-12#128"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRT266019",
+"order": 375,
+"sheet": "2026-11",
+"seq": 129,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#129",
+"2026-12#129"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRT266038",
+"order": 376,
+"sheet": "2026-11",
+"seq": 130,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-11#130",
+"2026-12#130"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRH265866",
+"order": 377,
+"sheet": "2026-11",
+"seq": 131,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#131",
+"2026-12#131"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRH265904",
+"order": 378,
+"sheet": "2026-11",
+"seq": 132,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#132",
+"2026-12#132"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRH265926",
+"order": 379,
+"sheet": "2026-11",
+"seq": 133,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#133",
+"2026-12#133"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRM265200",
+"order": 380,
+"sheet": "2026-11",
+"seq": 134,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#134",
+"2026-12#134"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRM265254",
+"order": 381,
+"sheet": "2026-11",
+"seq": 135,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#135",
+"2026-12#135"
+],
+"weldPlan": "2026-11-18",
+"assemblyPlan": "2026-11-25",
+"finishPlan": "2026-12-11"
+},
+{
+"chassis": "SRP265356",
+"order": 382,
+"sheet": "2026-11",
+"seq": 136,
+"model": "SRP19",
+"type": "管理订单",
+"months": [
+"2026-11#136",
+"2026-12#136"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRP265359",
+"order": 383,
+"sheet": "2026-11",
+"seq": 137,
+"model": "SRP19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#137",
+"2026-12#137"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRC265352",
+"order": 384,
+"sheet": "2026-11",
+"seq": 138,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-11#138",
+"2026-12#138"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRC265353",
+"order": 385,
+"sheet": "2026-11",
+"seq": 139,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-11#139",
+"2026-12#139"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRC265354",
+"order": 386,
+"sheet": "2026-11",
+"seq": 140,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-11#140",
+"2026-12#140"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRC265364",
+"order": 387,
+"sheet": "2026-11",
+"seq": 141,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-11#141",
+"2026-12#141"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRC266204",
+"order": 388,
+"sheet": "2026-11",
+"seq": 142,
+"model": "SRC22F 3 Bunks",
+"type": "客户订单",
+"months": [
+"2026-11#142",
+"2026-12#142"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRC265790",
+"order": 389,
+"sheet": "2026-11",
+"seq": 143,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#143",
+"2026-12#143"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRT265964",
+"order": 390,
+"sheet": "2026-11",
+"seq": 144,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#144",
+"2026-12#144"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRT265966",
+"order": 391,
+"sheet": "2026-11",
+"seq": 145,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#145",
+"2026-12#145"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRT266150",
+"order": 392,
+"sheet": "2026-11",
+"seq": 146,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#146",
+"2026-12#146"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRT266178",
+"order": 393,
+"sheet": "2026-11",
+"seq": 147,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#147",
+"2026-12#147"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRH265955",
+"order": 394,
+"sheet": "2026-11",
+"seq": 148,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#148",
+"2026-12#148"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRH265985",
+"order": 395,
+"sheet": "2026-11",
+"seq": 149,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#149",
+"2026-12#149"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRM265255",
+"order": 396,
+"sheet": "2026-11",
+"seq": 150,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#150",
+"2026-12#150"
+],
+"weldPlan": "2026-11-19",
+"assemblyPlan": "2026-11-26",
+"finishPlan": "2026-12-14"
+},
+{
+"chassis": "SRP266345",
+"order": 397,
+"sheet": "2026-11",
+"seq": 151,
+"model": "SRP14",
+"type": "管理订单",
+"months": [
+"2026-11#151",
+"2026-12#151"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRP266346",
+"order": 398,
+"sheet": "2026-11",
+"seq": 152,
+"model": "SRP14",
+"type": "管理订单",
+"months": [
+"2026-11#152",
+"2026-12#152"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRC266289",
+"order": 399,
+"sheet": "2026-11",
+"seq": 153,
+"model": "SRC16",
+"type": "管理订单",
+"months": [
+"2026-11#153",
+"2026-12#153"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRC266122",
+"order": 400,
+"sheet": "2026-11",
+"seq": 154,
+"model": "SRC19",
+"type": "客户订单",
+"months": [
+"2026-11#154",
+"2026-12#154"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRC266124",
+"order": 401,
+"sheet": "2026-11",
+"seq": 155,
+"model": "SRC24",
+"type": "客户订单",
+"months": [
+"2026-11#155",
+"2026-12#155"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRC266090",
+"order": 402,
+"sheet": "2026-11",
+"seq": 156,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#156",
+"2026-12#156"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRC266109",
+"order": 403,
+"sheet": "2026-11",
+"seq": 157,
+"model": "SRC22F 2 Bunks",
+"type": "客户订单",
+"months": [
+"2026-11#157",
+"2026-12#157"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRT266193",
+"order": 404,
+"sheet": "2026-11",
+"seq": 158,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#158",
+"2026-12#158"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRT266206",
+"order": 405,
+"sheet": "2026-11",
+"seq": 159,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#159",
+"2026-12#159"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRT266152",
+"order": 406,
+"sheet": "2026-11",
+"seq": 160,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#160",
+"2026-12#160"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRH266005",
+"order": 407,
+"sheet": "2026-11",
+"seq": 161,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#161",
+"2026-12#161"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRH265994",
+"order": 408,
+"sheet": "2026-11",
+"seq": 162,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#162",
+"2026-12#162"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRH266015",
+"order": 409,
+"sheet": "2026-11",
+"seq": 163,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#163",
+"2026-12#163"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRM265201",
+"order": 410,
+"sheet": "2026-11",
+"seq": 164,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#164",
+"2026-12#164"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRM265173",
+"order": 411,
+"sheet": "2026-11",
+"seq": 165,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#165",
+"2026-12#165"
+],
+"weldPlan": "2026-11-23",
+"assemblyPlan": "2026-12-01",
+"finishPlan": "2026-12-15"
+},
+{
+"chassis": "SRC266290",
+"order": 412,
+"sheet": "2026-11",
+"seq": 166,
+"model": "SRC16",
+"type": "管理订单",
+"months": [
+"2026-11#166",
+"2026-12#166"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRC266310",
+"order": 413,
+"sheet": "2026-11",
+"seq": 167,
+"model": "SRC20",
+"type": "管理订单",
+"months": [
+"2026-11#167",
+"2026-12#167"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRC266311",
+"order": 414,
+"sheet": "2026-11",
+"seq": 168,
+"model": "SRC20F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#168",
+"2026-12#168"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRS266094",
+"order": 415,
+"sheet": "2026-11",
+"seq": 169,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-11#169",
+"2026-12#169"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRC266132",
+"order": 416,
+"sheet": "2026-11",
+"seq": 170,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-11#170",
+"2026-12#170"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRC266135",
+"order": 417,
+"sheet": "2026-11",
+"seq": 171,
+"model": "SRC21",
+"type": "客户订单",
+"months": [
+"2026-11#171",
+"2026-12#171"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRC266215",
+"order": 418,
+"sheet": "2026-11",
+"seq": 172,
+"model": "SRC19",
+"type": "客户订单",
+"months": [
+"2026-11#172",
+"2026-12#172"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRP266218",
+"order": 419,
+"sheet": "2026-11",
+"seq": 173,
+"model": "SRP19",
+"type": "客户订单",
+"months": [
+"2026-11#173",
+"2026-12#173"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRT266217",
+"order": 420,
+"sheet": "2026-11",
+"seq": 174,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#174",
+"2026-12#174"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRT266138",
+"order": 421,
+"sheet": "2026-11",
+"seq": 175,
+"model": "SRT16",
+"type": "客户订单",
+"months": [
+"2026-11#175",
+"2026-12#175"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRT266146",
+"order": 422,
+"sheet": "2026-11",
+"seq": 176,
+"model": "SRT18",
+"type": "客户订单",
+"months": [
+"2026-11#176",
+"2026-12#176"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRH266016",
+"order": 423,
+"sheet": "2026-11",
+"seq": 177,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-11#177",
+"2026-12#177"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRH266151",
+"order": 424,
+"sheet": "2026-11",
+"seq": 178,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#178",
+"2026-12#178"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRH266157",
+"order": 425,
+"sheet": "2026-11",
+"seq": 179,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#179",
+"2026-12#179"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRM265174",
+"order": 426,
+"sheet": "2026-11",
+"seq": 180,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#180",
+"2026-12#180"
+],
+"weldPlan": "2026-11-24",
+"assemblyPlan": "2026-12-02",
+"finishPlan": "2026-12-16"
+},
+{
+"chassis": "SRP266348",
+"order": 427,
+"sheet": "2026-11",
+"seq": 181,
+"model": "SRP17",
+"type": "管理订单",
+"months": [
+"2026-11#181",
+"2026-12#181"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRP266349",
+"order": 428,
+"sheet": "2026-11",
+"seq": 182,
+"model": "SRP17",
+"type": "管理订单",
+"months": [
+"2026-11#182",
+"2026-12#182"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRP266350",
+"order": 429,
+"sheet": "2026-11",
+"seq": 183,
+"model": "SRP18F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-11#183",
+"2026-12#183"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRP266222",
+"order": 430,
+"sheet": "2026-11",
+"seq": 184,
+"model": "SRP17",
+"type": "客户订单",
+"months": [
+"2026-11#184",
+"2026-12#184"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRS266114",
+"order": 431,
+"sheet": "2026-11",
+"seq": 185,
+"model": "SRS9",
+"type": "客户订单",
+"months": [
+"2026-11#185",
+"2026-12#185"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRC266301",
+"order": 432,
+"sheet": "2026-11",
+"seq": 186,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-11#186",
+"2026-12#186"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRC266224",
+"order": 433,
+"sheet": "2026-11",
+"seq": 187,
+"model": "SRC21",
+"type": "客户订单",
+"months": [
+"2026-11#187",
+"2026-12#187"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRT266149",
+"order": 434,
+"sheet": "2026-11",
+"seq": 188,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-11#188",
+"2026-12#188"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRT266211",
+"order": 435,
+"sheet": "2026-11",
+"seq": 189,
+"model": "SRT16",
+"type": "客户订单",
+"months": [
+"2026-11#189",
+"2026-12#189"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRT266144",
+"order": 436,
+"sheet": "2026-11",
+"seq": 190,
+"model": "SRT16",
+"type": "客户订单",
+"months": [
+"2026-11#190",
+"2026-12#190"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRT266287",
+"order": 437,
+"sheet": "2026-11",
+"seq": 191,
+"model": "SRT19F 2 Bunks",
+"type": "客户订单",
+"months": [
+"2026-11#191",
+"2026-12#191"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRH266139",
+"order": 438,
+"sheet": "2026-11",
+"seq": 192,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#192",
+"2026-12#192"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRH266140",
+"order": 439,
+"sheet": "2026-11",
+"seq": 193,
+"model": "SRH15",
+"type": "客户订单",
+"months": [
+"2026-11#193",
+"2026-12#193"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRM265175",
+"order": 440,
+"sheet": "2026-11",
+"seq": 194,
+"model": "SRM22.1",
+"type": "管理订单",
+"months": [
+"2026-11#194",
+"2026-12#194"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRM266228",
+"order": 441,
+"sheet": "2026-11",
+"seq": 195,
+"model": "SRM24.1",
+"type": "管理订单",
+"months": [
+"2026-11#195",
+"2026-12#195"
+],
+"weldPlan": "2026-11-25",
+"assemblyPlan": "2026-12-03",
+"finishPlan": "2026-12-17"
+},
+{
+"chassis": "SRC266293",
+"order": 442,
+"sheet": "2026-11",
+"seq": 196,
+"model": "SRC14",
+"type": "管理订单",
+"months": [
+"2026-11#196",
+"2026-12#196"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRC266294",
+"order": 443,
+"sheet": "2026-11",
+"seq": 197,
+"model": "SRC14",
+"type": "管理订单",
+"months": [
+"2026-11#197",
+"2026-12#197"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRC266300",
+"order": 444,
+"sheet": "2026-11",
+"seq": 198,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-11#198",
+"2026-12#198"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRC265821",
+"order": 445,
+"sheet": "2026-11",
+"seq": 199,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-11#199",
+"2026-12#199"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRC266040",
+"order": 446,
+"sheet": "2026-11",
+"seq": 200,
+"model": "SRC22S",
+"type": "客户订单",
+"months": [
+"2026-11#200",
+"2026-12#200"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRP266167",
+"order": 447,
+"sheet": "2026-11",
+"seq": 201,
+"model": "SRP19",
+"type": "客户订单",
+"months": [
+"2026-11#201",
+"2026-12#201"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRP266170",
+"order": 448,
+"sheet": "2026-11",
+"seq": 202,
+"model": "SRP19",
+"type": "客户订单",
+"months": [
+"2026-11#202",
+"2026-12#202"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRT266320",
+"order": 449,
+"sheet": "2026-11",
+"seq": 203,
+"model": "SRT19",
+"type": "客户订单",
+"months": [
+"2026-11#203",
+"2026-12#203"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRT266074",
+"order": 450,
+"sheet": "2026-11",
+"seq": 204,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-11#204",
+"2026-12#204"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRT266034",
+"order": 451,
+"sheet": "2026-11",
+"seq": 205,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-11#205",
+"2026-12#205"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRH266153",
+"order": 452,
+"sheet": "2026-11",
+"seq": 206,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#206",
+"2026-12#206"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRH266176",
+"order": 453,
+"sheet": "2026-11",
+"seq": 207,
+"model": "SRH16",
+"type": "客户订单",
+"months": [
+"2026-11#207",
+"2026-12#207"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRH266223",
+"order": 454,
+"sheet": "2026-11",
+"seq": 208,
+"model": "SRH15",
+"type": "客户订单",
+"months": [
+"2026-11#208",
+"2026-12#208"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRM266229",
+"order": 455,
+"sheet": "2026-11",
+"seq": 209,
+"model": "SRM24.1",
+"type": "管理订单",
+"months": [
+"2026-11#209"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "",
+"finishPlan": ""
+},
+{
+"chassis": "SRM266230",
+"order": 456,
+"sheet": "2026-11",
+"seq": 210,
+"model": "SRM24.1",
+"type": "管理订单",
+"months": [
+"2026-11#210"
+],
+"weldPlan": "2026-11-26",
+"assemblyPlan": "",
+"finishPlan": ""
+},
+{
+"chassis": "SRM265859",
+"order": 457,
+"sheet": "2026-12",
+"seq": 209,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#209"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRM266394",
+"order": 458,
+"sheet": "2026-12",
+"seq": 210,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#210"
+],
+"weldPlan": "",
+"assemblyPlan": "2026-12-04",
+"finishPlan": "2026-12-18"
+},
+{
+"chassis": "SRC266370",
+"order": 459,
+"sheet": "2026-12",
+"seq": 211,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-12#211"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRC266388",
+"order": 460,
+"sheet": "2026-12",
+"seq": 212,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-12#212"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRC266078",
+"order": 461,
+"sheet": "2026-12",
+"seq": 213,
+"model": "SRC24",
+"type": "客户订单",
+"months": [
+"2026-12#213"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRC266123",
+"order": 462,
+"sheet": "2026-12",
+"seq": 214,
+"model": "SRC19",
+"type": "客户订单",
+"months": [
+"2026-12#214"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRC266113",
+"order": 463,
+"sheet": "2026-12",
+"seq": 215,
+"model": "SRC20",
+"type": "客户订单",
+"months": [
+"2026-12#215"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRC266177",
+"order": 464,
+"sheet": "2026-12",
+"seq": 216,
+"model": "SRC17",
+"type": "客户订单",
+"months": [
+"2026-12#216"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRS266133",
+"order": 465,
+"sheet": "2026-12",
+"seq": 217,
+"model": "SRS9",
+"type": "管理订单",
+"months": [
+"2026-12#217"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRT266063",
+"order": 466,
+"sheet": "2026-12",
+"seq": 218,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#218"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRT266073",
+"order": 467,
+"sheet": "2026-12",
+"seq": 219,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#219"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRT266174",
+"order": 468,
+"sheet": "2026-12",
+"seq": 220,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#220"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRT266192",
+"order": 469,
+"sheet": "2026-12",
+"seq": 221,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#221"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRH266220",
+"order": 470,
+"sheet": "2026-12",
+"seq": 222,
+"model": "SRH15",
+"type": "客户订单",
+"months": [
+"2026-12#222"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRH265960",
+"order": 471,
+"sheet": "2026-12",
+"seq": 223,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-12#223"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRM266331",
+"order": 472,
+"sheet": "2026-12",
+"seq": 224,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#224"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRM266026",
+"order": 473,
+"sheet": "2026-12",
+"seq": 225,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#225"
+],
+"weldPlan": "2026-12-01",
+"assemblyPlan": "2026-12-07",
+"finishPlan": "2026-12-21"
+},
+{
+"chassis": "SRC266372",
+"order": 474,
+"sheet": "2026-12",
+"seq": 226,
+"model": "SRC20F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#226"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "NGB266335",
+"order": 475,
+"sheet": "2026-12",
+"seq": 227,
+"model": "NGB21S",
+"type": "管理订单",
+"months": [
+"2026-12#227"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "NGB266336",
+"order": 476,
+"sheet": "2026-12",
+"seq": 228,
+"model": "NGB21F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#228"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRC266307",
+"order": 477,
+"sheet": "2026-12",
+"seq": 229,
+"model": "SRC20",
+"type": "管理订单",
+"months": [
+"2026-12#229"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "NGC266334",
+"order": 478,
+"sheet": "2026-12",
+"seq": 230,
+"model": "NGC21S",
+"type": "管理订单",
+"months": [
+"2026-12#230"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRH265800",
+"order": 479,
+"sheet": "2026-12",
+"seq": 231,
+"model": "SRH16F 1 Bunk",
+"type": "客户订单",
+"months": [
+"2026-12#231"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRT266427",
+"order": 480,
+"sheet": "2026-12",
+"seq": 232,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-12#232"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRT266194",
+"order": 481,
+"sheet": "2026-12",
+"seq": 233,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#233"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRT266195",
+"order": 482,
+"sheet": "2026-12",
+"seq": 234,
+"model": "SRT19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#234"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRT266196",
+"order": 483,
+"sheet": "2026-12",
+"seq": 235,
+"model": "SRT19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#235"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRH265961",
+"order": 484,
+"sheet": "2026-12",
+"seq": 236,
+"model": "SRH15F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#236"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRH265962",
+"order": 485,
+"sheet": "2026-12",
+"seq": 237,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-12#237"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRH266057",
+"order": 486,
+"sheet": "2026-12",
+"seq": 238,
+"model": "SRH16F 1 Bunk",
+"type": "管理订单",
+"months": [
+"2026-12#238"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRM266027",
+"order": 487,
+"sheet": "2026-12",
+"seq": 239,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#239"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRM266288",
+"order": 488,
+"sheet": "2026-12",
+"seq": 240,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#240"
+],
+"weldPlan": "2026-12-02",
+"assemblyPlan": "2026-12-08",
+"finishPlan": "2026-12-22"
+},
+{
+"chassis": "SRC266308",
+"order": 489,
+"sheet": "2026-12",
+"seq": 241,
+"model": "SRC20F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#241"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRC266304",
+"order": 490,
+"sheet": "2026-12",
+"seq": 242,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-12#242"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRC266374",
+"order": 491,
+"sheet": "2026-12",
+"seq": 243,
+"model": "SRC21C",
+"type": "管理订单",
+"months": [
+"2026-12#243"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRL266070",
+"order": 492,
+"sheet": "2026-12",
+"seq": 244,
+"model": "SRL236",
+"type": "管理订单",
+"months": [
+"2026-12#244"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRC266143",
+"order": 493,
+"sheet": "2026-12",
+"seq": 245,
+"model": "SRC18",
+"type": "客户订单",
+"months": [
+"2026-12#245"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRC266155",
+"order": 494,
+"sheet": "2026-12",
+"seq": 246,
+"model": "SRC22",
+"type": "客户订单",
+"months": [
+"2026-12#246"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRC266383",
+"order": 495,
+"sheet": "2026-12",
+"seq": 247,
+"model": "SRC17",
+"type": "客户订单",
+"months": [
+"2026-12#247"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRT266163",
+"order": 496,
+"sheet": "2026-12",
+"seq": 248,
+"model": "SRT22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#248"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRT266164",
+"order": 497,
+"sheet": "2026-12",
+"seq": 249,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#249"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRT266191",
+"order": 498,
+"sheet": "2026-12",
+"seq": 250,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#250"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRT265378",
+"order": 499,
+"sheet": "2026-12",
+"seq": 251,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-12#251"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRH266058",
+"order": 500,
+"sheet": "2026-12",
+"seq": 252,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-12#252"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRH266189",
+"order": 501,
+"sheet": "2026-12",
+"seq": 253,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-12#253"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRM266033",
+"order": 502,
+"sheet": "2026-12",
+"seq": 254,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#254"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRM266363",
+"order": 503,
+"sheet": "2026-12",
+"seq": 255,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#255"
+],
+"weldPlan": "2026-12-03",
+"assemblyPlan": "2026-12-09",
+"finishPlan": "2026-12-23"
+},
+{
+"chassis": "SRC266433",
+"order": 504,
+"sheet": "2026-12",
+"seq": 256,
+"model": "SRC19",
+"type": "客户订单",
+"months": [
+"2026-12#256"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "NGC266333",
+"order": 505,
+"sheet": "2026-12",
+"seq": 257,
+"model": "NGC20",
+"type": "客户订单",
+"months": [
+"2026-12#257"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRP266351",
+"order": 506,
+"sheet": "2026-12",
+"seq": 258,
+"model": "SRP19",
+"type": "管理订单",
+"months": [
+"2026-12#258"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRP266352",
+"order": 507,
+"sheet": "2026-12",
+"seq": 259,
+"model": "SRP19",
+"type": "管理订单",
+"months": [
+"2026-12#259"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "NGB266343",
+"order": 508,
+"sheet": "2026-12",
+"seq": 260,
+"model": "NGB19",
+"type": "管理订单",
+"months": [
+"2026-12#260"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRC266298",
+"order": 509,
+"sheet": "2026-12",
+"seq": 261,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#261"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRC266375",
+"order": 510,
+"sheet": "2026-12",
+"seq": 262,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-12#262"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRT265569",
+"order": 511,
+"sheet": "2026-12",
+"seq": 263,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#263"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRT266161",
+"order": 512,
+"sheet": "2026-12",
+"seq": 264,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#264"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRT266118",
+"order": 513,
+"sheet": "2026-12",
+"seq": 265,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#265"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRH266247",
+"order": 514,
+"sheet": "2026-12",
+"seq": 266,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-12#266"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRH266248",
+"order": 515,
+"sheet": "2026-12",
+"seq": 267,
+"model": "SRH15",
+"type": "管理订单",
+"months": [
+"2026-12#267"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRH266249",
+"order": 516,
+"sheet": "2026-12",
+"seq": 268,
+"model": "SRH14",
+"type": "管理订单",
+"months": [
+"2026-12#268"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRM266093",
+"order": 517,
+"sheet": "2026-12",
+"seq": 269,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#269"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRM266111",
+"order": 518,
+"sheet": "2026-12",
+"seq": 270,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#270"
+],
+"weldPlan": "2026-12-04",
+"assemblyPlan": "2026-12-10",
+"finishPlan": "2026-12-24"
+},
+{
+"chassis": "SRC266377",
+"order": 519,
+"sheet": "2026-12",
+"seq": 271,
+"model": "SRC22",
+"type": "管理订单",
+"months": [
+"2026-12#271"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRC266299",
+"order": 520,
+"sheet": "2026-12",
+"seq": 272,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#272"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266117",
+"order": 521,
+"sheet": "2026-12",
+"seq": 273,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-12#273"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266169",
+"order": 522,
+"sheet": "2026-12",
+"seq": 274,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-12#274"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266119",
+"order": 523,
+"sheet": "2026-12",
+"seq": 275,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#275"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266242",
+"order": 524,
+"sheet": "2026-12",
+"seq": 276,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-12#276"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266243",
+"order": 525,
+"sheet": "2026-12",
+"seq": 277,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-12#277"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266244",
+"order": 526,
+"sheet": "2026-12",
+"seq": 278,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#278"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRT266245",
+"order": 527,
+"sheet": "2026-12",
+"seq": 279,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#279"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRH266250",
+"order": 528,
+"sheet": "2026-12",
+"seq": 280,
+"model": "SRH16",
+"type": "管理订单",
+"months": [
+"2026-12#280"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRM266159",
+"order": 529,
+"sheet": "2026-12",
+"seq": 281,
+"model": "SRM22.1",
+"type": "客户订单",
+"months": [
+"2026-12#281"
+],
+"weldPlan": "2026-12-07",
+"assemblyPlan": "2026-12-11",
+"finishPlan": "2026-12-25"
+},
+{
+"chassis": "SRC266297",
+"order": 530,
+"sheet": "2026-12",
+"seq": 282,
+"model": "SRC14",
+"type": "管理订单",
+"months": [
+"2026-12#282"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266292",
+"order": 531,
+"sheet": "2026-12",
+"seq": 283,
+"model": "SRC16",
+"type": "管理订单",
+"months": [
+"2026-12#283"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266313",
+"order": 532,
+"sheet": "2026-12",
+"seq": 284,
+"model": "SRC21C",
+"type": "管理订单",
+"months": [
+"2026-12#284"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRP266353",
+"order": 533,
+"sheet": "2026-12",
+"seq": 285,
+"model": "SRP19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#285"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRP266354",
+"order": 534,
+"sheet": "2026-12",
+"seq": 286,
+"model": "SRP18F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#286"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRP266355",
+"order": 535,
+"sheet": "2026-12",
+"seq": 287,
+"model": "SRP20",
+"type": "管理订单",
+"months": [
+"2026-12#287"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266296",
+"order": 536,
+"sheet": "2026-12",
+"seq": 288,
+"model": "SRC14",
+"type": "管理订单",
+"months": [
+"2026-12#288"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266312",
+"order": 537,
+"sheet": "2026-12",
+"seq": 289,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-12#289"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266314",
+"order": 538,
+"sheet": "2026-12",
+"seq": 290,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-12#290"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266315",
+"order": 539,
+"sheet": "2026-12",
+"seq": 291,
+"model": "SRC22",
+"type": "管理订单",
+"months": [
+"2026-12#291"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRP266356",
+"order": 540,
+"sheet": "2026-12",
+"seq": 292,
+"model": "SRP19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#292"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRP266357",
+"order": 541,
+"sheet": "2026-12",
+"seq": 293,
+"model": "SRP20",
+"type": "管理订单",
+"months": [
+"2026-12#293"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266305",
+"order": 542,
+"sheet": "2026-12",
+"seq": 294,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-12#294"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266316",
+"order": 543,
+"sheet": "2026-12",
+"seq": 295,
+"model": "SRC22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#295"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266317",
+"order": 544,
+"sheet": "2026-12",
+"seq": 296,
+"model": "SRC22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#296"
+],
+"weldPlan": "2026-12-08",
+"assemblyPlan": "2026-12-14",
+"finishPlan": "2026-12-28"
+},
+{
+"chassis": "SRC266318",
+"order": 545,
+"sheet": "2026-12",
+"seq": 1,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-12#1"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266358",
+"order": 546,
+"sheet": "2026-12",
+"seq": 2,
+"model": "SRP18F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#2"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266359",
+"order": 547,
+"sheet": "2026-12",
+"seq": 3,
+"model": "SRP14",
+"type": "管理订单",
+"months": [
+"2026-12#3"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266360",
+"order": 548,
+"sheet": "2026-12",
+"seq": 4,
+"model": "SRP14",
+"type": "管理订单",
+"months": [
+"2026-12#4"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266302",
+"order": 549,
+"sheet": "2026-12",
+"seq": 5,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#5"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266303",
+"order": 550,
+"sheet": "2026-12",
+"seq": 6,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#6"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266325",
+"order": 551,
+"sheet": "2026-12",
+"seq": 7,
+"model": "SRC22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#7"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266322",
+"order": 552,
+"sheet": "2026-12",
+"seq": 8,
+"model": "SRC21C",
+"type": "管理订单",
+"months": [
+"2026-12#8"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266275",
+"order": 553,
+"sheet": "2026-12",
+"seq": 9,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-12#9"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266276",
+"order": 554,
+"sheet": "2026-12",
+"seq": 10,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-12#10"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266277",
+"order": 555,
+"sheet": "2026-12",
+"seq": 11,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#11"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266323",
+"order": 556,
+"sheet": "2026-12",
+"seq": 12,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-12#12"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266361",
+"order": 557,
+"sheet": "2026-12",
+"seq": 13,
+"model": "SRP17",
+"type": "管理订单",
+"months": [
+"2026-12#13"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266362",
+"order": 558,
+"sheet": "2026-12",
+"seq": 14,
+"model": "SRP17",
+"type": "管理订单",
+"months": [
+"2026-12#14"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266319",
+"order": 559,
+"sheet": "2026-12",
+"seq": 15,
+"model": "SRC23",
+"type": "管理订单",
+"months": [
+"2026-12#15"
+],
+"weldPlan": "2026-12-09",
+"assemblyPlan": "2026-12-15",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266326",
+"order": 560,
+"sheet": "2026-12",
+"seq": 16,
+"model": "SRC22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#16"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266327",
+"order": 561,
+"sheet": "2026-12",
+"seq": 17,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-12#17"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266363",
+"order": 562,
+"sheet": "2026-12",
+"seq": 18,
+"model": "SRP18F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#18"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266364",
+"order": 563,
+"sheet": "2026-12",
+"seq": 19,
+"model": "SRP19",
+"type": "管理订单",
+"months": [
+"2026-12#19"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266365",
+"order": 564,
+"sheet": "2026-12",
+"seq": 20,
+"model": "SRP19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#20"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266278",
+"order": 565,
+"sheet": "2026-12",
+"seq": 21,
+"model": "SRT19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#21"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266279",
+"order": 566,
+"sheet": "2026-12",
+"seq": 22,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#22"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266280",
+"order": 567,
+"sheet": "2026-12",
+"seq": 23,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#23"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266283",
+"order": 568,
+"sheet": "2026-12",
+"seq": 24,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-12#24"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266284",
+"order": 569,
+"sheet": "2026-12",
+"seq": 25,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-12#25"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266306",
+"order": 570,
+"sheet": "2026-12",
+"seq": 26,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-12#26"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266309",
+"order": 571,
+"sheet": "2026-12",
+"seq": 27,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-12#27"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266328",
+"order": 572,
+"sheet": "2026-12",
+"seq": 28,
+"model": "SRC23",
+"type": "管理订单",
+"months": [
+"2026-12#28"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266366",
+"order": 573,
+"sheet": "2026-12",
+"seq": 29,
+"model": "SRP19",
+"type": "管理订单",
+"months": [
+"2026-12#29"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266367",
+"order": 574,
+"sheet": "2026-12",
+"seq": 30,
+"model": "SRP19F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#30"
+],
+"weldPlan": "2026-12-10",
+"assemblyPlan": "2026-12-16",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266324",
+"order": 575,
+"sheet": "2026-12",
+"seq": 31,
+"model": "SRC22",
+"type": "管理订单",
+"months": [
+"2026-12#31"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266368",
+"order": 576,
+"sheet": "2026-12",
+"seq": 32,
+"model": "SRP20",
+"type": "管理订单",
+"months": [
+"2026-12#32"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266291",
+"order": 577,
+"sheet": "2026-12",
+"seq": 33,
+"model": "SRC16",
+"type": "管理订单",
+"months": [
+"2026-12#33"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266404",
+"order": 578,
+"sheet": "2026-12",
+"seq": 34,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-12#34"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266285",
+"order": 579,
+"sheet": "2026-12",
+"seq": 35,
+"model": "SRT22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#35"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266286",
+"order": 580,
+"sheet": "2026-12",
+"seq": 36,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#36"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266134",
+"order": 581,
+"sheet": "2026-12",
+"seq": 37,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#37"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266175",
+"order": 582,
+"sheet": "2026-12",
+"seq": 38,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-12#38"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266246",
+"order": 583,
+"sheet": "2026-12",
+"seq": 39,
+"model": "SRT20",
+"type": "管理订单",
+"months": [
+"2026-12#39"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRL266416",
+"order": 584,
+"sheet": "2026-12",
+"seq": 40,
+"model": "SRL206",
+"type": "管理订单",
+"months": [
+"2026-12#40"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266405",
+"order": 585,
+"sheet": "2026-12",
+"seq": 41,
+"model": "SRC20",
+"type": "管理订单",
+"months": [
+"2026-12#41"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266406",
+"order": 586,
+"sheet": "2026-12",
+"seq": 42,
+"model": "SRC20F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#42"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266430",
+"order": 587,
+"sheet": "2026-12",
+"seq": 43,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-12#43"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRP266369",
+"order": 588,
+"sheet": "2026-12",
+"seq": 44,
+"model": "SRP20",
+"type": "管理订单",
+"months": [
+"2026-12#44"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266321",
+"order": 589,
+"sheet": "2026-12",
+"seq": 45,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-12#45"
+],
+"weldPlan": "2026-12-11",
+"assemblyPlan": "2026-12-17",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266409",
+"order": 590,
+"sheet": "2026-12",
+"seq": 46,
+"model": "SRC21C",
+"type": "管理订单",
+"months": [
+"2026-12#46"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266410",
+"order": 591,
+"sheet": "2026-12",
+"seq": 47,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-12#47"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266411",
+"order": 592,
+"sheet": "2026-12",
+"seq": 48,
+"model": "SRC22",
+"type": "管理订单",
+"months": [
+"2026-12#48"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266412",
+"order": 593,
+"sheet": "2026-12",
+"seq": 49,
+"model": "SRC22F 2 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#49"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266414",
+"order": 594,
+"sheet": "2026-12",
+"seq": 50,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-12#50"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266437",
+"order": 595,
+"sheet": "2026-12",
+"seq": 51,
+"model": "SRT16",
+"type": "管理订单",
+"months": [
+"2026-12#51"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266438",
+"order": 596,
+"sheet": "2026-12",
+"seq": 52,
+"model": "SRT18",
+"type": "管理订单",
+"months": [
+"2026-12#52"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266439",
+"order": 597,
+"sheet": "2026-12",
+"seq": 53,
+"model": "SRT19",
+"type": "管理订单",
+"months": [
+"2026-12#53"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266447",
+"order": 598,
+"sheet": "2026-12",
+"seq": 54,
+"model": "SRT22",
+"type": "管理订单",
+"months": [
+"2026-12#54"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRL265704",
+"order": 599,
+"sheet": "2026-12",
+"seq": 55,
+"model": "SRL216S",
+"type": "客户订单",
+"months": [
+"2026-12#55"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266415",
+"order": 600,
+"sheet": "2026-12",
+"seq": 56,
+"model": "SRC23",
+"type": "管理订单",
+"months": [
+"2026-12#56"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266421",
+"order": 601,
+"sheet": "2026-12",
+"seq": 57,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#57"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266422",
+"order": 602,
+"sheet": "2026-12",
+"seq": 58,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-12#58"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266423",
+"order": 603,
+"sheet": "2026-12",
+"seq": 59,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-12#59"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266424",
+"order": 604,
+"sheet": "2026-12",
+"seq": 60,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#60"
+],
+"weldPlan": "2026-12-14",
+"assemblyPlan": "2026-12-18",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266428",
+"order": 605,
+"sheet": "2026-12",
+"seq": 61,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-12#61"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266408",
+"order": 606,
+"sheet": "2026-12",
+"seq": 62,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-12#62"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRT265691",
+"order": 607,
+"sheet": "2026-12",
+"seq": 63,
+"model": "SRT20",
+"type": "客户订单",
+"months": [
+"2026-12#63"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC265936",
+"order": 608,
+"sheet": "2026-12",
+"seq": 64,
+"model": "SRC16",
+"type": "客户订单",
+"months": [
+"2026-12#64"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266426",
+"order": 609,
+"sheet": "2026-12",
+"seq": 65,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-12#65"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266429",
+"order": 610,
+"sheet": "2026-12",
+"seq": 66,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-12#66"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266431",
+"order": 611,
+"sheet": "2026-12",
+"seq": 67,
+"model": "SRC20",
+"type": "管理订单",
+"months": [
+"2026-12#67"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266432",
+"order": 612,
+"sheet": "2026-12",
+"seq": 68,
+"model": "SRC22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#68"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266434",
+"order": 613,
+"sheet": "2026-12",
+"seq": 69,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#69"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266435",
+"order": 614,
+"sheet": "2026-12",
+"seq": 70,
+"model": "SRC21C",
+"type": "管理订单",
+"months": [
+"2026-12#70"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266440",
+"order": 615,
+"sheet": "2026-12",
+"seq": 71,
+"model": "SRC14",
+"type": "管理订单",
+"months": [
+"2026-12#71"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266442",
+"order": 616,
+"sheet": "2026-12",
+"seq": 72,
+"model": "SRC17",
+"type": "管理订单",
+"months": [
+"2026-12#72"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266443",
+"order": 617,
+"sheet": "2026-12",
+"seq": 73,
+"model": "SRC19",
+"type": "管理订单",
+"months": [
+"2026-12#73"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266444",
+"order": 618,
+"sheet": "2026-12",
+"seq": 74,
+"model": "SRC18",
+"type": "管理订单",
+"months": [
+"2026-12#74"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266445",
+"order": 619,
+"sheet": "2026-12",
+"seq": 75,
+"model": "SRC20",
+"type": "管理订单",
+"months": [
+"2026-12#75"
+],
+"weldPlan": "2026-12-15",
+"assemblyPlan": "2026-12-21",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266446",
+"order": 620,
+"sheet": "2026-12",
+"seq": 76,
+"model": "SRC21S",
+"type": "管理订单",
+"months": [
+"2026-12#76"
+],
+"weldPlan": "2026-12-16",
+"assemblyPlan": "2026-12-22",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266454",
+"order": 621,
+"sheet": "2026-12",
+"seq": 77,
+"model": "SRC22S",
+"type": "管理订单",
+"months": [
+"2026-12#77"
+],
+"weldPlan": "2026-12-16",
+"assemblyPlan": "2026-12-22",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266456",
+"order": 622,
+"sheet": "2026-12",
+"seq": 78,
+"model": "SRC21",
+"type": "管理订单",
+"months": [
+"2026-12#78"
+],
+"weldPlan": "2026-12-16",
+"assemblyPlan": "2026-12-22",
+"finishPlan": ""
+},
+{
+"chassis": "SRC266457",
+"order": 623,
+"sheet": "2026-12",
+"seq": 79,
+"model": "SRC22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#79"
+],
+"weldPlan": "2026-12-16",
+"assemblyPlan": "2026-12-22",
+"finishPlan": ""
+},
+{
+"chassis": "SRT266455",
+"order": 624,
+"sheet": "2026-12",
+"seq": 80,
+"model": "SRT22F 3 Bunks",
+"type": "管理订单",
+"months": [
+"2026-12#80"
+],
+"weldPlan": "2026-12-16",
+"assemblyPlan": "2026-12-22",
+"finishPlan": ""
+}
+]
+}
