@@ -298,6 +298,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     rows.push({
       id: b.id, chassis: b.chassis || '', empty: Boolean(b.empty), line: b.line || '', source: b.source || '', group, portalGroup: raw.group, status: b.status || '',
       regent: regent.label, regentRank: regent.rank, regentDerived: regent.derived, ltRank: progress.rank, ltField: progress.field, ltDate: progress.date,
+      today, orderRow: order?.slotRow ?? null, forecast: order?.forecastDate || '',
       planOrder: planRow && ROLLING.has(group) ? planRow.order : null, planRef: planRow ? planRow.months.join(' / ') : '', planWeld: planRow?.weldPlan || '', planAssembly: planRow?.assemblyPlan || '',
       issues: [
         ...((seen.get(chassis) || []).length > 1 ? [{ code: 'duplicate', level: 'error', zh: `车架号在产线出现 ${seen.get(chassis).length} 次（${seen.get(chassis).map(x => BOARD_GROUPS.find(gr => gr.id === x)?.zh || x).join('、')}）`, en: `Chassis appears ${seen.get(chassis).length} times on the line (${seen.get(chassis).join(', ')})` }] : []),
@@ -330,11 +331,32 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
 }
-/** Regent status (Finished first) → Longtree progress (latest node first) → that node's date → CN start. */
+/** When the vehicle reaches / reached the Melbourne port: actual arrival once arrived, else the vessel ETA (Portal shipping), else the Longtree ETA. */
+export function etaKey(r) {
+  const l = r.live || {}, ship = l.ship;
+  if (ship?.arrived) return l.ata || ship.eta || '';
+  if (l.ata && l.ata <= (r.today || '9999')) return l.ata;
+  return ship?.eta || l.eta || '';
+}
+const by = (...keys) => (a, z) => { for (const k of keys) { const d = k(a, z); if (d) return d; } return 0; };
+const asc = f => (a, z) => (f(a) || '9999').localeCompare(f(z) || '9999');
+const num = f => (a, z) => (f(a) ?? 1e9) - (f(z) ?? 1e9);
+/** Default order inside each group: the date the people looking at that group care about. */
+export const GROUP_SORT = {
+  transport: by(asc(r => r.auEnd)),
+  au: by(num(r => r.regentRank ?? 99), asc(r => r.auEnd)),
+  sea: by(asc(etaKey), asc(r => r.auEnd)),
+  cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(r => r.cnEnd)),
+  locked: by(num(r => r.planOrder)),
+  rolling: by(num(r => r.planOrder)),
+  empty: by(asc(r => r.auEnd), num(r => r.build?.seq)),
+  customers: by(num(r => r.orderRow), asc(r => r.forecast)),
+  later: by(num(r => r.orderRow), asc(r => r.forecast), num(r => r.regentRank ?? 99)),
+};
+const GROUP_INDEX = ['transport', 'au', 'sea', 'cn', 'locked', 'rolling', 'empty', 'customers', 'later'];
 export function sortLineRows(rows) {
-  const planKey = r => (ROLLING.has(r.group) ? r.planOrder ?? 1e9 : r.build ? 2e9 : 0);
-  return rows.map((r, i) => ({ r, i })).sort((a, z) => planKey(a.r) - planKey(z.r) || (a.r.regentRank ?? 99) - (z.r.regentRank ?? 99) || (z.r.ltRank ?? 0) - (a.r.ltRank ?? 0)
-    || (a.r.ltDate || '9999').localeCompare(z.r.ltDate || '9999') || (a.r.cnStart || '9999').localeCompare(z.r.cnStart || '9999') || (a.r.auEnd || '').localeCompare(z.r.auEnd || '') || a.i - z.i).map(x => x.r);
+  return rows.map((r, i) => ({ r, i })).sort((a, z) => (GROUP_INDEX.indexOf(a.r.group) - GROUP_INDEX.indexOf(z.r.group)) || (GROUP_SORT[a.r.group] || (() => 0))(a.r, z.r)
+    || (a.r.cnStart || '9999').localeCompare(z.r.cnStart || '9999') || a.i - z.i).map(x => x.r);
 }
 
 // ---- live sources (server side) ---------------------------------------------------------------

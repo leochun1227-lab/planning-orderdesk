@@ -20,10 +20,15 @@ type Row = {
   regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; range: string; customer: string; orderId: string;
   production: null | { status: string; stage: string; location: string };
   cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
+  today?: string; orderRow: number | null; forecast: string;
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
 };
 type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
+type SortKey = 'status' | 'date' | 'auEnd' | 'eta';
+/** Same as the server's etaKey: actual arrival once arrived, else vessel ETA, else Longtree ETA. */
+const etaOf = (r: Row) => { const l = r.live; if (!l) return ''; if (l.ship?.arrived) return l.ata || l.ship.eta || ''; if (l.ata && l.ata <= (r.today || '9999')) return l.ata; return l.ship?.eta || l.eta || ''; };
+const KEY_ORDER: Record<string, string[]> = { transport: ['auEnd', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'] };
 type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
 type Payload = { buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
@@ -77,7 +82,7 @@ function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => 
 
 export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; onOpenOrder: (id: string) => void }) {
   const [data, setData] = useState<Payload | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [group, setGroup] = useState('au'), [line, setLine] = useState('All'), [chip, setChip] = useState(''), [sort, setSort] = useState<'status' | 'date'>('status');
+  const [group, setGroup] = useState('au'), [line, setLine] = useState('All'), [chip, setChip] = useState(''), [sort, setSort] = useState<SortKey>('status'), [jumpMonth, setJumpMonth] = useState('');
   const [query, setQuery] = useState(''), [dealer, setDealer] = useState(''), [detail, setDetail] = useState<Row | null>(null);
   const grid = useRef<AgGridReact<Row>>(null);
   const [shown, setShown] = useState<number | null>(null), [colFilters, setColFilters] = useState(0);
@@ -112,7 +117,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     let list = searching ? base.filter(r => [r.chassis, r.model, r.dealer, r.customer, r.live?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q))) : inGroup;
     const c = CHIPS.find(x => x.id === chip);
     if (c && !searching) list = list.filter(c.test);
-    return sort === 'date' ? [...list].sort((a, b) => (a.cnEnd || '9999').localeCompare(b.cnEnd || '9999')) : list;
+    const key = sort === 'date' ? (r: Row) => r.cnEnd : sort === 'auEnd' ? (r: Row) => r.auEnd : sort === 'eta' ? etaOf : null;
+    return key ? [...list].sort((a, b) => (key(a) || '9999').localeCompare(key(b) || '9999')) : list;
   }, [base, inGroup, query, chip, sort]);
   const dealers = useMemo(() => Array.from(new Set(rows.map(r => r.dealer).filter(Boolean))).sort(), [rows]);
   const exec = EXEC.includes(group) || searching;
@@ -165,7 +171,20 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className="pl-stage" style={{ background: p.data.liveTone, alignSelf: 'flex-start' }}>{p.data.v.judge}</span><small className={p.data.v.differs ? 'pl-delay' : ''}>{p.data.v.judgeSub}</small></div> },
     ] },
   ];
-    return group === 'empty' && !searching ? [{ ...(cols[0] as ColGroupDef<Row>), headerName: zh ? '造车计划（只有日期，车以后分配）' : 'Build plan (dates only, vehicles assigned later)', children: (cols[0] as ColGroupDef<Row>).children.filter((c: any) => c.colId !== 'issues').map((c: any) => ({ ...c, pinned: undefined, width: undefined, flex: 1, minWidth: 180 })) }] : cols;
+    if (!searching && KEY_ORDER[group]) {
+      const head = cols[0] as ColGroupDef<Row>, rest = cols.slice(1) as ColGroupDef<Row>[];
+      const pool = new Map<string, any>(head.children.map((c: any) => [c.colId || c.field, c]));
+      for (const g of rest) { const plan = g.children.find((c: any) => c.colId === 'plan'); if (plan) { pool.set('plan', { ...plan, pinned: 'left' }); g.children = g.children.filter((c: any) => c.colId !== 'plan'); } }
+      pool.set('eta', { colId: 'eta', headerName: zh ? '到港 ETA' : 'Port ETA', pinned: 'left', width: 140, valueGetter: (p: any) => p.data ? etaOf(p.data) : '',
+        cellRenderer: (p: any) => { if (!p.data) return null; const v = etaOf(p.data), l = p.data.live, arrived = Boolean(l?.ship?.arrived || (l?.ata && l.ata <= (p.data.today || '9999')));
+          return v ? <div className="pl-two"><strong>{v}</strong><small><span className={`pl-kind ${arrived ? 'actual' : ''}`}>{arrived ? (zh ? '已到港' : 'Arrived') : l?.ship?.eta ? (zh ? '船期 ETA' : 'Vessel ETA') : (zh ? '飞书 ETA' : 'Longtree ETA')}</span>{!arrived && l?.ship?.confidence ? ` ${l.ship.confidence}` : ''}</small></div> : <span className="pl-missing">{zh ? '没有 ETA' : 'No ETA'}</span>; } });
+      pool.set('forecast', { colId: 'forecast', headerName: zh ? '排产表 Forecast' : 'Orderlist forecast', pinned: 'left', width: 140, valueGetter: (p: any) => p.data?.forecast || '',
+        cellRenderer: (p: any) => p.data && (p.data.forecast || p.data.orderRow ? <div className="pl-two"><strong>{p.data.forecast || '—'}</strong><small>{p.data.orderRow ? (zh ? `排产表第 ${p.data.orderRow} 行` : `Orderlist row ${p.data.orderRow}`) : (zh ? '不在排产表' : 'No Orderlist row')}</small></div> : <span className="pl-missing">{zh ? '不在排产表' : 'No Orderlist row'}</span>) });
+      const order = KEY_ORDER[group], first = order.map(k => pool.get(k)).filter(Boolean);
+      const others = head.children.filter((c: any) => !order.includes(c.colId || c.field));
+      return [{ ...head, headerName: zh ? '关键日期 / 车辆' : 'Key dates / vehicle', children: [...first, ...others] }, ...rest];
+    }
+    return group === 'empty' && !searching ? [{ ...(cols[0] as ColGroupDef<Row>), headerName: zh ? '造车计划（只有日期，车以后分配）' : 'Build plan (dates only, vehicles assigned later)', children: (cols[0] as ColGroupDef<Row>).children.filter((c: any) => c.colId !== 'issues').map((c: any) => ({ ...c, colId: `build-${c.colId || c.field}`, field: undefined, valueGetter: c.valueGetter || ((p: any) => p.data?.build ? `${p.data.build.month} #${p.data.build.seq}` : ''), pinned: null, width: undefined, flex: 1, minWidth: 180 })) }] : cols;
   }, [zh, group, exec, searching, data]);
 
   const defaultColDef = useMemo<ColDef<Row>>(() => ({ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
@@ -173,7 +192,16 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const src = data?.sources || {};
   const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI', tms: zh ? '船运（Portal）' : 'Shipping (Portal)' };
   const avg = g?.phase ? data?.averages?.[g.phase] : null;
-  const pick = (id: string) => { setGroup(id); setChip(''); setQuery(''); clearColFilters(); };
+  /** Scroll the build plan to the first slot of a month (as displayed, after filters and sorting). */
+  const jumpTo = (month: string) => {
+    const api = grid.current?.api; if (!api) return;
+    setJumpMonth(month);
+    for (let i = 0, n = api.getDisplayedRowCount(); i < n; i++) {
+      const node = api.getDisplayedRowAtIndex(i);
+      if (node?.data?.build?.month === month) { api.ensureIndexVisible(i, 'top'); api.flashCells({ rowNodes: [node] }); return; }
+    }
+  };
+  const pick = (id: string) => { setGroup(id); setChip(''); setQuery(''); clearColFilters(); setJumpMonth(''); setTimeout(() => { const api = grid.current?.api; if (api?.getDisplayedRowCount()) api.ensureIndexVisible(0, 'top'); }, 0); };
   const srcText = (k: string) => src[k]?.error === 'not configured' ? (zh ? '未配置' : 'not configured') : src[k]?.error === 'no upload yet' ? (zh ? '内网电脑还没有推送' : 'no upload from the in-network PC yet') : src[k]?.error ? `${zh ? '读取失败，显示上次数据' : 'failed, showing last copy'}：${src[k].error}` : time(src[k]?.at);
   const card = (ids: string[], Icon: any, step: string, sub: string, target: string) =>
     <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => pick(target)}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
@@ -200,8 +228,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <button aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={14} /></button>
     </div>
     {group === 'empty' && !searching && data?.buildPlan && <div className="pl-build-strip">
-      {data.buildPlan.months.map(m => <div key={m.month} className={m.portalWorkingDays && m.portalWorkingDays !== m.workingDays ? 'diff' : ''} title={`${zh ? '总产量' : 'Total'} ${m.total} − SRV/SRM ${m.srvSrm} = Towable ${m.towable}${m.portalWorkingDays !== m.workingDays ? ` · ${zh ? 'Portal 工作日' : 'Portal working days'} ${m.portalWorkingDays}` : ''}`}>
-        <span>{m.month}</span><b>{m.towable}</b><small>{m.workingDays} {zh ? '天' : 'd'} · {m.perDay == null ? '—' : m.perDay.toFixed(2)}/{zh ? '天' : 'd'}</small></div>)}
+      {data.buildPlan.months.map(m => <button type="button" key={m.month} onClick={() => jumpTo(m.month)} aria-pressed={jumpMonth === m.month} className={`${m.portalWorkingDays && m.portalWorkingDays !== m.workingDays ? 'diff' : ''} ${jumpMonth === m.month ? 'on' : ''}`} title={`${zh ? '总产量' : 'Total'} ${m.total} − SRV/SRM ${m.srvSrm} = Towable ${m.towable}${m.portalWorkingDays !== m.workingDays ? ` · ${zh ? 'Portal 工作日' : 'Portal working days'} ${m.portalWorkingDays}` : ''}`}>
+        <span>{m.month}</span><b>{m.towable}</b><small>{m.workingDays} {zh ? '天' : 'd'} · {m.perDay == null ? '—' : m.perDay.toFixed(2)}/{zh ? '天' : 'd'}</small></button>)}
     </div>}
     <div className="schedule-toolbar pl-toolbar">
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
@@ -210,7 +238,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         {colFilters > 0 && <button className="pl-clear-filters" onClick={clearColFilters}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
         <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
         <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '按 Regent 状态 → Longtree 节点' : 'Regent status → Longtree node'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option></select></label>
+        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as SortKey)}><option value="status" title={zh ? 'Transport：澳洲下线；澳洲生产：Regent 状态 → 澳洲下线；海运：到港 ETA；国内生产：Longtree 节点 → 国内下线；滚动 60 天：计划顺序；后续：排产表行顺序' : ''}>{zh ? '按分组默认排序' : 'Group default order'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option><option value="auEnd">{zh ? '按澳洲下线（完工）排序' : 'Sort by AU finish'}</option><option value="eta">{zh ? '按到港 ETA 排序' : 'Sort by ETA'}</option></select></label>
       </div>
     </div>
     {error && <div className="message error compact-msg"><AlertTriangle size={16} />{error}</div>}

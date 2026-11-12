@@ -458,3 +458,6 @@ body{background:#eef1f6;font-size:14px}
 .pl-build-strip{display:flex;gap:6px;overflow-x:auto;padding:6px 10px;border-bottom:1px solid #e3e7ee;background:#fbfcfd}
 .pl-build-strip>div{flex:none;display:flex;flex-direction:column;min-width:86px;padding:4px 8px;border:1px solid #e3e7ee;border-radius:6px;background:#fff;font-size:11px;color:#7b8799}
 .pl-build-strip>div b{font-size:15px;color:#1d2433}.pl-build-strip>div.diff{border-color:#f5c26b;background:#fffaf0}
+.pl-build-strip>button{flex:none;display:flex;flex-direction:column;align-items:flex-start;min-width:86px;padding:4px 8px;border:1px solid #e3e7ee;border-radius:6px;background:#fff;font-size:11px;color:#7b8799;cursor:pointer;text-align:left}
+.pl-build-strip>button b{font-size:15px;color:#1d2433}.pl-build-strip>button.diff{border-color:#f5c26b;background:#fffaf0}
+.pl-build-strip>button:hover{border-color:#9db4f0}.pl-build-strip>button.on{border-color:#2f5be0;box-shadow:inset 0 -2px 0 #2f5be0;background:#f3f6ff}

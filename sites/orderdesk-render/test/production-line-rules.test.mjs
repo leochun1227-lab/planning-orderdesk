@@ -39,12 +39,15 @@ test('issues: in the factory without GR is an error', () => {
   const dates = issuesFor({ b: { chassis: 'C' }, group: 'sea', lt: { finishedAt: '2026-10-14', shippedAt: '2026-10-13' }, sap: {}, regent: regentStatus(null), today });
   assert.equal(dates[0].code, 'dateOrder');
 });
-test('rows sort by Regent status, then latest Longtree node, then its date', () => {
+test('each group sorts by its own key date', () => {
   const rows = [
-    { id: 'a', regentRank: 4, ltRank: 8, ltDate: '2026-10-01' }, { id: 'b', regentRank: 0, ltRank: 1, ltDate: '' },
-    { id: 'c', regentRank: 4, ltRank: 10, ltDate: '2026-10-05' }, { id: 'd', regentRank: 4, ltRank: 10, ltDate: '2026-09-01' },
+    { id: 't2', group: 'transport', auEnd: '2026-10-30' }, { id: 't1', group: 'transport', auEnd: '2026-10-01' },
+    { id: 'a2', group: 'au', regentRank: 2, auEnd: '2026-11-20' }, { id: 'a1', group: 'au', regentRank: 2, auEnd: '2026-11-15' }, { id: 'a0', group: 'au', regentRank: 0, auEnd: '2026-12-30' },
+    { id: 's2', group: 'sea', live: { ship: { eta: '2026-11-30' } } }, { id: 's1', group: 'sea', live: { ship: { arrived: true, eta: '2026-10-29' }, ata: '2026-10-29' } }, { id: 's3', group: 'sea', live: { eta: '2026-12-10' } },
+    { id: 'c2', group: 'cn', ltRank: 5, cnEnd: '2026-11-01' }, { id: 'c1', group: 'cn', ltRank: 6, cnEnd: '2026-12-01' },
+    { id: 'l2', group: 'later', orderRow: 900 }, { id: 'l1', group: 'later', orderRow: 850 }, { id: 'l3', group: 'later', orderRow: null, forecast: '2027-05-01' },
   ];
-  assert.deepEqual(sortLineRows(rows).map(r => r.id), ['b', 'd', 'c', 'a']);
+  assert.deepEqual(sortLineRows(rows).map(r => r.id), ['t1', 't2', 'a0', 'a1', 'a2', 's1', 's2', 's3', 'c1', 'c2', 'l1', 'l2', 'l3']);
 });
 test('a row moved to AU gets AU plan dates', () => {
   const d = datesForGroup({ cnPlanStart: '2026-06-01', cnPlanEnd: '2026-06-21', auPlanStart: '2026-09-01', auPlanEnd: '2026-10-11', cnActual: '2026-06-02', auActual: '' }, 'au', today, {}, { shippedAt: '2026-07-01' }, { grAt: '2026-09-05' });
@@ -58,7 +61,7 @@ test('the plan snapshot orders the rolling 60 days and flags duplicates', () => 
   const out = buildProductionLine({ board, orders: {}, longtree: new Map(), prod: new Map(), portal: new Map(), today: '2026-11-11', settings: {}, plan });
   const g = id => out.rows.filter(r => r.chassis === id).map(r => r.group);
   assert.deepEqual(g('B'), ['rolling']); assert.deepEqual(g('C'), ['later']); assert.deepEqual(g('D'), ['locked']);
-  assert.deepEqual(out.rows.filter(r => ['locked', 'rolling'].includes(r.group)).map(r => r.chassis), ['B', 'D', 'A']);
+  assert.deepEqual(out.rows.filter(r => r.group === 'rolling').map(r => r.chassis), ['B', 'A']); assert.deepEqual(out.rows.filter(r => r.group === 'locked').map(r => r.chassis), ['D']);
   assert.equal(out.rows.find(r => r.chassis === 'B').planStart, '2026-11-20');
   assert.ok(out.rows.find(r => r.chassis === 'C').issues.some(i => i.code === 'notInPlan'));
   assert.equal(out.rows.filter(r => r.chassis === 'E' && r.issues.some(i => i.code === 'duplicate')).length, 2);
