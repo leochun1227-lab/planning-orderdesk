@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from 'ag-grid-community';
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, Clock3, FileSpreadsheet, History, LayoutDashboard, ListFilter, Mail, Plus, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal, Upload, X, AlertTriangle, Minus, PanelLeftClose, LogOut, CalendarRange } from 'lucide-react';
-import ScheduleView, { defaultScheduleFilter, type ScheduleFilter } from '@/components/schedule-view';
+import ScheduleView, { defaultScheduleFilter, periodRange, type Period, type ScheduleFilter } from '@/components/schedule-view';
 import ProductionLineView from '@/components/production-line-view';
 import { Factory } from 'lucide-react';
 import { buildSchedule, buildExtraRows, actionCounts } from '@/components/schedule-model';
@@ -109,6 +109,8 @@ export default function Dashboard() {
     const extraRows = useMemo(() => buildExtraRows(data, camperPlan?.plan, today), [data, camperPlan, today]);
     const pendingSet = useMemo(() => new Set(data?.schedule?.pending || []), [data]);
     const dailyEvents = useMemo(() => data?.events.filter(e => e.date === date && !e.migration) || [], [data, date]);
+    const [period, setPeriod] = useState<Period>('day');
+    const periodEvents = useMemo(() => { const [a, b] = periodRange(period, date); return data?.events.filter(e => !e.migration && e.date >= a && e.date <= b) || []; }, [data, date, period]);
     const eventIds = useMemo(() => ({ new: new Set(dailyEvents.filter(e => e.type === 'new').map(e => e.orderId)), changed: new Set(dailyEvents.filter(e => e.type === 'changed').map(e => e.orderId)), cancelled: new Set(dailyEvents.filter(e => e.type === 'cancelled').map(e => e.orderId)) }), [dailyEvents]);
     const counts = { new: eventIds.new.size, changed: eventIds.changed.size, cancelled: eventIds.cancelled.size, overdue: data?.orders.filter(o => isOverdue(o, today)).length || 0 };
     const dealers = useMemo(() => Array.from(new Set(data?.orders.map(o => o.dealer).filter(Boolean) || [])).sort() as string[], [data]);
@@ -291,7 +293,7 @@ export default function Dashboard() {
    {notice && <div role="status" className="message success"><Check size={19}/><span>{notice.duplicate ? t('这份报告已经处理，无重复更新') : notice.summary.kind === 'production' ? `${t('生产状态已重新计算')} · ${notice.summary.changedCount} ${t('个变更')}` : language === 'zh' ? `导入成功 · ${notice.summary.newCount} 个新订单 · ${notice.summary.changedCount} 个变更 · ${notice.summary.cancelledCount} 个取消` : `Imported · ${notice.summary.newCount} new · ${notice.summary.changedCount} changed · ${notice.summary.cancelledCount} cancelled`}</span><button aria-label={t("关闭通知")} onClick={() => setNotice(null)}><X size={18}/></button></div>}
    {view === 'history' && <div className="date-row"><div className="date-select"><Clock3 size={18}/><input aria-label={t("查看日期")} type="date" max={today} value={date} onChange={e => setDate(e.target.value || today)}/>{date === today && <span className="today-tag">{t("今天")}</span>}</div><div className="report-stamp">{t("报告日期 ")}<strong>{fmt(data?.meta.lastReportDate)}</strong><button aria-label={t("刷新订单")} className={busy ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load()}><RefreshCw size={17}/></button></div></div>}
    {view === 'production' && <ProductionLineView zh={language === 'zh'} onOpenOrder={id => { const o = orderById.get(id); if (o) setSelected(o); }}/>}
-   {view === 'schedule' && <ScheduleView rows={scheduleRows} extras={extraRows} zh={language === 'zh'} filter={scheduleFilter} setFilter={setScheduleFilter} onOpen={setSelected} counts={scheduleCounts} date={date} setDate={setDate} today={today} dayEvents={dailyEvents} reportDate={data?.meta.lastReportDate} busy={busy} onRefresh={() => void load()} campervanSource={camperPlan?.at ? (language === 'zh' ? '更新于 ' : 'updated ') + formatTime(camperPlan.at) : null}/>}
+   {view === 'schedule' && <ScheduleView rows={scheduleRows} extras={extraRows} zh={language === 'zh'} filter={scheduleFilter} setFilter={setScheduleFilter} onOpen={setSelected} counts={scheduleCounts} date={date} setDate={setDate} today={today} dayEvents={periodEvents} period={period} setPeriod={setPeriod} reportDate={data?.meta.lastReportDate} busy={busy} onRefresh={() => void load()} campervanSource={camperPlan?.at ? (language === 'zh' ? '更新于 ' : 'updated ') + formatTime(camperPlan.at) : null}/>}
    {view === 'orders' && <section className="table-panel"><div className="panel-heading"><div><h2>{filterTitles[filter]}</h2><span className="count-chip">{data ? rows.length.toLocaleString() : '—'}</span></div><div className="table-tabs">{([['active', t("在排")], ['signed', t("已签字")], ['campervan', 'Campervan'], ['completed', t("已完成")], ...(view === 'orders' ? [['cancelled', t("已取消")]] : [])] as [
             Filter,
             string

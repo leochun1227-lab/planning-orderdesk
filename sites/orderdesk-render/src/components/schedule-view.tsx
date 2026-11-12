@@ -9,7 +9,29 @@ import { FIELD_LABELS, isOverdue } from '@/lib/order-engine.mjs';
 import { ALERTS, type AlertKey, type ScheduleRow, type Order } from './schedule-model';
 
 type Chip = AlertKey | 'due' | 'overdue' | 'pending';
-type Day = 'all' | 'new' | 'changed' | 'cancelled';
+type Day = 'all' | 'new' | 'changed' | 'forecast' | 'cancelled';
+export type Period = 'day' | 'week' | 'month' | 'all';
+// Forecast date / Orderlist row changes (a new order taking a slot, a cancelled order releasing it)
+// are counted on their own, not as order changes.
+const SLOT_FIELDS = new Set(['forecastDate', 'slotRow']);
+/** [first, last] day of the period that contains `date` (weeks start on Monday). */
+export function periodRange(period: Period, date: string): [string, string] {
+  if (period === 'day') return [date, date];
+  if (period === 'all') return ['0000-01-01', '9999-12-31'];
+  const d = new Date(`${date}T00:00:00Z`);
+  if (period === 'month') { const a = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)), b = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)); return [a.toISOString().slice(0, 10), b.toISOString().slice(0, 10)]; }
+  const a = new Date(d); a.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); const b = new Date(a); b.setUTCDate(a.getUTCDate() + 6);
+  return [a.toISOString().slice(0, 10), b.toISOString().slice(0, 10)];
+}
+const periodRangeTitle = (p: Period, date: string, zh: boolean) => { const [a, b] = periodRange(p, date); return `${zh ? '范围' : 'Range'} ${a} – ${b}`; };
+export const eventKinds = (e: any): Day[] => {
+  if (e.type !== 'changed') return [e.type];
+  const fields = (e.changes || []).map((c: any) => c.field);
+  const out: Day[] = [];
+  if (fields.some((f: string) => SLOT_FIELDS.has(f))) out.push('forecast');
+  if (!fields.length || fields.some((f: string) => !SLOT_FIELDS.has(f))) out.push('changed');
+  return out;
+};
 export type ScheduleFilter = { alert: Chip | null; scope: 'open' | 'all' | 'slots' | 'campervan'; dealer: string; query: string; day: Day | null };
 export const defaultScheduleFilter: ScheduleFilter = { alert: null, scope: 'open', dealer: '', query: '', day: null };
 
@@ -23,9 +45,9 @@ const gridTheme = themeQuartz.withParams({
 });
 const DATE_FIELDS = ['requestDate', 'receivedAt', 'sentLongtreeAt', 'specAt', 'signedAt', 'purchaseAt'];
 
-export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOpen, counts, date, setDate, today, dayEvents, reportDate, busy, onRefresh, campervanSource }: {
+export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOpen, counts, date, setDate, today, dayEvents, reportDate, busy, onRefresh, campervanSource, period, setPeriod }: {
   rows: ScheduleRow[]; extras: ScheduleRow[]; zh: boolean; filter: ScheduleFilter; setFilter: (f: ScheduleFilter) => void; onOpen: (o: Order) => void;
-  counts: Record<string, number>; date: string; setDate: (d: string) => void; today: string; dayEvents: any[]; reportDate?: string; busy: boolean; onRefresh: () => void;
+  counts: Record<string, number>; date: string; setDate: (d: string) => void; today: string; dayEvents: any[]; reportDate?: string; busy: boolean; onRefresh: () => void; period: Period; setPeriod: (p: Period) => void;
   campervanSource?: string | null;
 }) {
   const grid = useRef<AgGridReact<ScheduleRow>>(null);
@@ -37,8 +59,8 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
 
   // Changes on the selected day, per order (same events the old overview counted).
   const day = useMemo(() => {
-    const by = new Map<string, any[]>(), ids: Record<Day, Set<string>> = { all: new Set(), new: new Set(), changed: new Set(), cancelled: new Set() };
-    for (const e of dayEvents) { (by.get(e.orderId) ?? by.set(e.orderId, []).get(e.orderId)!).push(e); ids.all.add(e.orderId); ids[e.type as Day]?.add(e.orderId); }
+    const by = new Map<string, any[]>(), ids: Record<Day, Set<string>> = { all: new Set(), new: new Set(), changed: new Set(), forecast: new Set(), cancelled: new Set() };
+    for (const e of dayEvents) { (by.get(e.orderId) ?? by.set(e.orderId, []).get(e.orderId)!).push(e); ids.all.add(e.orderId); for (const k of eventKinds(e)) ids[k].add(e.orderId); }
     return { by, ids };
   }, [dayEvents]);
   const camperCount = useMemo(() => extras.filter(r => r.kind === 'campervan' && r.order?.status === 'active').length, [extras]);
@@ -72,7 +94,8 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     valueGetter: p => { const o = p.data?.order; if (!o) return ''; const v = o[field]; return milestone && !v ? 'No' : v ?? ''; },
     valueFormatter: p => fmt(p.value), cellClass: p => (p.value === 'No' ? 'xl-no' : ''), cellStyle: p => dueStyle(p, field),
   });
-  const typeLabel = (t: string) => (zh ? { new: '新订单', changed: '变更', cancelled: '取消' } : { new: 'New', changed: 'Changed', cancelled: 'Cancelled' } as any)[t] || t;
+  const typeLabel = (t: string) => (zh ? { new: '新订单', changed: '变更', forecast: 'Forecast', cancelled: '取消' } : { new: 'New', changed: 'Changed', forecast: 'Forecast', cancelled: 'Cancelled' } as any)[t] || t;
+  const md = (d?: string) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '');
   const kindLabel = (k?: string) => (zh ? { campervan: 'Campervan', pending: '待排位', cancelled: '已取消', other: '不在排产表' } : { campervan: 'Campervan', pending: 'Not placed', cancelled: 'Cancelled', other: 'Not in schedule' } as any)[k || ''] || '';
   const columns = useMemo<ColDef<ScheduleRow>[]>(() => [
     { headerName: '#', colId: 'row', width: 62, pinned: 'left', cellClass: 'xl-rownum', valueGetter: p => p.data?.excelRow || '',
@@ -82,9 +105,18 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
       tooltipValueGetter: p => (p.data?.alert ? ALERTS[p.data.alert][zh ? 'zh' : 'en'] : p.data?.kind === 'campervan' ? (zh ? 'Dealer Portal 澳洲计划上线（只读）' : 'Dealer Portal AU planned start (read-only)') : '') },
     { headerName: zh ? '车架号' : 'Chassis', colId: 'chassis', width: 118, pinned: 'left', valueGetter: p => p.data?.order?.chassis || '',
       cellRenderer: (p: any) => p.data?.order ? <button className={`xl-link ${p.data.order.status === 'cancelled' ? 'cancelled' : ''}`} onClick={() => onOpen(p.data.order)}>{p.value}</button> : <span className="xl-slot">{zh ? '空位' : 'Empty slot'}</span> },
-    { headerName: zh ? '当日变化' : 'Change', colId: 'change', width: 220, hide: !filter.day,
-      valueGetter: p => { const es = p.data?.order ? day.by.get(p.data.order.id) || [] : []; return es.map(e => typeLabel(e.type) + (e.changes?.length && e.type === 'changed' ? ': ' + e.changes.map((c: any) => (FIELD_LABELS as any)[c.field] || c.field).join('、') : '')).join('；'); },
-      cellClass: p => { const es = p.data?.order ? day.by.get(p.data.order.id) || [] : []; return es.some(e => e.type === 'cancelled') ? 'chg chg-cancelled' : es.some(e => e.type === 'new') ? 'chg chg-new' : 'chg chg-changed'; } },
+    { headerName: zh ? (period === 'day' ? '当日变化' : '变化') : 'Change', colId: 'change', width: period === 'day' ? 220 : 300, hide: !filter.day,
+      valueGetter: p => { const es = p.data?.order ? [...(day.by.get(p.data.order.id) || [])].sort((a, b) => String(a.at).localeCompare(String(b.at))) : [];
+        return es.map(e => {
+          let text = typeLabel(e.type);
+          if (e.type === 'changed') {
+            const ch = e.changes || [], other = ch.filter((c: any) => !SLOT_FIELDS.has(c.field));
+            const parts = ch.filter((c: any) => SLOT_FIELDS.has(c.field)).map((c: any) => c.field === 'forecastDate' ? `Forecast → ${fmt(c.after) || '—'}` : (zh ? `排产行 ${c.before ?? ''} 释放` : `row ${c.before ?? ''} released`));
+            if (other.length || !ch.length) parts.unshift(typeLabel('changed') + (other.length ? ': ' + other.map((c: any) => (FIELD_LABELS as any)[c.field] || c.field).join('、') : ''));
+            text = parts.join('，');
+          }
+          return (period === 'day' ? '' : md(e.date) + ' ') + text; }).join('；'); },
+      cellClass: p => { const es = p.data?.order ? day.by.get(p.data.order.id) || [] : []; const k = new Set(es.flatMap(eventKinds)); return k.has('cancelled') ? 'chg chg-cancelled' : k.has('new') ? 'chg chg-new' : k.has('changed') ? 'chg chg-changed' : 'chg chg-forecast'; } },
     { headerName: zh ? '经销商' : 'Dealer', field: 'dealer', width: 118, cellStyle: p => (dealerColor(p.value) || {}) as CellStyle },
     { headerName: zh ? '客户' : 'Customer', colId: 'customer', width: 190, valueGetter: p => p.data?.order?.customer || '', cellStyle: p => dueStyle(p),
       cellRenderer: (p: any) => { const o = p.data?.order; if (!o) return ''; const raw = o.crmCustomer; return o.customer === 'Stock' && raw ? <span className="xl-stock">Stock<small title={zh ? 'CRM 原始客户名' : 'Original CRM customer'}>{raw}</small></span> : (o.customer || ''); },
@@ -104,7 +136,7 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     { headerName: zh ? '排程状态' : 'Schedule Status', colId: 'vinNumber', width: 180, valueGetter: p => p.data?.order?.vinNumber || '' },
     { headerName: 'Price Date', colId: 'priceVersion', width: 78, valueGetter: p => p.data?.order?.priceVersion || '' },
     { headerName: zh ? '预计半成品到货' : 'Est. Semi Received', colId: 'estimatedSemiReceivedAt', width: 110, valueGetter: p => { const v = p.data?.order?.estimatedSemiReceivedAt; return v && v !== 'null' ? v : ''; } },
-  ], [zh, onOpen, filter.day, day, today]);
+  ], [zh, onOpen, filter.day, day, today, period]);
 
   async function exportExcel() {
     setExporting(true); setError('');
@@ -127,11 +159,14 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
   ];
   const chipCount = (k: Chip) => k === 'grey' ? (counts.grey || 0) + (counts.greyNoRequest || 0) : k === 'due' ? rows.filter(r => r.due).length : counts[k] ?? 0;
   const set = (p: Partial<ScheduleFilter>) => setFilter({ ...filter, ...p });
-  const dayChips: [Day, string][] = [['all', zh ? '当日全部变化' : 'All changes'], ['new', zh ? '新订单' : 'New'], ['changed', zh ? '订单变化' : 'Changed'], ['cancelled', zh ? '取消' : 'Cancelled']];
+  const periodName = zh ? { day: date === today ? '今天' : '当天', week: '本周', month: '本月', all: '全部' }[period] : { day: date === today ? 'Today' : 'Day', week: 'Week', month: 'Month', all: 'All time' }[period];
+  const dayChips: [Day, string][] = [['all', period === 'all' ? (zh ? '全部变化' : 'All changes') : (zh ? `${periodName}全部变化` : `All changes (${periodName})`)], ['new', zh ? '新订单' : 'New'], ['changed', zh ? '订单变化' : 'Changed'], ['forecast', zh ? 'Forecast 变化' : 'Forecast'], ['cancelled', zh ? '取消' : 'Cancelled']];
+  const periodText = () => { const r = periodRange(period, date); return period === 'day' ? fmt(date) : period === 'all' ? (zh ? '全部日期' : 'all dates') : `${fmt(r[0])} – ${fmt(r[1] > today ? today : r[1])}`; };
 
   return <section className="table-panel schedule-panel">
     <div className="schedule-daybar">
-      <label className="day-date"><Clock3 size={15} /><input type="date" max={today} value={date} onChange={e => setDate(e.target.value || today)} aria-label={zh ? '查看日期' : 'Date'} />{date === today && <span className="today-tag">{zh ? '今天' : 'Today'}</span>}</label>
+      <label className={`day-date ${period === 'all' ? 'muted' : ''}`}><Clock3 size={15} /><input type="date" max={today} value={date} onChange={e => setDate(e.target.value || today)} aria-label={zh ? '查看日期' : 'Date'} />{date === today && period === 'day' && <span className="today-tag">{zh ? '今天' : 'Today'}</span>}</label>
+      <div className="seg period-seg" role="group" aria-label={zh ? '时间范围' : 'Period'}>{([['day', date === today ? (zh ? '今天' : 'Today') : (zh ? '当天' : 'Day')], ['week', zh ? '本周' : 'Week'], ['month', zh ? '本月' : 'Month'], ['all', zh ? '全部' : 'All']] as [Period, string][]).map(([k, l]) => <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)} title={k === 'week' || k === 'month' ? periodRangeTitle(k, date, zh) : undefined}>{l}</button>)}</div>
       <div className="day-chips">{dayChips.map(([k, l]) => <button key={k} className={`day-chip ${k} ${filter.day === k ? 'on' : ''} ${day.ids[k].size ? '' : 'zero'}`} onClick={() => set({ day: filter.day === k ? null : k, alert: null })}><b>{day.ids[k].size}</b>{l}</button>)}</div>
       <span className="count-chip sv-count"><CalendarRange size={14} /> {shown != null && <>{shown.toLocaleString()} / </>}{visible.length.toLocaleString()} {zh ? '行' : 'rows'}</span>
       <Button variant="outline" className="action slim sv-export" disabled={exporting} onClick={() => void exportExcel()}><ArrowDownToLine size={15} />{exporting ? (zh ? '导出中' : 'Exporting') : (zh ? '导出 Excel' : 'Export Excel')}</Button>
@@ -151,7 +186,7 @@ export default function ScheduleView({ rows, extras, zh, filter, setFilter, onOp
     </div>
     {(filter.query || filter.day || filter.alert === 'overdue' || filter.alert === 'pending' || filter.scope === 'campervan') && <div className="filter-note">
       {filter.query ? (zh ? `在全部车里搜索「${filter.query}」：包括 Orderlist、Campervan、待排位和已取消的车。` : `Searching all vehicles for "${filter.query}" (Orderlist, campervans, not placed, cancelled).`)
-        : filter.day ? (zh ? `${fmt(date)} 的变化，包括取消和 Campervan 订单。` : `Changes on ${fmt(date)}, including cancelled and campervan orders.`)
+        : filter.day ? (zh ? `${periodText()} 的变化，包括取消和 Campervan 订单；Forecast 变化（新订单排进空位、取消释放排位）单独统计，不算订单变化。` : `Changes for ${periodText()}, including cancelled and campervan orders; forecast / slot changes are counted separately.`)
         : filter.scope === 'campervan' && !filter.alert ? (zh ? `SRV / SRM 不占 Orderlist 空位；预计生产为 Dealer Portal 的澳洲计划上线${campervanSource ? `（${campervanSource}）` : ''}。` : 'SRV / SRM do not use Orderlist slots; dates are the Dealer Portal AU planned start.')
         : filter.alert === 'overdue' ? (zh ? '所有发图满 5 天仍未签字的车（含 Campervan）。' : 'All orders with plans sent ≥5 days and unsigned (incl. campervans).')
         : (zh ? '经销商没有空位、或不在排产表里的在排订单。' : 'Active orders without a dealer slot / not in the schedule.')}
