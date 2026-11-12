@@ -20,12 +20,14 @@ type Row = {
   regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; range: string; customer: string; orderId: string;
   production: null | { status: string; stage: string; location: string };
   cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
+  cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
 };
 type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
-type Payload = { plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
+type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
+type Payload = { buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
-const EXEC = ['au', 'sea', 'cn'];
+const EXEC = ['transport', 'au', 'sea', 'cn'];
 const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
 const FLAG_COLORS: Record<string, [string, string]> = { G: ['#2b8a3e', '#fff'], B: ['#1c7ed6', '#fff'], O: ['#f08c00', '#fff'], R: ['#e03131', '#fff'], Y: ['#fcc419', '#3d2c00'], M: ['#c2255c', '#fff'], P: ['#7048e8', '#fff'], D: ['#343a40', '#fff'] };
 const CHIPS = [
@@ -110,18 +112,18 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     let list = searching ? base.filter(r => [r.chassis, r.model, r.dealer, r.customer, r.live?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q))) : inGroup;
     const c = CHIPS.find(x => x.id === chip);
     if (c && !searching) list = list.filter(c.test);
-    return sort === 'date' ? [...list].sort((a, b) => (a.cnStart || '9999').localeCompare(b.cnStart || '9999')) : list;
+    return sort === 'date' ? [...list].sort((a, b) => (a.cnEnd || '9999').localeCompare(b.cnEnd || '9999')) : list;
   }, [base, inGroup, query, chip, sort]);
   const dealers = useMemo(() => Array.from(new Set(rows.map(r => r.dealer).filter(Boolean))).sort(), [rows]);
   const exec = EXEC.includes(group) || searching;
   const g = groupOf(group);
   const band = (ids: string[]) => ids.reduce((n, id) => n + (counts[id] || 0), 0);
 
-  const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => [
-    { headerName: zh ? 'Portal · 上线 / 车辆' : 'Portal · start / vehicle', children: [
-      { colId: 'cnStart', headerName: zh ? '国内上线时间' : 'CN start', pinned: 'left', width: 150, valueGetter: p => p.data?.cnActual || p.data?.cnStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.cnActual} expected={p.data.cnStart} baseline={p.data.cnPlanStart} /> },
-      { colId: 'auStart', headerName: zh ? '澳洲上线时间' : 'AU start', pinned: 'left', width: 150, valueGetter: p => p.data?.auActual || p.data?.auStart || '', cellRenderer: (p: any) => p.data && <OnlineDate zh={zh} actual={p.data.auActual} expected={p.data.auStart} baseline={p.data.auPlanStart} /> },
-      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two"><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></div> },
+  const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => { const cols: (ColDef<Row> | ColGroupDef<Row>)[] = [
+    { headerName: zh ? '下线时间 / 车辆' : 'Finish dates / vehicle', children: [
+      { colId: 'cnEnd', headerName: zh ? '国内下线时间' : 'CN finish', pinned: 'left', width: 150, valueGetter: p => p.data?.cnEnd || '', cellRenderer: (p: any) => p.data && (p.data.build ? <span className="pl-missing">{zh ? '待定' : 'TBC'}</span> : <OnlineDate zh={zh} actual={p.data.cnEndActual ? p.data.cnEnd : ''} expected={p.data.cnEnd} baseline={p.data.cnPlanEnd} />) },
+      { colId: 'auEnd', headerName: zh ? '澳洲下线（完工）时间' : 'AU finish', pinned: 'left', width: 150, valueGetter: p => p.data?.auEnd || '', cellRenderer: (p: any) => p.data && (p.data.build ? <div className="pl-two"><strong>{p.data.auEnd}</strong><small>{zh ? '造车计划' : 'Build plan'}</small></div> : <OnlineDate zh={zh} actual={p.data.auEndActual ? p.data.auEnd : ''} expected={p.data.auEnd} baseline={p.data.auPlanEnd} />) },
+      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
       { colId: 'issues', headerName: zh ? '异常' : 'Issues', pinned: 'left', width: 128, valueGetter: p => (p.data?.issues || []).map(i => ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code).join(zh ? '、' : ', '),
         tooltipValueGetter: p => (p.data?.issues || []).map(i => (zh ? i.zh : i.en)).join(zh ? '；' : '; ') || undefined,
         cellRenderer: (p: any) => p.data && p.data.issues.length > 0 && <div className="pl-issues">{p.data.issues.map((i: Issue) => <span key={i.code} className={`pl-issue ${i.level}`}>{ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code}</span>)}</div> },
@@ -162,7 +164,9 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       { colId: 'judge', headerName: zh ? '初步判断' : 'First reading', width: 140, valueGetter: p => p.data?.v?.judge || '',
         cellRenderer: (p: any) => p.data?.v && <div className="pl-two"><span className="pl-stage" style={{ background: p.data.liveTone, alignSelf: 'flex-start' }}>{p.data.v.judge}</span><small className={p.data.v.differs ? 'pl-delay' : ''}>{p.data.v.judgeSub}</small></div> },
     ] },
-  ], [zh, group, exec, searching, data]);
+  ];
+    return group === 'empty' && !searching ? [{ ...(cols[0] as ColGroupDef<Row>), headerName: zh ? '造车计划（只有日期，车以后分配）' : 'Build plan (dates only, vehicles assigned later)', children: (cols[0] as ColGroupDef<Row>).children.filter((c: any) => c.colId !== 'issues').map((c: any) => ({ ...c, pinned: undefined, width: undefined, flex: 1, minWidth: 180 })) }] : cols;
+  }, [zh, group, exec, searching, data]);
 
   const defaultColDef = useMemo<ColDef<Row>>(() => ({ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
   function exportCsv() { grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${g?.id || 'search'}-${data?.today || ''}.csv` }); }
@@ -178,11 +182,11 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
 
   return <section className="table-panel schedule-panel pl-panel">
     <div className="pl-overview">
-      {card(['au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', `${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'au')}
+      {card(['transport', 'au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', `Transport ${counts.transport ?? 0} · ${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'transport')}
       {card(['locked', 'rolling'], CalendarDays, zh ? '02 · 滚动 60 天' : '02 · Rolling 60 days', `${zh ? '已锁定' : 'Locked'} ${counts.locked ?? 0} · ${zh ? '待确认' : 'To confirm'} ${counts.rolling ?? 0}`, 'locked')}
-      {card(['empty', 'customers'], Layers, zh ? '03 · 预排产' : '03 · Pre-schedule', `Empty slots ${counts.empty ?? 0} · Customer ${counts.customers ?? 0}`, 'empty')}
+      {card(['empty', 'customers'], Layers, zh ? '03 · 预排产' : '03 · Pre-schedule', `${zh ? '造车计划' : 'Build plan'} ${(counts.empty ?? 0).toLocaleString()} · Customer ${counts.customers ?? 0}`, 'empty')}
       {card(['later'], Clock3, zh ? '后续排产 / 日期待补' : 'Later / dates missing', zh ? '国内计划上线在 60 天之后' : 'CN plan start beyond 60 days', 'later')}
-      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{(rows.length).toLocaleString()} {zh ? '条未发运车辆 / slot' : 'open vehicles / slots'}</p></div></div>
+      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{rows.filter(r => !r.build).length.toLocaleString()} {zh ? '条未发运车辆' : 'open vehicles'}</p></div></div>
     </div>
     <div className="pl-tabs" role="tablist">
       {groups.map(x => { const on = group === x.id && !searching;
@@ -195,6 +199,10 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <button className="pl-export" onClick={exportCsv} disabled={!visible.length}><ArrowDownToLine size={13} />CSV</button>
       <button aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={14} /></button>
     </div>
+    {group === 'empty' && !searching && data?.buildPlan && <div className="pl-build-strip">
+      {data.buildPlan.months.map(m => <div key={m.month} className={m.portalWorkingDays && m.portalWorkingDays !== m.workingDays ? 'diff' : ''} title={`${zh ? '总产量' : 'Total'} ${m.total} − SRV/SRM ${m.srvSrm} = Towable ${m.towable}${m.portalWorkingDays !== m.workingDays ? ` · ${zh ? 'Portal 工作日' : 'Portal working days'} ${m.portalWorkingDays}` : ''}`}>
+        <span>{m.month}</span><b>{m.towable}</b><small>{m.workingDays} {zh ? '天' : 'd'} · {m.perDay == null ? '—' : m.perDay.toFixed(2)}/{zh ? '天' : 'd'}</small></div>)}
+    </div>}
     <div className="schedule-toolbar pl-toolbar">
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
       {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}
@@ -202,7 +210,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         {colFilters > 0 && <button className="pl-clear-filters" onClick={clearColFilters}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
         <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
         <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '按 Regent 状态 → Longtree 节点' : 'Regent status → Longtree node'}</option><option value="date">{zh ? '按国内上线排序' : 'Sort by CN start'}</option></select></label>
+        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as 'status' | 'date')}><option value="status">{zh ? '按 Regent 状态 → Longtree 节点' : 'Regent status → Longtree node'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option></select></label>
       </div>
     </div>
     {error && <div className="message error compact-msg"><AlertTriangle size={16} />{error}</div>}
@@ -217,7 +225,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     {detail && <aside className="pl-detail" role="dialog" aria-label={detail.chassis || 'slot'}>
       <header><div><strong>{detail.empty ? 'Empty slot' : detail.chassis}</strong><span>{detail.model} · {detail.dealer || '—'} · {detail.customer || '—'}</span></div><button className="icon-button" aria-label={zh ? '关闭' : 'Close'} onClick={() => setDetail(null)}><X size={16} /></button></header>
       <div className="pl-plan">
-        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '计划完成' : 'Plan end', detail.planEnd, ''], [zh ? '预计完成' : 'Expected end', detail.expectedEnd, detail.delay ? `${detail.delay > 0 ? '+' : ''}${detail.delay} ${zh ? '天' : 'd'}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
+        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEnd, detail.cnEndActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd, detail.auEndActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '计划完成' : 'Plan end', detail.planEnd, ''], [zh ? '预计完成' : 'Expected end', detail.expectedEnd, detail.delay ? `${detail.delay > 0 ? '+' : ''}${detail.delay} ${zh ? '天' : 'd'}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
           .map(([l, v, n]) => <div key={l}><span>{l}</span><b>{v || '—'}</b><em>{n}</em></div>)}
       </div>
       {detail.live && <ol className="pl-timeline">

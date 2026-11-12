@@ -50,11 +50,11 @@ test('line = Portal board rows (groups, plan dates kept) plus live facts and the
     { id: 'slot-1', chassis: '', empty: true, group: 'empty', line: 'SRM', warnings: [] },
   ] };
   const r = buildProductionLine({ board, orders: { SRC1: { chassis: 'SRC-1', customer: 'Smith', status: 'active', signedAt: '2025-01-01' } }, longtree: new Map([['SRC1', { weldAt: '2025-09-22' }]]), prod: new Map([['SRC1', { location: 'qc', station: 'Qc Red Zone', flags: ['G'], stationSince: '2026-11-01T00:00:00Z', history: [] }]]), portal: new Map([['SRC1', { grAt: '2026-10-10', giAt: '' }]]), today: '2026-11-09' });
-  assert.deepEqual(r.counts.au, 1); assert.equal(r.counts.empty, 1); assert.equal(r.completed, 5);
+  assert.deepEqual(r.counts.au, 1); assert.ok(!r.counts.empty, 'Portal SRV / SRM empty slots are not shown'); assert.equal(r.completed, 5);
   const a = r.rows[0];
   assert.equal(a.auMrp, '2026-10-21'); assert.equal(a.customer, 'Smith'); assert.equal(a.orderId, 'SRC1');
   assert.equal(a.live.stage, 'auFactory'); assert.equal(a.live.station, 'Qc Red Zone'); assert.equal(a.live.daysAtStation, 8); assert.equal(a.live.grAt, '2026-10-10');
-  assert.equal(r.rows[1].live, null);
+  assert.equal(r.rows.length, 1);
 });
 
 test('sources: unconfigured sources are reported; the Portal board is built from the shared copy; GR/GI only from SAP', async () => {

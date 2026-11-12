@@ -454,3 +454,7 @@ body{background:#eef1f6;font-size:14px}
 .pl-two small{min-width:0;max-width:100%}.pl-clip{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .day-chip.forecast b{background:#0c8599}.chg-forecast{color:#0b7285}
 .view-schedule .period-seg button{padding:2px 9px;font-size:12.5px}.day-date.muted{opacity:.45}
+.pl-tab.transport.on{box-shadow:inset 0 -2px 0 #0b7285}.pl-tab.transport.on b{background:#e3fafc;color:#0b7285}
+.pl-build-strip{display:flex;gap:6px;overflow-x:auto;padding:6px 10px;border-bottom:1px solid #e3e7ee;background:#fbfcfd}
+.pl-build-strip>div{flex:none;display:flex;flex-direction:column;min-width:86px;padding:4px 8px;border:1px solid #e3e7ee;border-radius:6px;background:#fff;font-size:11px;color:#7b8799}
+.pl-build-strip>div b{font-size:15px;color:#1d2433}.pl-build-strip>div.diff{border-color:#f5c26b;background:#fffaf0}

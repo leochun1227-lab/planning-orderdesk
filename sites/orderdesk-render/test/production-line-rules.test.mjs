@@ -65,3 +65,8 @@ test('the plan snapshot orders the rolling 60 days and flags duplicates', () => 
   const expired = buildProductionLine({ board, orders: {}, longtree: new Map(), prod: new Map(), portal: new Map(), today: '2027-01-02', settings: {}, plan });
   assert.deepEqual(expired.rows.filter(r => r.chassis === 'B').map(r => r.group), ['later']);
 });
+test('vehicles the AU factory has at Transport get their own group', () => {
+  assert.equal(groupFor({ chassis: 'X', group: 'au' }, {}, { grAt: '2026-09-01' }, '2026-11-12', { location: 'transport' }), 'transport');
+  assert.equal(groupFor({ chassis: 'X', group: 'sea' }, {}, {}, '2026-11-12', { location: 'Transport' }), 'transport');
+  assert.equal(groupFor({ chassis: 'X', group: 'au' }, {}, { grAt: '2026-09-01' }, '2026-11-12', { location: 'qc' }), 'au');
+});
