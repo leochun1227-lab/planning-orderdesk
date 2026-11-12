@@ -28,7 +28,7 @@ type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
 type SortKey = 'status' | 'date' | 'auEnd' | 'eta';
 /** Same as the server's etaKey: actual arrival once arrived, else vessel ETA, else Longtree ETA. */
 const etaOf = (r: Row) => { const l = r.live; if (!l) return ''; if (l.ship?.arrived) return l.ata || l.ship.eta || ''; if (l.ata && l.ata <= (r.today || '9999')) return l.ata; return l.ship?.eta || l.eta || ''; };
-const KEY_ORDER: Record<string, string[]> = { transport: ['auEnd', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'] };
+const KEY_ORDER: Record<string, string[]> = { transport: ['auEnd', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
 type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
 type Payload = { buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
@@ -141,7 +141,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       { field: 'model', headerName: 'Model / Range', width: 118, cellRenderer: (p: any) => p.data && <Two strong top={p.data.model || (zh ? '未提供车型' : 'No model')} sub={p.data.range} /> },
       { colId: 'prodStatus', headerName: zh ? '生产状态' : 'Production status', width: 170, valueGetter: p => p.data ? (p.data.production?.status || p.data.production?.stage || (p.data.empty ? (zh ? '待补订单' : 'Awaiting order') : p.data.status)) : '',
         cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.group}`}>{p.value}</span>{p.data.production && <small>{p.data.status}{p.data.production.stage ? ` · ${p.data.production.stage}` : ''}</small>}</div> },
-      { colId: 'prodLocation', headerName: zh ? '生产库位' : 'Location', width: 92, valueGetter: p => p.data?.production?.location || '', cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '未提供' : '—'}</span> },
+      { colId: 'prodLocation', headerName: zh ? '生产库位' : 'Location', width: 92, valueGetter: p => p.data?.production?.location || '', cellRenderer: (p: any) => p.value || (p.data?.build ? '' : <span className="pl-missing">{zh ? '未提供' : '—'}</span>) },
       { colId: 'planStart', headerName: exec ? (zh ? '计划开始' : 'Plan start') : (zh ? '国内计划完成' : 'CN plan end'), width: 96, valueGetter: p => (p.data ? (EXEC.includes(p.data.group) ? p.data.planStart : p.data.cnPlanEnd) : '') || '—' },
       { field: 'planEnd', headerName: exec ? (zh ? '计划完成' : 'Plan end') : (zh ? '澳洲计划完成' : 'AU plan end'), width: 96, valueFormatter: p => p.value || '—' },
       { field: 'expectedEnd', headerName: exec ? (zh ? '预计完成' : 'Expected end') : (zh ? '澳洲预计完成' : 'AU expected end'), width: 100, cellClass: 'pl-bold', valueFormatter: p => p.value || '—' },
@@ -184,7 +184,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       const others = head.children.filter((c: any) => !order.includes(c.colId || c.field));
       return [{ ...head, headerName: zh ? '关键日期 / 车辆' : 'Key dates / vehicle', children: [...first, ...others] }, ...rest];
     }
-    return group === 'empty' && !searching ? [{ ...(cols[0] as ColGroupDef<Row>), headerName: zh ? '造车计划（只有日期，车以后分配）' : 'Build plan (dates only, vehicles assigned later)', children: (cols[0] as ColGroupDef<Row>).children.filter((c: any) => c.colId !== 'issues').map((c: any) => ({ ...c, colId: `build-${c.colId || c.field}`, field: undefined, valueGetter: c.valueGetter || ((p: any) => p.data?.build ? `${p.data.build.month} #${p.data.build.seq}` : ''), pinned: null, width: undefined, flex: 1, minWidth: 180 })) }] : cols;
+    return cols;
   }, [zh, group, exec, searching, data]);
 
   const defaultColDef = useMemo<ColDef<Row>>(() => ({ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
