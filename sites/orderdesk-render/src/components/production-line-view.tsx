@@ -1,5 +1,5 @@
-// 产线: the Dealer Portal production board (same groups, plan / expected / MRP dates and delay as
-// the Portal page), plus live facts per vehicle: Longtree node dates, AU factory station, SAP GR/GI.
+// 产线: the Dealer Portal production board groups, with our own dates (Longtree CN finish, AU finish forecast from the
+// Portal Production & dispatch plan), plus live facts per vehicle: Longtree node dates, AU factory station, SAP GR/GI.
 // Data: /api/production-line (read-only).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
@@ -11,7 +11,7 @@ import { ArrowDownToLine, Factory, CalendarDays, Layers, Clock3, Search, X, List
 type Group = { id: string; band: 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
 type Live = { stage: string; since: string; days: number | null; inLongtree: boolean; orderAt: string; weldAt: string; furnitureAt: string; assemblyAt: string; finishedAt: string; shippedAt: string; etd: string; atd: string; eta: string; ata: string; notes: Record<string, string>;
   ship: null | { container: string; voyage: string; vesselStatus: string; arrived: boolean; shippingDate: string; shippingText: string; eta: string; etaText: string; confidence: string; classification: string; containerGr: string; containerStatus: string };
-  inSap: boolean; grAt: string; po: string; grDoc: string; fgAt: string; fgDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
+  inSap: boolean; grAt: string; po: string; grDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
   liveStageName?: string; liveTone?: string; v?: View;
@@ -21,22 +21,25 @@ type Row = {
   production: null | { status: string; stage: string; location: string };
   cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
   today?: string; orderRow: number | null; forecast: string;
-  cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; build?: { month: string; seq: number; day: number; perDay: number };
+  cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
 };
+type AuForecast = { kind?: 'towable' | 'srm' | 'srv'; seq?: number; perDay?: number; stage?: string; note?: string };
+type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; crmDone: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
+const KIND_NAME: Record<string, string> = { towable: 'Towable', srm: 'SRM', srv: 'SRV' };
 type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
-type SortKey = 'status' | 'date' | 'auEnd' | 'eta';
+type SortKey = 'status' | 'date' | 'eta' | 'au';
 /** Same as the server's etaKey: actual arrival once arrived, else vessel ETA, else Longtree ETA. */
 const etaOf = (r: Row) => { const l = r.live; if (!l) return ''; if (l.ship?.arrived) return l.ata || l.ship.eta || ''; if (l.ata && l.ata <= (r.today || '9999')) return l.ata; return l.ship?.eta || l.eta || ''; };
-const KEY_ORDER: Record<string, string[]> = { transport: ['auEnd', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
+const NO_AU_FINISH = new Set(['transport', 'sea', 'cn']);
+const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'cnEnd'], cn: ['cnEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
 type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
-type Payload = { buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
+type Payload = { auForecast?: AuForecastSummary | null; buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
 const EXEC = ['transport', 'au', 'sea', 'cn'];
 const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
 const FLAG_COLORS: Record<string, [string, string]> = { G: ['#2b8a3e', '#fff'], B: ['#1c7ed6', '#fff'], O: ['#f08c00', '#fff'], R: ['#e03131', '#fff'], Y: ['#fcc419', '#3d2c00'], M: ['#c2255c', '#fff'], P: ['#7048e8', '#fff'], D: ['#343a40', '#fff'] };
 const CHIPS = [
-  { id: 'delay', zh: '已延迟', en: 'Delayed', test: (r: Row) => (r.delay ?? 0) > 0 },
   { id: 'overdue', zh: '已过国内计划上线日', en: 'Past CN plan start', test: (r: Row) => r.overdue },
   { id: 'station', zh: '同一工位 >14 天', en: 'Same station >14d', test: (r: Row) => (r.live?.daysAtStation ?? 0) > 14 },
   { id: 'issueErr', zh: '严重异常', en: 'Errors', test: (r: Row) => r.issues.some(i => i.level === 'error') },
@@ -60,6 +63,18 @@ function OnlineDate({ actual, expected, baseline, zh }: { actual: string; expect
     <small><span className={`pl-kind ${actual ? 'actual' : ''}`}>{actual ? (zh ? '实际' : 'Actual') : expected ? (zh ? '预计' : 'Expected') : (zh ? '待补日期' : 'No date')}</span>{!actual && baseline && baseline !== expected ? ` ${zh ? '原计划' : 'plan'} ${baseline}` : ''}</small></div>;
 }
 
+/** CN finish: the actual date once finished; otherwise no made-up date — "未下线" with the plan, red when the plan has passed. */
+const PAST_CN = new Set(['transport', 'au', 'sea']);
+const daysSince = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
+function CnFinish({ r, zh }: { r: Row; zh: boolean }) {
+  if (r.cnEndActual) return <OnlineDate zh={zh} actual={r.cnEnd} expected={r.cnEnd} baseline={r.cnPlanEnd} />;
+  const today = r.today || new Date().toISOString().slice(0, 10), late = r.cnPlanEnd && r.cnPlanEnd < today ? daysSince(r.cnPlanEnd, today) : 0;
+  if (PAST_CN.has(r.group)) return <div className="pl-two" title={zh ? '已离开 Longtree，但飞书和 Portal 都没有总装入库日期' : 'Left Longtree, but no finish date in Longtree or Portal'}><strong className="pl-quiet">{zh ? '没有下线记录' : 'No finish record'}</strong><small>{r.cnPlanEnd ? `${zh ? '计划' : 'Plan'} ${r.cnPlanEnd}` : ''}</small></div>;
+  return <div className="pl-two" title={zh ? '还没有总装入库日期（飞书 / Portal）' : 'No finish date yet (Longtree / Portal)'}><strong className="pl-quiet">{zh ? '未下线' : 'Not finished'}</strong>
+    <small>{r.cnPlanEnd ? `${zh ? '计划' : 'Plan'} ${r.cnPlanEnd}` : (zh ? '没有计划日期' : 'No plan date')}{late > 0 && <span className="pl-late">{zh ? ` 已超期 ${late} 天` : ` ${late} d overdue`}</span>}</small></div>;
+}
+export const cnFinishKey = (r: { cnEndActual?: boolean; cnEnd?: string; cnPlanEnd?: string }) => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd) || '';
+
 const LT_NODES: [keyof Live, string, string][] = [['ata', '实际到港', 'Arrived AU port'], ['atd', '实际离港', 'Left CN port'], ['shippedAt', '发运', 'Shipped'], ['finishedAt', '总装入库', 'Finished'], ['assemblyAt', '总装上线', 'Assembly'], ['weldAt', '钣焊上线', 'Welding'], ['furnitureAt', '家具上线', 'Furniture'], ['orderAt', '订单接收', 'Order received']];
 const LOCATION_ZH: Record<string, string> = { received: '已接收', 'pre-assembly': '预装', production: '生产', qc: '质检', transport: '待运输' };
 /** The four live facts as plain results, plus a first reading that does not change the Portal group. */
@@ -71,7 +86,7 @@ function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => 
   const differs = r.group !== r.portalGroup;
   return {
     grText: sapDown || (l.grAt ? (zh ? '已 GR' : 'GR done') : (zh ? '未 GR' : 'No GR')),
-    grSub: sapDown ? '' : [l.grAt, l.fgAt ? `${zh ? '完工入库' : 'Built'} ${l.fgAt}` : ''].filter(Boolean).join(' · '),
+    grSub: sapDown ? '' : l.grAt,
     giText: sapDown || (l.giAt ? (zh ? '已 GI' : 'GI done') : (zh ? '未 GI' : 'No GI')), giSub: sapDown ? '' : l.giAt ? `${l.giAt}${l.giDoc ? ` · ${l.giDoc}` : ''}` : '',
     ltText: ltDown ? ltDown : !l.inLongtree ? (zh ? '飞书表里还没有这台车' : 'Not in the Longtree table yet') : node ? `${zh ? node[1] : node[2]} · ${l[node[0]]}` : (zh ? '未开始' : 'Not started'), ltSub,
     prodText: prodDown ? prodDown : l.inProduction ? `${zh ? LOCATION_ZH[l.location] || l.location : l.location} · ${l.station || '—'}` : (zh ? '生产系统无此车' : 'Not in production API'),
@@ -117,7 +132,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     let list = searching ? base.filter(r => [r.chassis, r.model, r.dealer, r.customer, r.live?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q))) : inGroup;
     const c = CHIPS.find(x => x.id === chip);
     if (c && !searching) list = list.filter(c.test);
-    const key = sort === 'date' ? (r: Row) => r.cnEnd : sort === 'auEnd' ? (r: Row) => r.auEnd : sort === 'eta' ? etaOf : null;
+    const key = sort === 'date' ? (r: Row) => cnFinishKey(r) : sort === 'eta' ? etaOf : sort === 'au' ? (r: Row) => r.auEnd || '' : null;
     return key ? [...list].sort((a, b) => (key(a) || '9999').localeCompare(key(b) || '9999')) : list;
   }, [base, inGroup, query, chip, sort]);
   const dealers = useMemo(() => Array.from(new Set(rows.map(r => r.dealer).filter(Boolean))).sort(), [rows]);
@@ -127,8 +142,16 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
 
   const columns = useMemo<(ColDef<Row> | ColGroupDef<Row>)[]>(() => { const cols: (ColDef<Row> | ColGroupDef<Row>)[] = [
     { headerName: zh ? '下线时间 / 车辆' : 'Finish dates / vehicle', children: [
-      { colId: 'cnEnd', headerName: zh ? '国内下线时间' : 'CN finish', pinned: 'left', width: 150, valueGetter: p => p.data?.cnEnd || '', cellRenderer: (p: any) => p.data && (p.data.build ? <span className="pl-missing">{zh ? '待定' : 'TBC'}</span> : <OnlineDate zh={zh} actual={p.data.cnEndActual ? p.data.cnEnd : ''} expected={p.data.cnEnd} baseline={p.data.cnPlanEnd} />) },
-      { colId: 'auEnd', headerName: zh ? '澳洲下线（完工）时间' : 'AU finish', pinned: 'left', width: 150, valueGetter: p => p.data?.auEnd || '', cellRenderer: (p: any) => p.data && (p.data.build ? <div className="pl-two"><strong>{p.data.auEnd}</strong><small>{zh ? '造车计划' : 'Build plan'}</small></div> : <OnlineDate zh={zh} actual={p.data.auEndActual ? p.data.auEnd : ''} expected={p.data.auEnd} baseline={p.data.auPlanEnd} />) },
+      { colId: 'cnEnd', headerName: zh ? '国内下线时间' : 'CN finish', pinned: 'left', width: 176, valueGetter: p => !p.data ? '' : p.data.build ? '' : p.data.cnEndActual ? p.data.cnEnd : (zh ? '未下线' : 'Not finished'),
+        comparator: (_a: any, _b: any, na: any, nb: any) => cnFinishKey(na?.data || {}).localeCompare(cnFinishKey(nb?.data || {})),
+        cellRenderer: (p: any) => p.data && (p.data.build ? <span className="pl-missing">{zh ? '待定' : 'TBC'}</span> : <CnFinish r={p.data} zh={zh} />) },
+      { colId: 'auEnd', headerName: zh ? '澳洲下线（完工）时间' : 'AU finish', pinned: 'left', width: 150, valueGetter: p => p.data?.auEnd || '',
+        cellRenderer: (p: any) => { const r: Row | undefined = p.data, f = r?.auForecast; if (!r) return null;
+          if (r.build) return <div className="pl-two"><strong>{r.auEnd}</strong><small>{zh ? '造车计划' : 'Build plan'}</small></div>;
+          if (f?.note === 'crmDone') return <span className="pl-quiet" title={zh ? 'CRM 显示已完工 / 待发车，生产系统里也没有这台车，不占产能' : 'CRM says finished, not on the AU line; takes no capacity'}>{zh ? 'CRM 已完工' : 'CRM finished'}</span>;
+          if (f?.note === 'overflow') return <span className="pl-late" title={zh ? 'Portal 计划的产能排到 2027-12 还不够' : 'Not enough planned capacity up to 2027-12'}>{zh ? '超出计划产能' : 'Beyond plan'}</span>;
+          if (r.auEnd && f) return <div className="pl-two" title={zh ? `${KIND_NAME[f.kind || 'towable']} 第 ${f.seq} 台 · 当天 ${KIND_NAME[f.kind || 'towable']} 产能 ${f.perDay} 台` : ''}><strong>{r.auEnd}</strong><small>{zh ? '预计' : 'expected'} · {KIND_NAME[f.kind || 'towable']} #{f.seq}</small></div>;
+          return r.auEnd ? <strong>{r.auEnd}</strong> : <span className="pl-quiet">{zh ? '待排' : 'To schedule'}</span>; } },
       { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
       { colId: 'issues', headerName: zh ? '异常' : 'Issues', pinned: 'left', width: 128, valueGetter: p => (p.data?.issues || []).map(i => ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code).join(zh ? '、' : ', '),
         tooltipValueGetter: p => (p.data?.issues || []).map(i => (zh ? i.zh : i.en)).join(zh ? '；' : '; ') || undefined,
@@ -142,10 +165,6 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       { colId: 'prodStatus', headerName: zh ? '生产状态' : 'Production status', width: 170, valueGetter: p => p.data ? (p.data.production?.status || p.data.production?.stage || (p.data.empty ? (zh ? '待补订单' : 'Awaiting order') : p.data.status)) : '',
         cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.group}`}>{p.value}</span>{p.data.production && <small>{p.data.status}{p.data.production.stage ? ` · ${p.data.production.stage}` : ''}</small>}</div> },
       { colId: 'prodLocation', headerName: zh ? '生产库位' : 'Location', width: 92, valueGetter: p => p.data?.production?.location || '', cellRenderer: (p: any) => p.value || (p.data?.build ? '' : <span className="pl-missing">{zh ? '未提供' : '—'}</span>) },
-      { colId: 'planStart', headerName: exec ? (zh ? '计划开始' : 'Plan start') : (zh ? '国内计划完成' : 'CN plan end'), width: 96, valueGetter: p => (p.data ? (EXEC.includes(p.data.group) ? p.data.planStart : p.data.cnPlanEnd) : '') || '—' },
-      { field: 'planEnd', headerName: exec ? (zh ? '计划完成' : 'Plan end') : (zh ? '澳洲计划完成' : 'AU plan end'), width: 96, valueFormatter: p => p.value || '—' },
-      { field: 'expectedEnd', headerName: exec ? (zh ? '预计完成' : 'Expected end') : (zh ? '澳洲预计完成' : 'AU expected end'), width: 100, cellClass: 'pl-bold', valueFormatter: p => p.value || '—' },
-      { field: 'delay', headerName: zh ? '延迟天数' : 'Delay', width: 74, cellRenderer: (p: any) => p.value == null ? '—' : <span className={p.value > 0 ? 'pl-delay' : 'pl-ontime'}>{p.value > 0 ? '+' : ''}{p.value} {zh ? '天' : 'd'}</span> },
       { field: 'cnMrp', headerName: zh ? '国内 MRP 日期' : 'CN MRP', width: 96, valueFormatter: p => p.value || '—' },
       { field: 'auMrp', headerName: zh ? '澳洲 MRP 日期' : 'AU MRP', width: 96, valueFormatter: p => p.value || '—' },
       ...(group === 'customers' && !searching ? [{ colId: 'orderType', headerName: zh ? '订单类型 / Customer' : 'Order type / customer', width: 160, valueGetter: (p: any) => p.data?.customer, cellRenderer: (p: any) => p.data && <Two top={/\/.*stock/i.test(p.data.customer) ? 'Transfer from stock' : 'Customer'} sub={p.data.customer} /> } as ColDef<Row>] : []),
@@ -180,8 +199,10 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
           return v ? <div className="pl-two"><strong>{v}</strong><small><span className={`pl-kind ${arrived ? 'actual' : ''}`}>{arrived ? (zh ? '已到港' : 'Arrived') : l?.ship?.eta ? (zh ? '船期 ETA' : 'Vessel ETA') : (zh ? '飞书 ETA' : 'Longtree ETA')}</span>{!arrived && l?.ship?.confidence ? ` ${l.ship.confidence}` : ''}</small></div> : <span className="pl-missing">{zh ? '没有 ETA' : 'No ETA'}</span>; } });
       pool.set('forecast', { colId: 'forecast', headerName: zh ? '排产表 Forecast' : 'Orderlist forecast', pinned: 'left', width: 140, valueGetter: (p: any) => p.data?.forecast || '',
         cellRenderer: (p: any) => p.data && (p.data.forecast || p.data.orderRow ? <div className="pl-two"><strong>{p.data.forecast || '—'}</strong><small>{p.data.orderRow ? (zh ? `排产表第 ${p.data.orderRow} 行` : `Orderlist row ${p.data.orderRow}`) : (zh ? '不在排产表' : 'No Orderlist row')}</small></div> : <span className="pl-missing">{zh ? '不在排产表' : 'No Orderlist row'}</span>) });
+      pool.set('transportSince', { colId: 'transportSince', headerName: zh ? '进入 Transport' : 'At Transport since', pinned: 'left', width: 140, valueGetter: (p: any) => String(p.data?.live?.stationSince || p.data?.live?.enteredAt || '').slice(0, 10),
+        cellRenderer: (p: any) => { const d = String(p.data?.live?.stationSince || p.data?.live?.enteredAt || '').slice(0, 10); return p.data && (d ? <div className="pl-two"><strong>{d}</strong><small>{p.data.live.daysAtStation != null ? (zh ? `已 ${p.data.live.daysAtStation} 天` : `${p.data.live.daysAtStation} days`) : ''}</small></div> : <span className="pl-missing">—</span>); } });
       const order = KEY_ORDER[group], first = order.map(k => pool.get(k)).filter(Boolean);
-      const others = head.children.filter((c: any) => !order.includes(c.colId || c.field));
+      const others = head.children.filter((c: any) => !order.includes(c.colId || c.field) && !(NO_AU_FINISH.has(group) && c.colId === 'auEnd'));
       return [{ ...head, headerName: zh ? '关键日期 / 车辆' : 'Key dates / vehicle', children: [...first, ...others] }, ...rest];
     }
     return cols;
@@ -206,7 +227,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const card = (ids: string[], Icon: any, step: string, sub: string, target: string) =>
     <button className={`pl-band ${ids.includes(group) && !searching ? 'on' : ''}`} onClick={() => pick(target)}><Icon size={20} /><div><span>{step}</span><strong>{band(ids).toLocaleString()} <small>{zh ? '辆' : ''}</small></strong><p>{sub}</p></div></button>;
   const planNote = data?.plan && (group === 'locked' || group === 'rolling') ? (zh ? `按 ${data.plan.files.join('、')} 的顺序排（一次性，${data.plan.activeUntil} 后恢复 Portal 规则）` : `Ordered by the Longtree Nov / Dec plan (one-off, until ${data.plan.activeUntil})`) : '';
-  const note = searching ? (zh ? '在所有分组里搜索' : 'Searching every group') : [planNote, g?.note].filter(Boolean).join(' · ');
+  const fc = data?.auForecast, fcNote = fc && group === 'au' ? (zh ? `${fc.today ? `${fc.today.date} 预计下线 ${fc.today.towable + fc.today.srm + fc.today.srv} 台（Towable ${fc.today.towable} · SRM ${fc.today.srm} · SRV ${fc.today.srv}）` : ''}${fc.last ? `，排到 ${fc.last}` : ''}${fc.overflow ? `，${fc.overflow} 台超出计划产能` : ''}` : `${fc.today ? `${fc.today.date}: ${fc.today.towable + fc.today.srm + fc.today.srv} expected (Towable ${fc.today.towable} · SRM ${fc.today.srm} · SRV ${fc.today.srv})` : ''}${fc.last ? `, last ${fc.last}` : ''}`) : '';
+  const note = searching ? (zh ? '在所有分组里搜索' : 'Searching every group') : [planNote, fcNote, g?.note].filter(Boolean).join(' · ');
 
   return <section className="table-panel schedule-panel pl-panel">
     <div className="pl-overview">
@@ -238,7 +260,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         {colFilters > 0 && <button className="pl-clear-filters" onClick={clearColFilters}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
         <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
         <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as SortKey)}><option value="status" title={zh ? 'Transport：澳洲下线；澳洲生产：Regent 状态 → 澳洲下线；海运：到港 ETA；国内生产：Longtree 节点 → 国内下线；滚动 60 天：计划顺序；后续：排产表行顺序' : ''}>{zh ? '按分组默认排序' : 'Group default order'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option><option value="auEnd">{zh ? '按澳洲下线（完工）排序' : 'Sort by AU finish'}</option><option value="eta">{zh ? '按到港 ETA 排序' : 'Sort by ETA'}</option></select></label>
+        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as SortKey)}><option value="status" title={zh ? 'Transport：进入 Transport 时间；澳洲生产：Regent 状态 → GR 日期；海运：到港 ETA；国内生产：Longtree 节点 → 国内下线；滚动 60 天：计划顺序；后续：排产表行顺序' : ''}>{zh ? '按分组默认排序' : 'Group default order'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option><option value="eta">{zh ? '按到港 ETA 排序' : 'Sort by ETA'}</option><option value="au">{zh ? '按澳洲预计下线排序' : 'Sort by expected AU finish'}</option></select></label>
       </div>
     </div>
     {error && <div className="message error compact-msg"><AlertTriangle size={16} />{error}</div>}
@@ -253,11 +275,11 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     {detail && <aside className="pl-detail" role="dialog" aria-label={detail.chassis || 'slot'}>
       <header><div><strong>{detail.empty ? 'Empty slot' : detail.chassis}</strong><span>{detail.model} · {detail.dealer || '—'} · {detail.customer || '—'}</span></div><button className="icon-button" aria-label={zh ? '关闭' : 'Close'} onClick={() => setDetail(null)}><X size={16} /></button></header>
       <div className="pl-plan">
-        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEnd, detail.cnEndActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd, detail.auEndActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '计划完成' : 'Plan end', detail.planEnd, ''], [zh ? '预计完成' : 'Expected end', detail.expectedEnd, detail.delay ? `${detail.delay > 0 ? '+' : ''}${detail.delay} ${zh ? '天' : 'd'}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
+        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEndActual ? detail.cnEnd : (zh ? '未下线' : 'not finished'), detail.cnEndActual ? (zh ? '实际' : 'actual') : (detail.cnPlanEnd ? `${zh ? '计划' : 'plan'} ${detail.cnPlanEnd}` : '')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd || (detail.auForecast?.note === 'crmDone' ? (zh ? 'CRM 已完工' : 'CRM finished') : detail.auForecast?.note === 'overflow' ? (zh ? '超出计划产能' : 'beyond plan') : (zh ? '待排' : 'to schedule')), detail.auForecast?.seq && detail.auEnd ? `${zh ? '预计' : 'expected'} · ${KIND_NAME[detail.auForecast.kind || 'towable']} #${detail.auForecast.seq}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
           .map(([l, v, n]) => <div key={l}><span>{l}</span><b>{v || '—'}</b><em>{n}</em></div>)}
       </div>
       {detail.live && <ol className="pl-timeline">
-        {([[zh ? '家具上线' : 'Furniture', detail.live.furnitureAt], [zh ? '钣焊上线' : 'Welding', detail.live.weldAt], [zh ? '总装上线' : 'Assembly', detail.live.assemblyAt], [zh ? '总装入库' : 'Finished', detail.live.finishedAt], [zh ? '发运' : 'Shipped', detail.live.shippedAt], [zh ? '预计离港' : 'ETD', detail.live.etd], [zh ? '实际离港' : 'ATD', detail.live.atd], [zh ? '预计到港' : 'ETA', detail.live.eta], [zh ? '实际到港' : 'ATA', detail.live.ata], ['GR', detail.live.grAt], [zh ? '完工入库' : 'Built (AU)', detail.live.fgAt], ['GI', detail.live.giAt]] as [string, string][])
+        {([[zh ? '家具上线' : 'Furniture', detail.live.furnitureAt], [zh ? '钣焊上线' : 'Welding', detail.live.weldAt], [zh ? '总装上线' : 'Assembly', detail.live.assemblyAt], [zh ? '总装入库' : 'Finished', detail.live.finishedAt], [zh ? '发运' : 'Shipped', detail.live.shippedAt], [zh ? '预计离港' : 'ETD', detail.live.etd], [zh ? '实际离港' : 'ATD', detail.live.atd], [zh ? '预计到港' : 'ETA', detail.live.eta], [zh ? '实际到港' : 'ATA', detail.live.ata], ['GR', detail.live.grAt], ['GI', detail.live.giAt]] as [string, string][])
           .map(([l, v]) => <li key={l} className={v ? 'done' : ''}><span>{l}</span><b>{v || '—'}</b></li>)}
       </ol>}
       {detail.live?.history?.length ? <><h4>{zh ? '澳洲工厂工位记录（实时）' : 'AU station history (live)'}</h4><ul className="pl-history">{detail.live.history.map((h, i) => <li key={i}><span>{time(h.at)}</span><b>{h.stage}</b><em>{h.location}</em></li>)}</ul></> : null}

@@ -41,8 +41,8 @@ test('issues: in the factory without GR is an error', () => {
 });
 test('each group sorts by its own key date', () => {
   const rows = [
-    { id: 't2', group: 'transport', auEnd: '2026-10-30' }, { id: 't1', group: 'transport', auEnd: '2026-10-01' },
-    { id: 'a2', group: 'au', regentRank: 2, auEnd: '2026-11-20' }, { id: 'a1', group: 'au', regentRank: 2, auEnd: '2026-11-15' }, { id: 'a0', group: 'au', regentRank: 0, auEnd: '2026-12-30' },
+    { id: 't2', group: 'transport', live: { stationSince: '2026-10-30' } }, { id: 't1', group: 'transport', live: { stationSince: '2026-10-01' } },
+    { id: 'a2', group: 'au', regentRank: 2, live: { grAt: '2026-11-20' } }, { id: 'a1', group: 'au', regentRank: 2, live: { grAt: '2026-11-15' } }, { id: 'a0', group: 'au', regentRank: 0, live: { grAt: '2026-12-30' } },
     { id: 's2', group: 'sea', live: { ship: { eta: '2026-11-30' } } }, { id: 's1', group: 'sea', live: { ship: { arrived: true, eta: '2026-10-29' }, ata: '2026-10-29' } }, { id: 's3', group: 'sea', live: { eta: '2026-12-10' } },
     { id: 'c2', group: 'cn', ltRank: 5, cnEnd: '2026-11-01' }, { id: 'c1', group: 'cn', ltRank: 6, cnEnd: '2026-12-01' },
     { id: 'l2', group: 'later', orderRow: 900 }, { id: 'l1', group: 'later', orderRow: 850 }, { id: 'l3', group: 'later', orderRow: null, forecast: '2027-05-01' },
@@ -72,4 +72,9 @@ test('vehicles the AU factory has at Transport get their own group', () => {
   assert.equal(groupFor({ chassis: 'X', group: 'au' }, {}, { grAt: '2026-09-01' }, '2026-11-12', { location: 'transport' }), 'transport');
   assert.equal(groupFor({ chassis: 'X', group: 'sea' }, {}, {}, '2026-11-12', { location: 'Transport' }), 'transport');
   assert.equal(groupFor({ chassis: 'X', group: 'au' }, {}, { grAt: '2026-09-01' }, '2026-11-12', { location: 'qc' }), 'au');
+});
+test('the SAP finished-goods receipt is ignored', () => {
+  assert.equal(groupFor({ chassis: 'X', group: 'sea' }, { shippedAt: '2026-09-01' }, { fgAt: '2026-10-01' }, '2026-11-13'), 'sea');
+  const out = issuesFor({ b: { chassis: 'X' }, group: 'sea', lt: { shippedAt: '2026-09-01' }, sap: { fgAt: '2026-10-01' }, regent: regentStatus(null), today: '2026-11-13' });
+  assert.deepEqual(out, []);
 });

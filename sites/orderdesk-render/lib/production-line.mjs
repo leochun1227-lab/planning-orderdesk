@@ -10,7 +10,7 @@ import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
-import { loadWorkCalendar, towableQuantities, buildPlanSlots } from './build-plan.mjs';
+import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
 // exactly while it is active. Delete or replace data/longtree-plan-*.json to change it.
@@ -18,11 +18,12 @@ export function loadRollingPlan(url = new URL('../data/longtree-plan-2026-11-12.
   try { const doc = JSON.parse(readFileSync(url, 'utf8')); return { ...doc, byChassis: new Map(doc.rows.map(r => [normalizeChassis(r.chassis), r])) }; } catch { return null; }
 }
 const ROLLING = new Set(['locked', 'rolling']);
-/** 下线 (finish) dates: actual once it happened (CN = Longtree 总装入库 / Portal finishGoods; AU = SAP 完工入库 / Portal Delivery Ready), else the Portal expected date. */
+/** 下线 (finish) dates. CN = Longtree (Feishu) 总装入库 only, the same field the Longtree API script reads; nothing from the
+ *  Portal. AU finish is left empty: it will come from Orderdesk's own AU scheduling (to be defined), not SAP or the Portal. */
 function finishDates(b, lt, sap, today) {
   const tr = b.track || {}, past = d => (d && d <= today ? d : '');
-  const cnDone = past(lt?.finishedAt) || trackDay(tr.finishGoods, today), auDone = past(sap?.fgAt) || trackDay(tr['Delivery Ready'], today);
-  return { cnEnd: cnDone || b.cnEnd || '', cnEndActual: Boolean(cnDone), auEnd: auDone || b.auEnd || '', auEndActual: Boolean(auDone) };
+  const cnDone = past(lt?.finishedAt);
+  return { cnEnd: cnDone || '', cnEndActual: Boolean(cnDone), auEnd: '', auEndActual: false };
 }
 const EXECUTION = new Set(['transport', 'au', 'sea', 'cn']);
 
@@ -137,7 +138,7 @@ export function stageOf(order, lt = {}, au, portal = {}, today) {
  */
 export const BOARD_GROUPS = [
   { id: 'transport', band: 'execution', zh: 'Transport', en: 'Transport', note: '澳洲生产系统显示在 Transport 的车（已下线，等运去经销商、还没 GI）；放在澳洲生产之前。', phase: 'au' },
-  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR（或完工入库），或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红 · 实际上线取 Production Start。', phase: 'au' },
+  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，车按线上进度（QC → 生产 → 预装 → 已接收）排队，从今天开始填。', phase: 'au' },
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '已发运（飞书有发运 / 离港 / 到港日期，或 Portal 已在海运 / 澳洲），SAP 还没有 GR，澳洲工厂也还没接收。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆 · 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: '已确认待上线 · 仅以现有 Schedule Confirmed = Yes 判断锁定。' },
@@ -205,7 +206,7 @@ export function datesForGroup(b, group, today, settings = {}, lt = {}, sap = {})
   const cn = settings.cnDays ?? 20, sea = settings.seaDays ?? 50, au = settings.auDays ?? 40, cnMrp = settings.cnMrpDays ?? 5, auMrp = settings.auMrpDays ?? 5;
   const tr = b.track || {}, past = d => (d && d <= today ? d : '');
   const weld = b.cnActual || past(lt.weldAt), built = trackDay(tr.finishGoods, today) || past(lt.finishedAt), left = trackDay(tr.leavingFactory, today) || past(lt.shippedAt);
-  const received = trackDay(tr['Received in Melbourne'], today) || past(sap.grAt) || past(sap.fgAt), started = b.auActual || '', ready = trackDay(tr['Delivery Ready'], today);
+  const received = trackDay(tr['Received in Melbourne'], today) || past(sap.grAt), started = b.auActual || '', ready = trackDay(tr['Delivery Ready'], today);
   const T = b.cnPlanStart, C = b.cnPlanEnd, m = b.auPlanStart, B = b.auPlanEnd;
   const cnStart = weld || (T ? latest(T, today) : '');
   const cnEnd = built || (cnStart ? latest(C, addDays(cnStart, cn), group === 'cn' ? today : '') : '');
@@ -223,7 +224,7 @@ const SHIPPED_PORTAL = new Set(['au', 'sea']);
 const atTransport = au => String(au?.location || '').toLowerCase() === 'transport';
 export function groupFor(b, lt = {}, sap = {}, today, au = null) {
   if (b.empty || !b.chassis) return b.group;
-  if (sap.grAt || sap.fgAt) return atTransport(au) ? 'transport' : 'au';
+  if (sap.grAt) return atTransport(au) ? 'transport' : 'au';
   // Physically in the AU factory (production API location, or a Portal production start) without a
   // GR: still AU production; issuesFor flags the missing GR.
   if ((au && AU_LOCATIONS.has(String(au.location || '').toLowerCase())) || b.auActual) return atTransport(au) ? 'transport' : 'au';
@@ -242,7 +243,6 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
     if (inFactory) why.push([`生产系统：${au.location}${au.station ? ' · ' + au.station : ''}`, `production API: ${au.location}${au.station ? ' · ' + au.station : ''}`]);
     if (b.auActual) why.push([`Portal 生产上线 ${b.auActual}`, `Portal production start ${b.auActual}`]);
     if (regent.phase === 'au') why.push([`CRM：${regent.label}`, `CRM: ${regent.label}`]);
-    if (sap.fgAt) why.push([`完工入库 ${sap.fgAt}`, `finished-goods receipt ${sap.fgAt}`]);
     if (why.length) add('inFactoryNoGr', 'error', `已在澳洲工厂/生产，SAP 没有 GR（${why.map(w => w[0]).join('；')}）`, `In the AU factory but no SAP GR (${why.map(w => w[1]).join('; ')})`);
     else if (past(lt?.ata)) { const d = daysBetween(lt.ata, today); if (d > 14) add('arrivedNoGr', 'warn', `到港 ${d} 天，SAP 还没有 GR`, `Arrived ${d} days ago, no SAP GR yet`); }
   }
@@ -251,7 +251,7 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
   // CRM status against the facts. CRM "Van Arrived" = received at Regent (GR); arriving at the
   // Melbourne port is still "Van on the sea". Blank CRM status (shown as PO sent / Signoff) is not checked.
   const shipDay = past(lt?.shippedAt) || past(lt?.atd) || past(lt?.ata), cnDay = [lt?.furnitureAt, lt?.weldAt, lt?.assemblyAt, lt?.finishedAt].map(past).filter(Boolean).sort()[0] || '';
-  const [fact, since] = gr || sap.fgAt ? ['au', gr || sap.fgAt] : shipDay ? ['sea', shipDay] : cnDay ? ['cn', cnDay] : ['pre', ''];
+  const [fact, since] = gr ? ['au', gr] : shipDay ? ['sea', shipDay] : cnDay ? ['cn', cnDay] : ['pre', ''];
   if (regent.phase && !regent.derived && (lt || gr)) {
     const c = PHASE_ORDER.indexOf(regent.phase), f = PHASE_ORDER.indexOf(fact), late = daysBetween(since, today) ?? 0;
     const factZh = { au: `已 GR（${since}）`, sea: `已发运（${since}）`, cn: `国内已上线（${since}）` }[fact], factEn = { au: `GR on ${since}`, sea: `shipped ${since}`, cn: `in Longtree production since ${since}` }[fact];
@@ -270,7 +270,7 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
   return out;
 }
 
-export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null }) {
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null }) {
   const activePlan = plan && (!plan.activeUntil || today <= plan.activeUntil) ? plan : null;
   const seen = new Map();
   for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
@@ -314,7 +314,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         inLongtree: Boolean(lt), orderAt: lt?.orderAt || '', weldAt: lt?.weldAt || '', furnitureAt: lt?.furnitureAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '',
         etd: lt?.etd || '', atd: lt?.atd || '', eta: lt?.eta || '', ata: lt?.ata || '', notes: lt?.notes || {},
         ship: (chassis && tms.get(chassis)) || null,
-        inSap: Boolean(chassis && portal.has(chassis)), grAt: p.grAt || '', po: p.po || '', grDoc: p.grDoc || '', fgAt: p.fgAt || '', fgDoc: p.fgDoc || '', giAt: p.giAt || '', giDoc: p.giDoc || '',
+        inSap: Boolean(chassis && portal.has(chassis)), grAt: p.grAt || '', po: p.po || '', grDoc: p.grDoc || '', giAt: p.giAt || '', giDoc: p.giDoc || '',
         inProduction: Boolean(au), location: au?.location || '', station: au?.station || '', flags: au?.flags || [], enteredAt: au?.enteredAt || '', stationSince: au?.stationSince || '', daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
       },
     });
@@ -327,10 +327,37 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
       build: { month: slot.month, seq: slot.seq, day: slot.day, perDay: slot.perDay } });
   }
-  return { today, counts, completed: board.completed, averages: board.averages, settings, rows: sortLineRows(rows),
+  const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
+  return { today, counts, completed: board.completed, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
 }
+// Expected AU finish (下线) for the AU production group. Capacity per working day comes from the Dealer Portal
+// "Production & dispatch" plan: Towable = total − SRM − SRV, and SRM / SRV each have their own number, so they never take
+// Towable places. Each month is spread over the working days of the VIC work calendar. The cars are queued by how far
+// they are on the AU line (QC → production → pre-assembly → received → no production record), then by time at that
+// station, then GR date; the queue fills today's places first, then the next working day, and so on.
+const AU_STAGE = { qc: 0, production: 1, 'pre-assembly': 2, received: 3 };
+const CRM_DONE = new Set(['Finished', 'Ready for Dispatch']);
+export function forecastAuFinish(rows, capacity, today) {
+  const slots = { towable: [], srm: [], srv: [] };
+  for (const d of [...capacity.keys()].filter(d => d >= today).sort()) for (const k of Object.keys(slots)) for (let i = 0; i < capacity.get(d)[k]; i++) slots[k].push([d, capacity.get(d)[k]]);
+  const queue = [];
+  for (const r of rows) if (r.group === 'au') { if (CRM_DONE.has(r.regent) && !r.live?.location) r.auForecast = { note: 'crmDone' }; else queue.push(r); }
+  queue.sort(by(num(r => AU_STAGE[r.live?.location] ?? 4), asc(r => r.live?.stationSince || r.live?.enteredAt), asc(r => r.live?.grAt), asc(r => r.chassis)));
+  const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0, crmDone: rows.filter(r => r.auForecast?.note === 'crmDone').length };
+  for (const r of queue) {
+    const kind = capacityKind(r.model), slot = slots[kind][used[kind]];
+    used[kind]++;
+    if (!slot) { r.auForecast = { kind, seq: used[kind], note: 'overflow' }; summary.overflow++; continue; }
+    r.auEnd = slot[0]; r.auEndActual = false;
+    r.auForecast = { kind, seq: used[kind], perDay: slot[1], stage: r.live?.location || '' };
+    summary[kind]++;
+  }
+  const first = [...capacity.keys()].filter(d => d >= today).sort()[0];
+  return { ...summary, today: first ? { date: first, ...capacity.get(first) } : null, last: queue.reduce((m, r) => (r.auEnd > m ? r.auEnd : m), '') };
+}
+
 /** When the vehicle reaches / reached the Melbourne port: actual arrival once arrived, else the vessel ETA (Portal shipping), else the Longtree ETA. */
 export function etaKey(r) {
   const l = r.live || {}, ship = l.ship;
@@ -343,10 +370,10 @@ const asc = f => (a, z) => (f(a) || '9999').localeCompare(f(z) || '9999');
 const num = f => (a, z) => (f(a) ?? 1e9) - (f(z) ?? 1e9);
 /** Default order inside each group: the date the people looking at that group care about. */
 export const GROUP_SORT = {
-  transport: by(asc(r => r.auEnd)),
-  au: by(num(r => r.regentRank ?? 99), asc(r => r.auEnd)),
-  sea: by(asc(etaKey), asc(r => r.auEnd)),
-  cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(r => r.cnEnd)),
+  transport: by(asc(r => r.live?.stationSince || r.live?.enteredAt)),
+  au: by(num(r => r.regentRank ?? 99), asc(r => r.live?.grAt)),
+  sea: by(asc(etaKey)),
+  cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(r => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd))),
   locked: by(num(r => r.planOrder)),
   rolling: by(num(r => r.planOrder)),
   empty: by(asc(r => r.auEnd), num(r => r.build?.seq)),
@@ -430,7 +457,8 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
     boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '',
-      buildPlan: buildPlanSlots(towableQuantities({ dispatchPlan: raw.dispatchPlan, motorhomePlans: { 2026: raw.mhPlan2026, 2027: raw.mhPlan2027 } }), calendar) };
+      buildPlan: buildPlanSlots(towableQuantities({ dispatchPlan: raw.dispatchPlan, motorhomePlans: { 2026: raw.mhPlan2026, 2027: raw.mhPlan2027 } }), calendar),
+      auCapacity: dailyCapacity(planQuantities({ dispatchPlan: raw.dispatchPlan, motorhomePlans: { 2026: raw.mhPlan2026, 2027: raw.mhPlan2027 }, modelNames: raw.mhModels }), calendar) };
     return boardCache;
   }
   return {
@@ -442,7 +470,7 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
       const [copy] = await Promise.all([portal.current({ force }), force || first ? inflight : null]);
       const pb = await portalBoard(copy, today);
       const sapCopy = sap ? await sap.current() : { rows: new Map(), at: '', count: 0, error: 'not configured' };
-      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan,
+      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan, auCapacity: pb.auCapacity,
         status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) }, tms: { at: pb.tmsAt, error: pb.tms.size ? '' : (copy.error || 'no data'), count: pb.tms.size, configured: true } } };
     },
   };
