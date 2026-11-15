@@ -276,7 +276,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
   const orderByChassis = new Map(Object.values(orders || {}).filter(o => o && o.status !== 'cancelled').map(o => [normalizeChassis(o.chassis), o]));
   const counts = Object.fromEntries(BOARD_GROUPS.map(g => [g.id, 0]));
-  const rows = [];
+  const rows = [], crmDone = [];
   for (const raw of board.rows) {
     if (raw.empty) continue; // Portal SRV / SRM empty slots: replaced by the Towable build plan below
     const chassis = raw.empty ? '' : normalizeChassis(raw.chassis);
@@ -292,8 +292,10 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     }
     const dateGroup = group === 'transport' ? 'au' : group, moved = dateGroup !== raw.group || source !== raw;
     const b = !moved ? raw : { ...source, ...datesForGroup(source, dateGroup, today, settings, lt || {}, p), overdue: Boolean(ROLLING.has(group) && source.cnPlanStart && source.cnPlanStart < today) };
-    counts[group] = (counts[group] || 0) + 1;
     const regent = regentStatus(order), progress = longtreeProgress(lt || {}, today);
+    // CRM already Finished / Ready for Dispatch and not on the AU production system: taken off the line (only counted).
+    if (group === 'au' && CRM_DONE.has(regent.label) && !au?.location) { crmDone.push(chassis); continue; }
+    counts[group] = (counts[group] || 0) + 1;
     const live = chassis ? stageOf(order || {}, lt, au, p, today) : null;
     rows.push({
       id: b.id, chassis: b.chassis || '', empty: Boolean(b.empty), line: b.line || '', source: b.source || '', group, portalGroup: raw.group, status: b.status || '',
@@ -328,7 +330,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       build: { month: slot.month, seq: slot.seq, day: slot.day, perDay: slot.perDay } });
   }
   const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
-  return { today, counts, completed: board.completed, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
+  return { today, counts, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
 }
@@ -343,15 +345,15 @@ export function forecastAuFinish(rows, capacity, today) {
   const slots = { towable: [], srm: [], srv: [] };
   for (const d of [...capacity.keys()].filter(d => d >= today).sort()) for (const k of Object.keys(slots)) for (let i = 0; i < capacity.get(d)[k]; i++) slots[k].push([d, capacity.get(d)[k]]);
   const queue = [];
-  for (const r of rows) if (r.group === 'au') { if (CRM_DONE.has(r.regent) && !r.live?.location) r.auForecast = { note: 'crmDone' }; else queue.push(r); }
+  for (const r of rows) if (r.group === 'au') queue.push(r);
   queue.sort(by(num(r => AU_STAGE[r.live?.location] ?? 4), asc(r => r.live?.stationSince || r.live?.enteredAt), asc(r => r.live?.grAt), asc(r => r.chassis)));
-  const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0, crmDone: rows.filter(r => r.auForecast?.note === 'crmDone').length };
-  for (const r of queue) {
+  const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0 };
+  for (const [order, r] of queue.entries()) {
     const kind = capacityKind(r.model), slot = slots[kind][used[kind]];
     used[kind]++;
-    if (!slot) { r.auForecast = { kind, seq: used[kind], note: 'overflow' }; summary.overflow++; continue; }
+    if (!slot) { r.auForecast = { kind, seq: used[kind], order, note: 'overflow' }; summary.overflow++; continue; }
     r.auEnd = slot[0]; r.auEndActual = false;
-    r.auForecast = { kind, seq: used[kind], perDay: slot[1], stage: r.live?.location || '' };
+    r.auForecast = { kind, seq: used[kind], order, perDay: slot[1], stage: r.live?.location || '' };
     summary[kind]++;
   }
   const first = [...capacity.keys()].filter(d => d >= today).sort()[0];
@@ -371,7 +373,8 @@ const num = f => (a, z) => (f(a) ?? 1e9) - (f(z) ?? 1e9);
 /** Default order inside each group: the date the people looking at that group care about. */
 export const GROUP_SORT = {
   transport: by(asc(r => r.live?.stationSince || r.live?.enteredAt)),
-  au: by(num(r => r.regentRank ?? 99), asc(r => r.live?.grAt)),
+  // AU production: by expected AU finish (下线) date; cars beyond the planned capacity last.
+  au: by(num(r => (r.auEnd ? 1 : 2)), asc(r => r.auEnd), num(r => r.auForecast?.order), asc(r => r.live?.grAt)),
   sea: by(asc(etaKey)),
   cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(r => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd))),
   locked: by(num(r => r.planOrder)),

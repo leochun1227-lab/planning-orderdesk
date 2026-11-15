@@ -24,8 +24,8 @@ type Row = {
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
 };
-type AuForecast = { kind?: 'towable' | 'srm' | 'srv'; seq?: number; perDay?: number; stage?: string; note?: string };
-type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; crmDone: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
+type AuForecast = { kind?: 'towable' | 'srm' | 'srv'; seq?: number; order?: number; perDay?: number; stage?: string; note?: string };
+type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
 const KIND_NAME: Record<string, string> = { towable: 'Towable', srm: 'SRM', srv: 'SRV' };
 type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
 type SortKey = 'status' | 'date' | 'eta' | 'au';
@@ -34,7 +34,7 @@ const etaOf = (r: Row) => { const l = r.live; if (!l) return ''; if (l.ship?.arr
 const NO_AU_FINISH = new Set(['transport', 'sea', 'cn']);
 const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'cnEnd'], cn: ['cnEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
 type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
-type Payload = { auForecast?: AuForecastSummary | null; buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
+type Payload = { crmDone?: string[]; auForecast?: AuForecastSummary | null; buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
 const EXEC = ['transport', 'au', 'sea', 'cn'];
 const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
@@ -148,7 +148,6 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       { colId: 'auEnd', headerName: zh ? '澳洲下线（完工）时间' : 'AU finish', pinned: 'left', width: 150, valueGetter: p => p.data?.auEnd || '',
         cellRenderer: (p: any) => { const r: Row | undefined = p.data, f = r?.auForecast; if (!r) return null;
           if (r.build) return <div className="pl-two"><strong>{r.auEnd}</strong><small>{zh ? '造车计划' : 'Build plan'}</small></div>;
-          if (f?.note === 'crmDone') return <span className="pl-quiet" title={zh ? 'CRM 显示已完工 / 待发车，生产系统里也没有这台车，不占产能' : 'CRM says finished, not on the AU line; takes no capacity'}>{zh ? 'CRM 已完工' : 'CRM finished'}</span>;
           if (f?.note === 'overflow') return <span className="pl-late" title={zh ? 'Portal 计划的产能排到 2027-12 还不够' : 'Not enough planned capacity up to 2027-12'}>{zh ? '超出计划产能' : 'Beyond plan'}</span>;
           if (r.auEnd && f) return <div className="pl-two" title={zh ? `${KIND_NAME[f.kind || 'towable']} 第 ${f.seq} 台 · 当天 ${KIND_NAME[f.kind || 'towable']} 产能 ${f.perDay} 台` : ''}><strong>{r.auEnd}</strong><small>{zh ? '预计' : 'expected'} · {KIND_NAME[f.kind || 'towable']} #{f.seq}</small></div>;
           return r.auEnd ? <strong>{r.auEnd}</strong> : <span className="pl-quiet">{zh ? '待排' : 'To schedule'}</span>; } },
@@ -236,7 +235,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       {card(['locked', 'rolling'], CalendarDays, zh ? '02 · 滚动 60 天' : '02 · Rolling 60 days', `${zh ? '已锁定' : 'Locked'} ${counts.locked ?? 0} · ${zh ? '待确认' : 'To confirm'} ${counts.rolling ?? 0}`, 'locked')}
       {card(['empty', 'customers'], Layers, zh ? '03 · 预排产' : '03 · Pre-schedule', `${zh ? '造车计划' : 'Build plan'} ${(counts.empty ?? 0).toLocaleString()} · Customer ${counts.customers ?? 0}`, 'empty')}
       {card(['later'], Clock3, zh ? '后续排产 / 日期待补' : 'Later / dates missing', zh ? '国内计划上线在 60 天之后' : 'CN plan start beyond 60 days', 'later')}
-      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{rows.filter(r => !r.build).length.toLocaleString()} {zh ? '条未发运车辆' : 'open vehicles'}</p></div></div>
+      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{rows.filter(r => !r.build).length.toLocaleString()} {zh ? '条未发运车辆' : 'open vehicles'}{data?.crmDone?.length ? <span title={data.crmDone.join(', ')}> · {zh ? `CRM 已完工移出 ${data.crmDone.length}` : `CRM finished removed ${data.crmDone.length}`}</span> : null}</p></div></div>
     </div>
     <div className="pl-tabs" role="tablist">
       {groups.map(x => { const on = group === x.id && !searching;
@@ -260,7 +259,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         {colFilters > 0 && <button className="pl-clear-filters" onClick={clearColFilters}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
         <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
         <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
-        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as SortKey)}><option value="status" title={zh ? 'Transport：进入 Transport 时间；澳洲生产：Regent 状态 → GR 日期；海运：到港 ETA；国内生产：Longtree 节点 → 国内下线；滚动 60 天：计划顺序；后续：排产表行顺序' : ''}>{zh ? '按分组默认排序' : 'Group default order'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option><option value="eta">{zh ? '按到港 ETA 排序' : 'Sort by ETA'}</option><option value="au">{zh ? '按澳洲预计下线排序' : 'Sort by expected AU finish'}</option></select></label>
+        <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as SortKey)}><option value="status" title={zh ? 'Transport：进入 Transport 时间；澳洲生产：澳洲预计下线日期；海运：到港 ETA；国内生产：Longtree 节点 → 国内下线；滚动 60 天：计划顺序；后续：排产表行顺序' : ''}>{zh ? '按分组默认排序' : 'Group default order'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option><option value="eta">{zh ? '按到港 ETA 排序' : 'Sort by ETA'}</option><option value="au">{zh ? '按澳洲预计下线排序' : 'Sort by expected AU finish'}</option></select></label>
       </div>
     </div>
     {error && <div className="message error compact-msg"><AlertTriangle size={16} />{error}</div>}
@@ -275,7 +274,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     {detail && <aside className="pl-detail" role="dialog" aria-label={detail.chassis || 'slot'}>
       <header><div><strong>{detail.empty ? 'Empty slot' : detail.chassis}</strong><span>{detail.model} · {detail.dealer || '—'} · {detail.customer || '—'}</span></div><button className="icon-button" aria-label={zh ? '关闭' : 'Close'} onClick={() => setDetail(null)}><X size={16} /></button></header>
       <div className="pl-plan">
-        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEndActual ? detail.cnEnd : (zh ? '未下线' : 'not finished'), detail.cnEndActual ? (zh ? '实际' : 'actual') : (detail.cnPlanEnd ? `${zh ? '计划' : 'plan'} ${detail.cnPlanEnd}` : '')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd || (detail.auForecast?.note === 'crmDone' ? (zh ? 'CRM 已完工' : 'CRM finished') : detail.auForecast?.note === 'overflow' ? (zh ? '超出计划产能' : 'beyond plan') : (zh ? '待排' : 'to schedule')), detail.auForecast?.seq && detail.auEnd ? `${zh ? '预计' : 'expected'} · ${KIND_NAME[detail.auForecast.kind || 'towable']} #${detail.auForecast.seq}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
+        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEndActual ? detail.cnEnd : (zh ? '未下线' : 'not finished'), detail.cnEndActual ? (zh ? '实际' : 'actual') : (detail.cnPlanEnd ? `${zh ? '计划' : 'plan'} ${detail.cnPlanEnd}` : '')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd || (detail.auForecast?.note === 'overflow' ? (zh ? '超出计划产能' : 'beyond plan') : (zh ? '待排' : 'to schedule')), detail.auForecast?.seq && detail.auEnd ? `${zh ? '预计' : 'expected'} · ${KIND_NAME[detail.auForecast.kind || 'towable']} #${detail.auForecast.seq}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
           .map(([l, v, n]) => <div key={l}><span>{l}</span><b>{v || '—'}</b><em>{n}</em></div>)}
       </div>
       {detail.live && <ol className="pl-timeline">

@@ -27,10 +27,10 @@ test('AU finish forecast: SRM / SRV use their own capacity, queue by line progre
   const cap = dailyCapacity(new Map([['2026-11', q.get('2026-11')]]), { days: new Set(['2026-11-12', '2026-11-13']) });
   assert.deepEqual(cap.get('2026-11-13'), { towable: 2, srm: 1, srv: 0 });
   const row = (chassis, model, location, since, regent = 'Van Arrived') => ({ chassis, model, group: 'au', regent, live: { location, stationSince: since, grAt: '2026-10-01' }, auEnd: '' });
-  const rows = [row('A', 'SRC', 'received', '2026-11-01'), row('B', 'SRH', 'qc', '2026-11-10'), row('C', 'SRT', 'production', '2026-11-05'), row('D', 'SRM 22', 'received', '2026-11-01'), row('E', 'SRV', 'qc', ''), row('F', 'SRH', '', '', 'Finished')];
+  const rows = [row('A', 'SRC', 'received', '2026-11-01'), row('B', 'SRH', 'qc', '2026-11-10'), row('C', 'SRT', 'production', '2026-11-05'), row('D', 'SRM 22', 'received', '2026-11-01'), row('E', 'SRV', 'qc', '')];
   const s = forecastAuFinish(rows, cap, '2026-11-13');
   const by = Object.fromEntries(rows.map(r => [r.chassis, r]));
   assert.equal(by.B.auEnd, '2026-11-13'); assert.equal(by.C.auEnd, '2026-11-13'); assert.equal(by.A.auEnd, '');
   assert.equal(by.A.auForecast.note, 'overflow'); assert.equal(by.D.auEnd, '2026-11-13'); assert.equal(by.E.auForecast.note, 'overflow');
-  assert.equal(by.F.auForecast.note, 'crmDone'); assert.equal(s.crmDone, 1);
+  assert.equal(s.towable, 2); assert.equal(s.overflow, 2);
 });

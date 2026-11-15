@@ -42,12 +42,12 @@ test('issues: in the factory without GR is an error', () => {
 test('each group sorts by its own key date', () => {
   const rows = [
     { id: 't2', group: 'transport', live: { stationSince: '2026-10-30' } }, { id: 't1', group: 'transport', live: { stationSince: '2026-10-01' } },
-    { id: 'a2', group: 'au', regentRank: 2, live: { grAt: '2026-11-20' } }, { id: 'a1', group: 'au', regentRank: 2, live: { grAt: '2026-11-15' } }, { id: 'a0', group: 'au', regentRank: 0, live: { grAt: '2026-12-30' } },
+    { id: 'a2', group: 'au', auEnd: '2026-11-20', auForecast: { order: 5 } }, { id: 'a3', group: 'au', auEnd: '', auForecast: { note: 'overflow' } }, { id: 'a1', group: 'au', auEnd: '2026-11-17', auForecast: { order: 2 } },
     { id: 's2', group: 'sea', live: { ship: { eta: '2026-11-30' } } }, { id: 's1', group: 'sea', live: { ship: { arrived: true, eta: '2026-10-29' }, ata: '2026-10-29' } }, { id: 's3', group: 'sea', live: { eta: '2026-12-10' } },
     { id: 'c2', group: 'cn', ltRank: 5, cnEnd: '2026-11-01' }, { id: 'c1', group: 'cn', ltRank: 6, cnEnd: '2026-12-01' },
     { id: 'l2', group: 'later', orderRow: 900 }, { id: 'l1', group: 'later', orderRow: 850 }, { id: 'l3', group: 'later', orderRow: null, forecast: '2027-05-01' },
   ];
-  assert.deepEqual(sortLineRows(rows).map(r => r.id), ['t1', 't2', 'a0', 'a1', 'a2', 's1', 's2', 's3', 'c1', 'c2', 'l1', 'l2', 'l3']);
+  assert.deepEqual(sortLineRows(rows).map(r => r.id), ['t1', 't2', 'a1', 'a2', 'a3', 's1', 's2', 's3', 'c1', 'c2', 'l1', 'l2', 'l3']);
 });
 test('a row moved to AU gets AU plan dates', () => {
   const d = datesForGroup({ cnPlanStart: '2026-06-01', cnPlanEnd: '2026-06-21', auPlanStart: '2026-09-01', auPlanEnd: '2026-10-11', cnActual: '2026-06-02', auActual: '' }, 'au', today, {}, { shippedAt: '2026-07-01' }, { grAt: '2026-09-05' });
@@ -77,4 +77,12 @@ test('the SAP finished-goods receipt is ignored', () => {
   assert.equal(groupFor({ chassis: 'X', group: 'sea' }, { shippedAt: '2026-09-01' }, { fgAt: '2026-10-01' }, '2026-11-13'), 'sea');
   const out = issuesFor({ b: { chassis: 'X' }, group: 'sea', lt: { shippedAt: '2026-09-01' }, sap: { fgAt: '2026-10-01' }, regent: regentStatus(null), today: '2026-11-13' });
   assert.deepEqual(out, []);
+});
+test('CRM Finished / Ready for Dispatch cars not on the AU line are taken off the line', () => {
+  const row = (id, extra = {}) => ({ id, chassis: id, group: 'au', cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', locked: false, warnings: [], ...extra });
+  const board = { rows: [row('SRC1'), row('SRC2')], completed: 0, averages: {} };
+  const orders = { a: { chassis: 'SRC1', productionStatus: 'Finished' }, b: { chassis: 'SRC2', productionStatus: 'Finished' } };
+  const prod = new Map([['SRC2', { location: 'qc' }]]), portal = new Map([['SRC1', { grAt: '2026-10-01' }], ['SRC2', { grAt: '2026-10-01' }]]);
+  const out = buildProductionLine({ board, orders, longtree: new Map(), prod, portal, today: '2026-11-16', settings: {} });
+  assert.deepEqual(out.crmDone, ['SRC1']); assert.deepEqual(out.rows.map(r => r.chassis), ['SRC2']);
 });
