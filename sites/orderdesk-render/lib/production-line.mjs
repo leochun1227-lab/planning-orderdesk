@@ -138,9 +138,9 @@ export function stageOf(order, lt = {}, au, portal = {}, today) {
  */
 export const BOARD_GROUPS = [
   { id: 'transport', band: 'execution', zh: 'Transport', en: 'Transport', note: '澳洲生产系统显示在 Transport 的车（已下线，等运去经销商、还没 GI）；放在澳洲生产之前。', phase: 'au' },
-  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，车按线上进度（QC → 生产 → 预装 → 已接收）排队，从今天开始填。', phase: 'au' },
+  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，从今天开始按 澳洲生产（QC → 生产 → 预装 → 已接收）→ 海运（ETA）→ 国内生产 → 滚动 60 天（计划顺序）依次填。', phase: 'au' },
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '已发运（飞书有发运 / 离港 / 到港日期，或 Portal 已在海运 / 澳洲），SAP 还没有 GR，澳洲工厂也还没接收。', phase: 'sea' },
-  { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆 · 从底盘焊接、总装到国内完工。', phase: 'cn' },
+  { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: '已确认待上线 · 仅以现有 Schedule Confirmed = Yes 判断锁定。' },
   { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '滚动安排待确认 · 不根据日期自动改写确认状态。' },
   { id: 'empty', band: 'preschedule', zh: 'Towable 造车计划', en: 'Towable build plan', note: '按 Portal Production & dispatch 的 Towable 月产量（总产量 − SRV − SRM），平均分到工作日历的每个工作日，每个位置一个澳洲下线日期；先不放车，以后再分配。Portal 的 SRV / SRM 空 slot 不再显示。' },
@@ -230,6 +230,9 @@ export function groupFor(b, lt = {}, sap = {}, today, au = null) {
   if ((au && AU_LOCATIONS.has(String(au.location || '').toLowerCase())) || b.auActual) return atTransport(au) ? 'transport' : 'au';
   const shipped = [lt.shippedAt, lt.atd, lt.ata].some(d => d && d <= today);
   if (shipped || SHIPPED_PORTAL.has(b.group)) return 'sea';
+  // Already on the Longtree line (furniture / welding / assembly / finished date in Feishu): China production, even when
+  // the Portal still has it in the rolling 60 days or later (e.g. Nov / Dec plan cars that have started).
+  if (!EXECUTION.has(b.group) && [lt.furnitureAt, lt.weldAt, lt.assemblyAt, lt.finishedAt].some(d => d && d <= today)) return 'cn';
   return b.group;
 }
 /** Checks that point at a wrong or missing record somewhere. error = something is wrong; warn = needs a look. */
@@ -341,12 +344,18 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
 // station, then GR date; the queue fills today's places first, then the next working day, and so on.
 const AU_STAGE = { qc: 0, production: 1, 'pre-assembly': 2, received: 3 };
 const CRM_DONE = new Set(['Finished', 'Ready for Dispatch']);
+const SEA_DAYS = 50;
 export function forecastAuFinish(rows, capacity, today) {
   const slots = { towable: [], srm: [], srv: [] };
   for (const d of [...capacity.keys()].filter(d => d >= today).sort()) for (const k of Object.keys(slots)) for (let i = 0; i < capacity.get(d)[k]; i++) slots[k].push([d, capacity.get(d)[k]]);
-  const queue = [];
-  for (const r of rows) if (r.group === 'au') queue.push(r);
-  queue.sort(by(num(r => AU_STAGE[r.live?.location] ?? 4), asc(r => r.live?.stationSince || r.live?.enteredAt), asc(r => r.live?.grAt), asc(r => r.chassis)));
+  // Queue: AU production (by line progress) → shipping (by ETA) → China production (group order) → rolling 60 days (plan order).
+  const of = g => rows.filter(r => !r.empty && (Array.isArray(g) ? g.includes(r.group) : r.group === g));
+  const queue = [
+    ...of('au').sort(by(num(r => AU_STAGE[r.live?.location] ?? 4), asc(r => r.live?.stationSince || r.live?.enteredAt), asc(r => r.live?.grAt), asc(r => r.chassis))),
+    ...of('sea').sort(GROUP_SORT.sea),
+    ...of('cn').sort(GROUP_SORT.cn),
+    ...of(['locked', 'rolling']).sort(by(num(r => r.planOrder), asc(r => r.chassis))),
+  ];
   const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0 };
   for (const [order, r] of queue.entries()) {
     const kind = capacityKind(r.model), slot = slots[kind][used[kind]];
@@ -355,7 +364,14 @@ export function forecastAuFinish(rows, capacity, today) {
     r.auEnd = slot[0]; r.auEndActual = false;
     r.auForecast = { kind, seq: used[kind], order, perDay: slot[1], stage: r.live?.location || '' };
     summary[kind]++;
+    // Not physically possible: the van would finish in AU before it can be there (shipping: ETA; not shipped yet:
+    // CN finish, actual or Longtree plan, + 50 sea days as in the Portal plan).
+    const cnDone = r.cnEndActual ? r.cnEnd : r.cnPlanEnd;
+    const arrive = r.group === 'sea' ? etaKey(r) : r.group !== 'au' && cnDone ? addDays(cnDone, SEA_DAYS) : '';
+    if (arrive && r.auEnd < arrive) r.auForecast.beforeArrival = arrive;
   }
+  for (const g of ['au', 'sea', 'cn', 'locked', 'rolling']) summary[g] = queue.filter(r => r.group === g).reduce((m, r) => ({ first: m.first && m.first < r.auEnd ? m.first : r.auEnd, last: r.auEnd > m.last ? r.auEnd : m.last, n: m.n + 1 }), { first: '', last: '', n: 0 });
+  summary.beforeArrival = queue.filter(r => r.auForecast?.beforeArrival).length;
   const first = [...capacity.keys()].filter(d => d >= today).sort()[0];
   return { ...summary, today: first ? { date: first, ...capacity.get(first) } : null, last: queue.reduce((m, r) => (r.auEnd > m ? r.auEnd : m), '') };
 }

@@ -11,7 +11,9 @@ test('GR always means AU production; shipped without GR means shipping', () => {
   assert.equal(groupFor({ chassis: 'X', group: 'sea' }, { ata: '2026-10-29' }, {}, today, { location: 'received' }), 'au');
   assert.equal(groupFor({ chassis: 'X', group: 'cn' }, { shippedAt: '2026-11-09' }, {}, today), 'sea');
   assert.equal(groupFor({ chassis: 'X', group: 'cn' }, { shippedAt: '2026-12-09' }, {}, today), 'cn', 'a future ship date is not shipped');
-  assert.equal(groupFor({ chassis: 'X', group: 'locked' }, { weldAt: '2026-11-01' }, {}, today), 'locked');
+  assert.equal(groupFor({ chassis: 'X', group: 'locked' }, { weldAt: '2026-11-01' }, {}, today), 'cn', 'started on the Longtree line = China production');
+  assert.equal(groupFor({ chassis: 'X', group: 'rolling' }, { furnitureAt: '2026-11-01' }, {}, today), 'cn');
+  assert.equal(groupFor({ chassis: 'X', group: 'rolling' }, { weldAt: '2099-01-01' }, {}, today), 'rolling', 'a future weld date has not started');
   assert.equal(groupFor({ empty: true, group: 'empty' }, {}, {}, today), 'empty');
 });
 test('Regent status order, with PO / signoff for a blank CRM status', () => {

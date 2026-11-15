@@ -24,15 +24,15 @@ type Row = {
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
 };
-type AuForecast = { kind?: 'towable' | 'srm' | 'srv'; seq?: number; order?: number; perDay?: number; stage?: string; note?: string };
+type AuForecast = { beforeArrival?: string; kind?: 'towable' | 'srm' | 'srv'; seq?: number; order?: number; perDay?: number; stage?: string; note?: string };
 type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
 const KIND_NAME: Record<string, string> = { towable: 'Towable', srm: 'SRM', srv: 'SRV' };
 type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
 type SortKey = 'status' | 'date' | 'eta' | 'au';
 /** Same as the server's etaKey: actual arrival once arrived, else vessel ETA, else Longtree ETA. */
 const etaOf = (r: Row) => { const l = r.live; if (!l) return ''; if (l.ship?.arrived) return l.ata || l.ship.eta || ''; if (l.ata && l.ata <= (r.today || '9999')) return l.ata; return l.ship?.eta || l.eta || ''; };
-const NO_AU_FINISH = new Set(['transport', 'sea', 'cn']);
-const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'cnEnd'], cn: ['cnEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
+const NO_AU_FINISH = new Set(['transport']);
+const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
 type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
 type Payload = { crmDone?: string[]; auForecast?: AuForecastSummary | null; buildPlan?: { months: BuildMonth[]; calendar: string } | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
@@ -149,6 +149,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         cellRenderer: (p: any) => { const r: Row | undefined = p.data, f = r?.auForecast; if (!r) return null;
           if (r.build) return <div className="pl-two"><strong>{r.auEnd}</strong><small>{zh ? '造车计划' : 'Build plan'}</small></div>;
           if (f?.note === 'overflow') return <span className="pl-late" title={zh ? 'Portal 计划的产能排到 2027-12 还不够' : 'Not enough planned capacity up to 2027-12'}>{zh ? '超出计划产能' : 'Beyond plan'}</span>;
+          if (r.auEnd && f?.beforeArrival) return <div className="pl-two" title={zh ? `排到的日子早于预计到澳 ${f.beforeArrival}（海运看 ETA，没发运的看国内下线 + 50 天海运）` : `Slot is before the van can be in AU (${f.beforeArrival})`}><strong>{r.auEnd}</strong><small className="pl-late">{zh ? `早于预计到澳 ${f.beforeArrival}` : `before arrival ${f.beforeArrival}`}</small></div>;
           if (r.auEnd && f) return <div className="pl-two" title={zh ? `${KIND_NAME[f.kind || 'towable']} 第 ${f.seq} 台 · 当天 ${KIND_NAME[f.kind || 'towable']} 产能 ${f.perDay} 台` : ''}><strong>{r.auEnd}</strong><small>{zh ? '预计' : 'expected'} · {KIND_NAME[f.kind || 'towable']} #{f.seq}</small></div>;
           return r.auEnd ? <strong>{r.auEnd}</strong> : <span className="pl-quiet">{zh ? '待排' : 'To schedule'}</span>; } },
       { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
