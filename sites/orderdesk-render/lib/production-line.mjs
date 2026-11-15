@@ -141,8 +141,8 @@ export const BOARD_GROUPS = [
   { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，从今天开始按 澳洲生产（QC → 生产 → 预装 → 已接收）→ 海运（ETA）→ 国内生产 → 滚动 60 天（计划顺序）依次填。', phase: 'au' },
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '已发运（飞书有发运 / 离港 / 到港日期，或 Portal 已在海运 / 澳洲），SAP 还没有 GR，澳洲工厂也还没接收。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
-  { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: '已确认待上线 · 仅以现有 Schedule Confirmed = Yes 判断锁定。' },
-  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '滚动安排待确认 · 不根据日期自动改写确认状态。' },
+  { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: 'Longtree 11 / 12 月计划里还没上线的车都在这里（已在国内生产 / 海运 / 澳洲的保持原位），按计划文件顺序；不再看 Portal 的 Schedule Confirmed。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '暂时为空：11 / 12 月计划的车都放在排产锁定线。' },
   { id: 'empty', band: 'preschedule', zh: 'Towable 造车计划', en: 'Towable build plan', note: '按 Portal Production & dispatch 的 Towable 月产量（总产量 − SRV − SRM），平均分到工作日历的每个工作日，每个位置一个澳洲下线日期；先不放车，以后再分配。Portal 的 SRV / SRM 空 slot 不再显示。' },
   { id: 'customers', band: 'preschedule', zh: 'Customer 订单池', en: 'Customer pool', note: '客户订单独立成池，Stock 不进入 Customer 订单池。' },
   { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '国内计划上线在 60 天之后的车，或计划日期待补。' },
@@ -289,7 +289,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     if (activePlan && chassis && !EXECUTION.has(group)) {
       planRow = activePlan.byChassis.get(chassis) || null;
       if (planRow) {
-        group = raw.locked ? 'locked' : 'rolling';
+        group = 'locked'; // every plan car not yet on the line: 排产锁定线 (Portal Schedule Confirmed no longer used)
         source = { ...raw, cnPlanStart: planRow.weldPlan || planRow.assemblyPlan || raw.cnPlanStart, cnPlanEnd: planRow.finishPlan || raw.cnPlanEnd };
       } else if (ROLLING.has(group)) { group = 'later'; notInPlan = true; }
     }

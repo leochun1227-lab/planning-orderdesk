@@ -62,8 +62,8 @@ test('the plan snapshot orders the rolling 60 days and flags duplicates', () => 
   const plan = { activeUntil: '2026-12-31', rows: [], byChassis: new Map([['B', { order: 1, months: ['2026-11#5'], weldPlan: '2026-11-20', finishPlan: '2026-12-05' }], ['D', { order: 2, months: ['2026-12#1'], weldPlan: '2026-12-02' }], ['A', { order: 3, months: ['2026-12#2'], weldPlan: '2026-12-03' }]]) };
   const out = buildProductionLine({ board, orders: {}, longtree: new Map(), prod: new Map(), portal: new Map(), today: '2026-11-11', settings: {}, plan });
   const g = id => out.rows.filter(r => r.chassis === id).map(r => r.group);
-  assert.deepEqual(g('B'), ['rolling']); assert.deepEqual(g('C'), ['later']); assert.deepEqual(g('D'), ['locked']);
-  assert.deepEqual(out.rows.filter(r => r.group === 'rolling').map(r => r.chassis), ['B', 'A']); assert.deepEqual(out.rows.filter(r => r.group === 'locked').map(r => r.chassis), ['D']);
+  assert.deepEqual(g('B'), ['locked']); assert.deepEqual(g('C'), ['later']); assert.deepEqual(g('D'), ['locked']);
+  assert.deepEqual(out.rows.filter(r => r.group === 'rolling').map(r => r.chassis), []); assert.deepEqual(out.rows.filter(r => r.group === 'locked').map(r => r.chassis), ['B', 'D', 'A'], 'all plan cars not on the line are locked, in plan order');
   assert.equal(out.rows.find(r => r.chassis === 'B').planStart, '2026-11-20');
   assert.ok(out.rows.find(r => r.chassis === 'C').issues.some(i => i.code === 'notInPlan'));
   assert.equal(out.rows.filter(r => r.chassis === 'E' && r.issues.some(i => i.code === 'duplicate')).length, 2);
