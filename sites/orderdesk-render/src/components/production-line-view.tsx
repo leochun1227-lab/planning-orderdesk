@@ -211,7 +211,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const defaultColDef = useMemo<ColDef<Row>>(() => ({ resizable: true, sortable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true, filter: ValueFilter, filterParams: { zh } }), [zh]);
   function exportCsv() { grid.current?.api.exportDataAsCsv({ fileName: `Production-line-${g?.id || 'search'}-${data?.today || ''}.csv` }); }
   const src = data?.sources || {};
-  const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI', tms: zh ? '船运（Portal）' : 'Shipping (Portal)' };
+  const srcLabel: Record<string, string> = { portal: zh ? 'Dealer Portal（排产）' : 'Dealer Portal (board)', longtree: 'Longtree', prod: zh ? '澳洲生产' : 'AU production', sap: 'SAP GR / GI', tms: zh ? '船运（Portal）' : 'Shipping (Portal)', plan: zh ? '月产量（Portal，5 分钟）' : 'Monthly plan (Portal, 5 min)' };
   const avg = g?.phase ? data?.averages?.[g.phase] : null;
   /** Scroll the build plan to the first slot of a month (as displayed, after filters and sorting). */
   const jumpTo = (month: string) => {

@@ -476,9 +476,18 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
     boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '',
-      buildPlan: buildPlanSlots(towableQuantities({ dispatchPlan: raw.dispatchPlan, motorhomePlans: { 2026: raw.mhPlan2026, 2027: raw.mhPlan2027 } }), calendar),
-      auCapacity: dailyCapacity(planQuantities({ dispatchPlan: raw.dispatchPlan, motorhomePlans: { 2026: raw.mhPlan2026, 2027: raw.mhPlan2027 }, modelNames: raw.mhModels }), calendar) };
+    };
     return boardCache;
+  }
+  // The Production & dispatch plan is re-read every 5 minutes (portal-source); recomputed only when it changed.
+  let planCache = null;
+  function portalPlan(plan) {
+    if (!plan) return { buildPlan: null, auCapacity: null };
+    if (planCache?.key === plan.key) return planCache;
+    const r = plan.raw, plans = { dispatchPlan: r.dispatchPlan, motorhomePlans: { 2026: r.mhPlan2026, 2027: r.mhPlan2027 } };
+    planCache = { key: plan.key, buildPlan: buildPlanSlots(towableQuantities(plans), calendar), auCapacity: dailyCapacity(planQuantities({ ...plans, modelNames: r.mhModels }), calendar),
+      updatedAt: [r.dispatchPlan?.['2026']?.updatedAt, r.dispatchPlan?.['2027']?.updatedAt].filter(Boolean).sort().pop() || '' };
+    return planCache;
   }
   return {
     // First load waits; later a stale copy is returned at once and refreshed in the background.
@@ -487,10 +496,10 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
       if (force || stale) inflight ??= refresh(force).finally(() => { inflight = null; });
       const first = Object.values(loaded).length < Object.keys(sources).length;
       const [copy] = await Promise.all([portal.current({ force }), force || first ? inflight : null]);
-      const pb = await portalBoard(copy, today);
+      const pb = { ...(await portalBoard(copy, today)), ...portalPlan(copy.plan) };
       const sapCopy = sap ? await sap.current() : { rows: new Map(), at: '', count: 0, error: 'not configured' };
       return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan, auCapacity: pb.auCapacity,
-        status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) }, tms: { at: pb.tmsAt, error: pb.tms.size ? '' : (copy.error || 'no data'), count: pb.tms.size, configured: true } } };
+        status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) }, tms: { at: pb.tmsAt, error: pb.tms.size ? '' : (copy.error || 'no data'), count: pb.tms.size, configured: true }, plan: { at: copy.plan?.at || '', updatedAt: pb.updatedAt || '', error: copy.planError || '', count: pb.auCapacity?.size || 0, configured: true } } };
     },
   };
 }
