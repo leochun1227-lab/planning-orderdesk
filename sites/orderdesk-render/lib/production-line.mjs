@@ -376,7 +376,7 @@ function dealerRow(d, v, dealerName, today) {
     dealer: dealerName, model: v.model, range: prefix, customer: v.customer, orderId: '', production: null,
     cnActual: '', cnStart: '', cnPlanStart: '', cnPlanEnd: '', cnPlanMonth: '', auActual: '', auStart: '', auPlanStart: '', auPlanEnd: '', cnEnd: '', cnEndActual: false, auEnd: '', auEndActual: false,
     planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
-    dealerSite: { slug: d.slug, where: v.where, category: v.category, since: v.since, days: v.days, target: d.target } };
+    dealerSite: { slug: d.slug, where: v.where, category: v.category, since: v.since, days: v.days, arrive: v.arrive || '', target: d.target } };
 }
 // Expected AU finish (下线) for the AU production group. Capacity per working day comes from the Dealer Portal
 // "Production & dispatch" plan: Towable = total − SRM − SRV, and SRM / SRV each have their own number, so they never take

@@ -23,7 +23,7 @@ type Row = {
   today?: string; orderRow: number | null; forecast: string;
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
-  rollingOrder?: number; rollingKind?: 'customer' | 'stock'; dealerSite?: { slug: string; where: 'yard' | 'transit'; category: 'stock' | 'customer' | 'second'; since: string; days: number | null; target: number };
+  rollingOrder?: number; rollingKind?: 'customer' | 'stock'; dealerSite?: { slug: string; where: 'yard' | 'transit'; category: 'stock' | 'customer' | 'second'; since: string; days: number | null; arrive?: string; target: number };
 };
 type AuForecast = { beforeArrival?: string; kind?: 'towable' | 'srm' | 'srv'; seq?: number; order?: number; perDay?: number; stage?: string; note?: string };
 type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
@@ -217,6 +217,9 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         { field: 'customer', headerName: zh ? '客户' : 'Customer', width: 200 },
         { colId: 'since', headerName: zh ? '进店 / PGI 日期' : 'In yard / PGI date', width: 130, valueGetter: (p: any) => site(p)?.since || '' },
         { colId: 'days', headerName: zh ? '天数' : 'Days', width: 90, valueGetter: (p: any) => site(p)?.days ?? null, valueFormatter: (p: any) => p.value == null ? '—' : String(p.value) },
+        { colId: 'arrive', headerName: zh ? '预计到店' : 'Expected at dealer', width: 130, valueGetter: (p: any) => site(p)?.where === 'transit' ? site(p)?.arrive || '' : '',
+          tooltipValueGetter: () => (zh ? '在途：PGI 日期 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天；Traralgon 暂不计算）；已过了还没进店的按今天' : 'Transit: PGI + travel days'),
+          cellRenderer: (p: any) => site(p)?.where !== 'transit' ? null : p.value || <span className="pl-missing">{zh ? '暂不计算' : 'Not calculated'}</span> },
       ] }];
     }
     if (!searching && KEY_ORDER[group]) {
