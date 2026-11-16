@@ -3,11 +3,13 @@
 // Read only when someone opens a page and the copy is older than the interval; a stale copy is
 // served at once while a new one loads; a failed read keeps the last good copy.
 import { PORTAL_BOARD_SOURCES, PORTAL_DATABASE_URL } from './campervan-plan.mjs';
+import { PORTAL_DEALER_SOURCES } from './dealership.mjs';
 
 export const PORTAL_TTL_MS = 2 * 60 * 60 * 1000;
 // GR / GI come from SAP directly (sap-grgi.mjs). tmssystem = the Portal's Vessel movements & ETA
 // (container / vessel / ETA per chassis, ~2.4 MB), shown on the production line.
-export const PORTAL_EXTRA_SOURCES = [['tms', 'tmssystem']];
+// + the five dealerships' yards, transit overrides and handovers (dealership.mjs, ~2.5 MB).
+export const PORTAL_EXTRA_SOURCES = [['tms', 'tmssystem'], ...PORTAL_DEALER_SOURCES];
 // The Production & dispatch plan (monthly totals, SRM / SRV quantities, model names): a few KB, so it is
 // re-read every 5 minutes on its own; the AU finish forecast follows a Portal change within minutes.
 export const PORTAL_PLAN_SOURCES = [['dispatchPlan', 'productionDispatchPlanning'], ['mhPlan2026', 'motorhomeSchedule/plans/2026'], ['mhPlan2027', 'motorhomeSchedule/plans/2027'], ['mhModels', 'motorhomeSchedule/models']];

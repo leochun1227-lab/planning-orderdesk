@@ -100,15 +100,30 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
   // Production line (产线): Longtree + AU production API + Portal GR/GI, read-only, cached 15 minutes.
   const productionLine = createProductionLineSource(env, { portal, sap });
   const rollingPlan = loadRollingPlan();
-  if (env.NODE_ENV === 'production') productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); // warm up at start
+  if (env.NODE_ENV === 'production') {
+    productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); // warm up at start
+    // Keep the copies fresh without anyone opening the page or pressing refresh: every source is re-read when its own
+    // interval has passed (Portal 2 h, plan 5 min, Longtree 30 min, production 15 min).
+    setInterval(() => { productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); }, 10 * 60 * 1000).unref?.();
+  }
+  async function currentLine(force = false) {
+    const today = dayInSydney(new Date());
+    const sources = await productionLine.current({ force, today });
+    const { state } = await store.readState();
+    return { sources, line: buildProductionLine({ orders: state?.orders || {}, ...sources, today, plan: rollingPlan }) };
+  }
   app.get('/api/production-line', async c => {
     try {
-      const today = dayInSydney(new Date());
-      const sources = await productionLine.current({ force: c.req.query('refresh') === '1', today });
-      const { state } = await store.readState();
-      const line = buildProductionLine({ orders: state?.orders || {}, ...sources, today, plan: rollingPlan });
+      const { sources, line } = await currentLine(c.req.query('refresh') === '1');
       return json({ ...line, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
+  });
+  // Dealer analysis (our five dealerships): the same computation, only the dealership part.
+  app.get('/api/dealer-analysis', async c => {
+    try {
+      const { sources, line } = await currentLine(c.req.query('refresh') === '1');
+      return json({ today: line.today, dealership: line.dealership, counts: line.counts, sources: { portal: sources.status.portal, dealers: sources.status.dealers, plan: sources.status.plan, longtree: sources.status.longtree, prod: sources.status.prod }, refreshing: sources.refreshing });
+    } catch (e) { return json({ error: message(e, 'Dealer 分析暂时读取不到') }, 502); }
   });
 
   app.get('/api/orders', async c => {

@@ -10,6 +10,7 @@ import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, slugify, ROLLING_SIZE, DELIVERY_OFFSET_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -137,15 +138,16 @@ export function stageOf(order, lt = {}, au, portal = {}, today) {
  * the AU factory's current location/station, SAP GR/GI and the Orderdesk order.
  */
 export const BOARD_GROUPS = [
+  { id: 'dealership', band: 'dealer', zh: 'Dealership', en: 'Dealership', note: '五家直营店（Frankston、Geelong、Launceston、St James、Traralgon）店里的车和在途车（PGI 后 100 天内、还没进店也没交付），口径同 Dealer Portal 管理页；标签上的数字是 new stock 合计。上面是每家近三个月交付、目标库存和还缺多少 stock。' },
   { id: 'transport', band: 'execution', zh: 'Transport', en: 'Transport', note: '澳洲生产系统显示在 Transport 的车（已下线，等运去经销商、还没 GI）；放在澳洲生产之前。', phase: 'au' },
-  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，从今天开始按 澳洲生产（QC → 生产 → 预装 → 已接收）→ 海运（ETA）→ 国内生产 → 滚动 60 天（计划顺序）依次填。', phase: 'au' },
+  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，从今天开始按 澳洲生产（QC → 生产 → 预装 → 已接收）→ 海运（Shipment ETA）→ 国内生产 → 排产锁定线（计划顺序）→ 滚动排产线依次填。', phase: 'au' },
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '已发运（飞书有发运 / 离港 / 到港日期，或 Portal 已在海运 / 澳洲），SAP 还没有 GR，澳洲工厂也还没接收。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: 'Longtree 11 / 12 月计划里还没上线的车都在这里（已在国内生产 / 海运 / 澳洲的保持原位），按计划文件顺序；不再看 Portal 的 Schedule Confirmed。' },
-  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '暂时为空：11 / 12 月计划的车都放在排产锁定线。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '五家直营店的 customer 订单先排（按排产表顺序），再补每家还缺的 stock（用它自己的 stock 订单）；暂定最多 180 台，澳洲预计下线接在排产锁定线后面。其他经销商的订单不进来。' },
   { id: 'empty', band: 'preschedule', zh: 'Towable 造车计划', en: 'Towable build plan', note: '按 Portal Production & dispatch 的 Towable 月产量（总产量 − SRV − SRM），平均分到工作日历的每个工作日，每个位置一个澳洲下线日期；先不放车，以后再分配。Portal 的 SRV / SRM 空 slot 不再显示。' },
-  { id: 'customers', band: 'preschedule', zh: 'Customer 订单池', en: 'Customer pool', note: '客户订单独立成池，Stock 不进入 Customer 订单池。' },
-  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '国内计划上线在 60 天之后的车，或计划日期待补。' },
+  { id: 'customers', band: 'preschedule', zh: 'Customer 订单池', en: 'Customer pool', note: '其余所有订单：不在 11 / 12 月计划、也没进滚动排产线的（含 stock 订单和其他经销商的订单），按排产表顺序。' },
+  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '暂时为空：原来这里的订单都放到滚动排产线或 Customer 订单池。' },
 ];
 
 // ---- Orderdesk rules on top of the Portal board ------------------------------------------------
@@ -273,7 +275,7 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
   return out;
 }
 
-export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null }) {
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE }) {
   const activePlan = plan && (!plan.activeUntil || today <= plan.activeUntil) ? plan : null;
   const seen = new Map();
   for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
@@ -336,10 +338,37 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
       build: { month: slot.month, seq: slot.seq, day: slot.day, perDay: slot.perDay } });
   }
+  // Dealerships + rolling line: first the AU finish of everything already on the line (to know when the rolling-line vans
+  // would reach the dealers), then pick the rolling line, move every other open order to the Customer pool, and forecast again.
+  let dealership = null;
+  if (dealers) {
+    const first = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
+    const lockedLast = first?.locked?.last || first?.last || today, deliveredBy = addDays(lockedLast, DELIVERY_OFFSET_DAYS);
+    const needs = dealerNeeds(dealers, rows, today, deliveredBy), pick = pickRolling(rows, needs, rollingSize);
+    pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); }); // on the rolling line by design
+    for (const r of rows) if (r.group === 'later') r.group = 'customers';
+    const names = new Map(); for (const r of rows) if (r.dealer && !names.has(slugify(r.dealer))) names.set(slugify(r.dealer), r.dealer);
+    for (const d of dealers) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
+    dealership = { deliveredBy, lockedLast, size: rollingSize, picked: pick.picked.length, customers: pick.customers, offsetDays: DELIVERY_OFFSET_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
+      dealers: dealers.map((d, i) => { const { vehicles, ...rest } = d; return { ...rest, ...needs[i], monthly: [], stockPicked: pick.stockPicked[d.slug], stockAvailable: pick.stockAvailable[d.slug], customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length }; }) };
+  }
+  for (const id of Object.keys(counts)) counts[id] = rows.filter(r => r.group === id).length;
+  if (dealership) counts.dealership = dealership.dealers.reduce((n, d) => n + d.yard.stock, 0);
   const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
-  return { today, counts, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
+  if (dealership) dealership.dealers.forEach((x, i) => { x.monthly = dealerMonthly(dealers[i], rows, today); });
+  return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
+}
+/** A vehicle at (or on its way to) one of our dealerships, shaped like a production-line row. */
+function dealerRow(d, v, dealerName, today) {
+  const prefix = v.chassis.slice(0, 3).toUpperCase();
+  return { id: `dealer-${d.slug}-${v.where}-${v.chassis}`, chassis: v.chassis, empty: false, line: prefix === 'SRV' || prefix === 'SRM' ? prefix : 'Towable', source: 'Dealer Portal', group: 'dealership', portalGroup: 'dealership', status: '',
+    regent: '', regentRank: 99, regentDerived: false, ltRank: 0, ltField: '', ltDate: '', today, orderRow: null, forecast: '', planOrder: null, planRef: '', planWeld: '', planAssembly: '', issues: [],
+    dealer: dealerName, model: v.model, range: prefix, customer: v.customer, orderId: '', production: null,
+    cnActual: '', cnStart: '', cnPlanStart: '', cnPlanEnd: '', cnPlanMonth: '', auActual: '', auStart: '', auPlanStart: '', auPlanEnd: '', cnEnd: '', cnEndActual: false, auEnd: '', auEndActual: false,
+    planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
+    dealerSite: { slug: d.slug, where: v.where, category: v.category, since: v.since, days: v.days, target: d.target } };
 }
 // Expected AU finish (下线) for the AU production group. Capacity per working day comes from the Dealer Portal
 // "Production & dispatch" plan: Towable = total − SRM − SRV, and SRM / SRV each have their own number, so they never take
@@ -357,7 +386,8 @@ export function forecastAuFinish(rows, capacity, today) {
     ...of('au').sort(by(num(r => AU_STAGE[r.live?.location] ?? 4), asc(r => r.live?.stationSince || r.live?.enteredAt), asc(r => r.live?.grAt), asc(r => r.chassis))),
     ...of('sea').sort(GROUP_SORT.sea),
     ...of('cn').sort(GROUP_SORT.cn),
-    ...of(['locked', 'rolling']).sort(by(num(r => r.planOrder), asc(r => r.chassis))),
+    ...of('locked').sort(by(num(r => r.planOrder), asc(r => r.chassis))),
+    ...of('rolling').sort(by(num(r => r.rollingOrder), asc(r => r.chassis))),
   ];
   const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0 };
   for (const [order, r] of queue.entries()) {
@@ -396,12 +426,13 @@ export const GROUP_SORT = {
   sea: by(asc(etaKey)),
   cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(cnFinishKey)),
   locked: by(num(r => r.planOrder)),
-  rolling: by(num(r => r.planOrder)),
+  rolling: by(num(r => r.rollingOrder)),
+  dealership: by(asc(r => r.dealerSite?.slug), asc(r => (r.dealerSite?.where === 'yard' ? 'a' : 'b')), asc(r => ({ stock: 'a', customer: 'b', second: 'c' })[r.dealerSite?.category] || 'z'), num(r => -(r.dealerSite?.days ?? 0))),
   empty: by(asc(r => r.auEnd), num(r => r.build?.seq)),
   customers: by(num(r => r.orderRow), asc(r => r.forecast)),
   later: by(num(r => r.orderRow), asc(r => r.forecast), num(r => r.regentRank ?? 99)),
 };
-const GROUP_INDEX = ['transport', 'au', 'sea', 'cn', 'locked', 'rolling', 'empty', 'customers', 'later'];
+const GROUP_INDEX = ['dealership', 'transport', 'au', 'sea', 'cn', 'locked', 'rolling', 'empty', 'customers', 'later'];
 export function sortLineRows(rows) {
   return rows.map((r, i) => ({ r, i })).sort((a, z) => (GROUP_INDEX.indexOf(a.r.group) - GROUP_INDEX.indexOf(z.r.group)) || (GROUP_SORT[a.r.group] || (() => 0))(a.r, z.r)
     || (a.r.cnStart || '9999').localeCompare(z.r.cnStart || '9999') || a.i - z.i).map(x => x.r);
@@ -477,7 +508,9 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     if (boardCache && boardCache.at === copy.at && boardCache.today === today) return boardCache;
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
-    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '',
+    let dealers = null, dealersError = '';
+    try { dealers = raw.yard ? dealerSnapshot(raw, today) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
+    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, dealersError,
     };
     return boardCache;
   }
@@ -500,8 +533,8 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
       const [copy] = await Promise.all([portal.current({ force }), force || first ? inflight : null]);
       const pb = { ...(await portalBoard(copy, today)), ...portalPlan(copy.plan) };
       const sapCopy = sap ? await sap.current() : { rows: new Map(), at: '', count: 0, error: 'not configured' };
-      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan, auCapacity: pb.auCapacity,
-        status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) }, tms: { at: pb.tmsAt, error: pb.tms.size ? '' : (copy.error || 'no data'), count: pb.tms.size, configured: true }, plan: { at: copy.plan?.at || '', updatedAt: pb.updatedAt || '', error: copy.planError || '', count: pb.auCapacity?.size || 0, configured: true } } };
+      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan, auCapacity: pb.auCapacity, dealers: pb.dealers,
+        status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) }, tms: { at: pb.tmsAt, error: pb.tms.size ? '' : (copy.error || 'no data'), count: pb.tms.size, configured: true }, plan: { at: copy.plan?.at || '', updatedAt: pb.updatedAt || '', error: copy.planError || '', count: pb.auCapacity?.size || 0, configured: true }, dealers: { at: copy.at, error: pb.dealersError || '', count: pb.dealers ? pb.dealers.reduce((n, d) => n + d.vehicles.length, 0) : 0, configured: true } } };
     },
   };
 }
