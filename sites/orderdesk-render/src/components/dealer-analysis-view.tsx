@@ -21,55 +21,54 @@ export function DealerTable({ dl, zh }: { dl: Dealership; zh: boolean }) {
   const m = dl.dealers[0]?.handover.months.map(x => x.month.slice(5)) || [];
   return <div className="da-table"><table>
     <thead><tr>
-      <th>Dealer</th><th>{zh ? '目标库存' : 'Target'}</th><th>{zh ? '店里 new stock' : 'Yard new stock'}</th><th>{zh ? '店里 customer / 二手' : 'Yard customer / 2nd'}</th><th>{zh ? '在途 stock / customer' : 'Transit stock / customer'}</th>
-      <th title={zh ? '交付按排产表客户名分 stock / customer，同 Dealer Portal YTD Handover' : 'As the Dealer Portal YTD Handover'}>{zh ? `近三月交付 stock（${m.join(' / ')} 月）` : `Stock handovers (${m.join(' / ')})`}</th><th>{zh ? '月均 stock / customer' : 'Avg / month stock / customer'}</th>
+      <th>Dealer</th><th>{zh ? '目标库存' : 'Target'}</th><th>{zh ? '店里 new stock' : 'Yard new stock'}</th><th>{zh ? '在途 stock' : 'Transit stock'}</th>
+      <th title={zh ? '交付按排产表客户名分 stock / customer，同 Dealer Portal YTD Handover' : 'As the Dealer Portal YTD Handover'}>{zh ? `近三月交付 stock（${m.join(' / ')} 月）` : `Stock handovers (${m.join(' / ')})`}</th><th>{zh ? '月均 stock 交付' : 'Avg stock handovers / month'}</th>
       <th title={zh ? '到店 = 澳洲预计下线（Transport 按今天）+ 3 天出车 + 路上天数' : 'At the dealer = AU finish (Transport: today) + 3 + travel days'}>{zh ? '到店天数' : 'Days to dealer'}</th>
       <th title={zh ? 'Transport、澳洲生产、海运、国内生产、排产锁定线里这家的 stock 订单' : 'Stock orders of this dealer from Transport to the locked line'}>{zh ? '线上 stock' : 'Stock on the line'}</th>
       <th title={zh ? '滚动排产线最后一台澳洲下线 + 到店天数' : ''}>{zh ? '滚动线到店' : 'Rolling line at dealer'}</th>
       <th title={zh ? '线上 stock 里那天之前能到店的' : ''}>{zh ? '那天前到店 stock' : 'Stock arriving by then'}</th>
-      <th title={zh ? '店里 + 那天前到店的在途 stock + 那天前到店的线上 stock − 月均 stock 交付 × 月数' : ''}>{zh ? '那天预计 stock' : 'Stock then'}</th><th>{zh ? '还缺' : 'Need'}</th><th>{zh ? '排进滚动 stock / customer' : 'Rolling stock / customer'}</th>
+      <th title={zh ? '店里 + 那天前到店的在途 stock + 那天前到店的线上 stock − 月均 stock 交付 × 月数' : ''}>{zh ? '那天预计 stock' : 'Stock then'}</th><th>{zh ? '还缺' : 'Need'}</th><th>{zh ? '排进滚动 stock' : 'Stock on the rolling line'}</th>
     </tr></thead>
     <tbody>{dl.dealers.map(d => <tr key={d.slug} className={d.paused ? 'paused' : ''}>
-      <td><b>{d.name}</b></td><td>{d.target}</td><td className={d.yard.stock > d.target ? 'over' : ''}><b>{d.yard.stock}</b></td><td>{d.yard.customer} / {d.yard.second}</td><td>{d.transit.stock} / {d.transit.customer}</td>
-      <td>{d.handover.months.map(x => x.stock).join(' / ')}<small> · {zh ? '本月' : 'MTD'} {d.handover.thisMonth.stock}</small></td><td>{d.handover.avgStock} / {d.handover.avgCustomer}</td>
+      <td><b>{d.name}</b></td><td>{d.target}</td><td className={d.yard.stock > d.target ? 'over' : ''}><b>{d.yard.stock}</b></td><td>{d.transit.stock}</td>
+      <td>{d.handover.months.map(x => x.stock).join(' / ')}<small> · {zh ? '本月' : 'MTD'} {d.handover.thisMonth.stock}</small></td><td>{d.handover.avgStock}</td>
       {d.paused ? <><td colSpan={1}>—</td><td title={Object.entries(d.pipeline).map(([g, n]) => `${zh ? GROUP_ZH[g] || g : g} ${n}`).join(' · ')}>{d.pipelineStock}</td><td colSpan={4} className="paused-note">{zh ? '暂不计算' : 'Not calculated for now'}</td></> : <>
         <td>{dl.dispatchDays} + {d.travelDays}</td>
         <td title={Object.entries(d.pipeline).map(([g, n]) => `${zh ? GROUP_ZH[g] || g : g} ${n}`).join(' · ')}>{d.pipelineStock}</td>
         <td>{d.deliveredBy}</td><td>{d.arriving}</td>
         <td title={`${d.yard.stock} + ${d.transitArriving} + ${d.arriving} − ${d.sold} (${d.handover.avgStock} × ${d.months})`} className={(d.projected ?? 0) < d.target ? 'short' : 'over'}>{d.projected}</td>
         <td className={d.need ? 'short' : ''}><b>{d.need}</b></td></>}
-      <td>{d.stockPicked} / {d.customerPicked}{!d.paused && d.need > d.stockPicked ? <small className="short"> {zh ? `stock 订单只有 ${d.stockAvailable} 台，还差 ${d.need - d.stockPicked}` : `only ${d.stockAvailable} stock orders, ${d.need - d.stockPicked} short`}</small> : null}</td>
+      <td>{d.stockPicked}{!d.paused && d.need > d.stockPicked ? <small className="short"> {zh ? `stock 订单只有 ${d.stockAvailable} 台，还差 ${d.need - d.stockPicked}` : `only ${d.stockAvailable} stock orders, ${d.need - d.stockPicked} short`}</small> : null}</td>
     </tr>)}</tbody>
   </table></div>;
 }
 
 function DealerCard({ d, zh }: { d: DealerSummary; zh: boolean }) {
-  if (d.paused || !d.monthly.length) return <article className="da-card"><header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 ${d.transit.total}` : `Target ${d.target} · yard ${d.yard.stock}`}</span></div><b className="paused">{zh ? '暂不计算' : 'Paused'}</b></header>
-    <table className="da-mini"><thead><tr><th>{zh ? '交付' : 'Handovers'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
-      <tbody>{([['stock', 'Stock', d.handover.avgStock], ['customer', 'Customer', d.handover.avgCustomer], ['second', zh ? '二手' : '2nd hand', d.handover.avgSecond]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table></article>;
-  const max = Math.max(1, ...d.monthly.map(x => x.stockIn + x.customerIn), ...d.monthly.map(x => x.endStock), d.target), H = 90, h = (n: number) => `${Math.max(0, Math.min(1, n / max)) * H}px`;
+  if (d.paused || !d.monthly.length) return <article className="da-card"><header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock}` : `Target ${d.target} · yard ${d.yard.stock}`}</span></div><b className="paused">{zh ? '暂不计算' : 'Paused'}</b></header>
+    <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
+      <tbody>{([['stock', zh ? 'Stock 交付' : 'Stock handovers', d.handover.avgStock]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table></article>;
+  const max = Math.max(1, ...d.monthly.map(x => x.stockIn), ...d.monthly.map(x => x.endStock), d.target), H = 90, h = (n: number) => `${Math.max(0, Math.min(1, n / max)) * H}px`;
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const label = (k: string, i: number) => { const [y, mm] = k.split('-'); return <>{MON[Number(mm) - 1]}{i === 0 || mm === '01' ? <small> {y}</small> : null}</>; };
   return <article className="da-card">
-    <header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 ${d.transit.total} · 下线 + ${(d.lead ?? 0)} 天到店` : `Target ${d.target} · yard ${d.yard.stock} · transit ${d.transit.total} · AU finish + ${d.lead} days`}</span></div>
+    <header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock} · 下线 + ${(d.lead ?? 0)} 天到店` : `Target ${d.target} · yard ${d.yard.stock} · transit stock ${d.transit.stock} · AU finish + ${d.lead} days`}</span></div>
       <b className={d.need ? 'short' : 'ok'}>{d.need ? (zh ? `还缺 ${d.need}` : `Need ${d.need}`) : (zh ? '不缺' : 'OK')}</b></header>
     <table className="da-fc">
       <tbody>
-        <tr className="bars"><th>{zh ? <><span className="lg"><i className="stock" />到店 stock</span><span className="lg"><i className="cust" />到店 customer</span><span className="lg"><i className="line" />月底 stock</span><span className="lg"><i className="dash" />目标</span></> : <><span className="lg"><i className="stock" />Stock in</span><span className="lg"><i className="cust" />Customer in</span><span className="lg"><i className="line" />Month-end stock</span><span className="lg"><i className="dash" />Target</span></>}</th>
+        <tr className="bars"><th>{zh ? <><span className="lg"><i className="stock" />到店 stock</span><span className="lg"><i className="line" />月底 stock</span><span className="lg"><i className="dash" />目标</span></> : <><span className="lg"><i className="stock" />Stock in</span><span className="lg"><i className="line" />Month-end stock</span><span className="lg"><i className="dash" />Target</span></>}</th>
           {d.monthly.map(x => <td key={x.month}><div className="da-col" style={{ height: H }}>
             <div className="da-tgt" style={{ bottom: h(d.target) }} />
-            <i className="cust" style={{ height: h(x.customerIn) }} /><i className="stock" style={{ height: h(x.stockIn) }} />
+            <i className="stock" style={{ height: h(x.stockIn) }} />
             <em style={{ bottom: h(x.endStock) }} className={x.endStock < d.target ? 'low' : ''} />
           </div></td>)}</tr>
         <tr className="months"><th>{zh ? '月份' : 'Month'}</th>{d.monthly.map((x, i) => <td key={x.month}>{label(x.month, i)}</td>)}</tr>
         <tr><th>{zh ? '到店 stock' : 'Stock in'}</th>{d.monthly.map(x => <td key={x.month}>{x.stockIn}</td>)}</tr>
-        <tr><th>{zh ? '到店 customer' : 'Customer in'}</th>{d.monthly.map(x => <td key={x.month}>{x.customerIn}</td>)}</tr>
         <tr><th title={zh ? '按近三个月的月均 stock 交付；本月只算剩下的天数' : ''}>{zh ? '卖出 stock' : 'Stock sold'}</th>{d.monthly.map(x => <td key={x.month}>{Math.round(x.stockOut)}</td>)}</tr>
         <tr className="end"><th>{zh ? '月底 stock' : 'Stock at month end'}</th>{d.monthly.map(x => <td key={x.month} className={x.endStock < d.target ? 'short' : ''}>{x.endStock}</td>)}</tr>
       </tbody>
     </table>
-    <table className="da-mini"><thead><tr><th>{zh ? '交付' : 'Handovers'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
-      <tbody>{([['stock', 'Stock', d.handover.avgStock], ['customer', 'Customer', d.handover.avgCustomer], ['second', zh ? '二手' : '2nd hand', d.handover.avgSecond]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table>
+    <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
+      <tbody>{([['stock', zh ? 'Stock 交付' : 'Stock handovers', d.handover.avgStock]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table>
   </article>;
 }
 
@@ -99,14 +98,14 @@ export default function DealerAnalysisView({ zh }: { zh: boolean }) {
     {dl && <>
       <div className="da-kpis">
         <div><span>{zh ? '店里 new stock / 目标合计' : 'Yard new stock / targets'}</span><strong>{sum(d => d.yard.stock)} <small>/ {sum(d => d.target)}</small></strong></div>
-        <div><span>{zh ? '在途（stock / customer）' : 'In transit (stock / customer)'}</span><strong>{sum(d => d.transit.total)} <small>{sum(d => d.transit.stock)} / {sum(d => d.transit.customer)}</small></strong></div>
-        <div><span>{zh ? `月均交付 stock / customer（近 ${dl.months} 个月）` : `Avg handovers / month`}</span><strong>{sum(d => d.handover.avgStock).toFixed(0)} <small>/ {sum(d => d.handover.avgCustomer).toFixed(0)}</small></strong></div>
+        <div><span>{zh ? '在途 stock' : 'Stock in transit'}</span><strong>{sum(d => d.transit.stock)}</strong></div>
+        <div><span>{zh ? `月均 stock 交付（近 ${dl.months} 个月）` : `Avg stock handovers / month`}</span><strong>{sum(d => d.handover.avgStock).toFixed(0)}</strong></div>
         <div><span>{zh ? '还缺 stock' : 'Stock needed'}</span><strong className={sum(d => d.need) ? 'short' : ''}>{sum(d => d.need)}</strong></div>
         <div><span>{zh ? '滚动排产线' : 'Rolling line'}</span><strong>{dl.picked} <small>/ {dl.size} · customer {dl.customers} · stock {sum(d => d.stockPicked)}</small></strong></div>
       </div>
       <DealerTable dl={dl} zh={zh} />
       <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途的车已经 PGI，按 PGI 日期 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），排满 ${dl.size} 台时最后一台 ${dl.rollingEnd} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线先排五家的 customer 订单，再补还缺的 stock。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd}.`}</p>
-      <h3 className="da-sub">{zh ? '每月预计到店和月底 stock（含在途）：月底 stock = 上月底 + 到店 stock − 卖出 stock' : 'Arrivals per month (incl. transit) and stock at month end'}</h3>
+      <h3 className="da-sub">{zh ? '每月 stock：月底 stock = 上月底 + 到店 stock（含在途）− 卖出 stock；customer 车不算库存，这页只看 stock' : 'Stock per month: month end = previous + stock in (incl. transit) − stock sold; customer vans are not stock'}</h3>
       <div className="da-cards">{dl.dealers.map(d => <DealerCard key={d.slug} d={d} zh={zh} />)}</div>
     </>}
   </section>;
