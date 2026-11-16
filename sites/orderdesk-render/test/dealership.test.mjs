@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dealerSnapshot, dealerNeeds, pickRolling, yardCategory, dayOf } from '../lib/dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, yardCategory, dayOf, isStockCustomer } from '../lib/dealership.mjs';
 import { buildProductionLine } from '../lib/production-line.mjs';
 
 const raw = {
@@ -28,6 +28,14 @@ const raw = {
     H5: { handoverAt: '2026-11-02' }, SRT8: { handoverAt: '2026-11-12' },
   },
 };
+
+test('production Stock classification uses only the case-insensitive customer-name suffix; Dealership keeps its own categories', () => {
+  for (const name of ['Stock', 'STOCK', 'StOcK', 'Frankston Stock', 'Alex / stock', 'livestock', ' stock ']) assert.equal(isStockCustomer(name), true, name);
+  for (const name of ['', null, undefined, 'Stock / Alex', 'Stockton', 'Alex Stock extra', 'Alex Stock.']) assert.equal(isStockCustomer(name), false, String(name));
+  assert.equal(yardCategory({ customer: 'Dealer Stock', wholesaleBillToName: 'Alex Smith' }), 'customer');
+  assert.equal(yardCategory({ customer: 'Alex Smith', wholesaleBillToName: 'Regent RV' }), 'stock');
+  assert.equal(yardCategory({ customer: 'Dealer Stock', vehicleType: 'Second Hand' }), 'second');
+});
 
 test('dealership snapshot follows the Dealer Portal admin page and handover dashboard', () => {
   const snap = dealerSnapshot(raw, '2026-11-16');

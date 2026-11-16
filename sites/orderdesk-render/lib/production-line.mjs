@@ -306,6 +306,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     if (group === 'au' && CRM_DONE.has(regent.label) && !au?.location) { crmDone.push(chassis); continue; }
     counts[group] = (counts[group] || 0) + 1;
     const live = chassis ? stageOf(order || {}, lt, au, p, today) : null;
+    const customer = String(order?.customer ?? b.customer ?? '');
     rows.push({
       id: b.id, chassis: b.chassis || '', empty: Boolean(b.empty), line: b.line || '', source: b.source || '', group, portalGroup: raw.group, status: b.status || '',
       regent: regent.label, regentRank: regent.rank, regentDerived: regent.derived, ltRank: progress.rank, ltField: progress.field, ltDate: progress.date,
@@ -315,7 +316,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         ...((seen.get(chassis) || []).length > 1 ? [{ code: 'duplicate', level: 'error', zh: `车架号在产线出现 ${seen.get(chassis).length} 次（${seen.get(chassis).map(x => BOARD_GROUPS.find(gr => gr.id === x)?.zh || x).join('、')}）`, en: `Chassis appears ${seen.get(chassis).length} times on the line (${seen.get(chassis).join(', ')})` }] : []),
         ...(notInPlan ? [{ code: 'notInPlan', level: 'warn', zh: `不在 Longtree 11 / 12 月排产计划里（Portal 国内计划上线 ${raw.cnPlanStart || '—'}，原在${raw.group === 'locked' ? '排产锁定线' : '滚动排产线'}）`, en: `Not in the Longtree Nov / Dec plan (Portal CN plan start ${raw.cnPlanStart || '—'}, was ${raw.group})` }] : []),
         ...issuesFor({ b, group, lt, au, sap: p, regent, today })],
-      dealer: b.dealer || '', model: b.model || '', range: b.range || '', customer: order?.customer || b.customer || '', orderId: order ? chassis : '',
+      dealer: b.dealer || '', customer, modelYear: String(order?.modelYear || b.modelYear || '').trim(), model: b.model || '', range: b.range || '', orderId: order ? chassis : '',
       production: b.production ? { status: b.production.status || '', stage: b.production.stage || '', location: b.production.location || '' } : null,
       cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: cnPlan.date, cnPlanMonth: cnPlan.date ? '' : cnPlan.month, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
       ...finishDates(b, lt, p, today),
@@ -333,7 +334,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   for (const slot of buildPlan?.rows || []) {
     counts.empty = (counts.empty || 0) + 1;
     rows.push({ id: slot.id, chassis: '', empty: true, line: 'Towable', source: 'build-plan', group: 'empty', portalGroup: 'empty', status: '', regent: '', regentRank: 99, regentDerived: false, ltRank: 0, ltField: '', ltDate: '',
-      planOrder: null, planRef: '', planWeld: '', planAssembly: '', issues: [], dealer: '', model: '', range: '', customer: '', orderId: '', production: null,
+      planOrder: null, planRef: '', planWeld: '', planAssembly: '', issues: [], dealer: '', model: '', modelYear: '', range: '', customer: '', orderId: '', production: null,
       cnActual: '', cnStart: '', cnPlanStart: '', cnPlanEnd: '', auActual: '', auStart: '', auPlanStart: '', auPlanEnd: '', cnEnd: '', cnEndActual: false, auEnd: slot.date, auEndActual: false,
       planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
       build: { month: slot.month, seq: slot.seq, day: slot.day, perDay: slot.perDay } });
@@ -498,6 +499,19 @@ async function prodReportRows(env, fetcher) {
 }
 /** Cached sources; each keeps its last good copy when a refresh fails. Portal comes from the shared copy. */
 export const SOURCE_TTL_MS = { longtree: 30 * 60 * 1000, prod: 15 * 60 * 1000 };
+// The bundled Portal board drops model year. Carry explicit years from the same cached source records;
+// never derive a model year from a chassis prefix, a production date or a slot's calendar year.
+function portalModelYears(raw) {
+  const years = new Map();
+  const list = v => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);
+  for (const records of [raw.campers, raw.schedule, raw.motorhome?.orders]) for (const r of list(records)) {
+    if (!r || typeof r !== 'object') continue;
+    const chassis = normalizeChassis(r.chassisNumber || r.Chassis || r.chassis);
+    const year = [r.modelYear, r.ModelYear, r['Model Year']].map(v => String(v ?? '').trim()).find(Boolean);
+    if (chassis && year) years.set(chassis, year);
+  }
+  return years;
+}
 export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = SOURCE_TTL_MS, portal, board = loadPortalBoard(), sap = null } = {}) {
   const calendar = loadWorkCalendar();
   const sources = {
@@ -522,9 +536,11 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     if (boardCache && boardCache.at === copy.at && boardCache.today === today) return boardCache;
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
+    const years = portalModelYears(raw);
+    const rows = built.rows.map(r => ({ ...r, modelYear: years.get(normalizeChassis(r.chassis)) || r.modelYear || '' }));
     let dealers = null, dealersError = '';
     try { dealers = raw.yard ? dealerSnapshot(raw, today, { all: true }) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
-    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, dealersError,
+    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, dealersError,
     };
     return boardCache;
   }
