@@ -519,3 +519,44 @@ body{background:#eef1f6;font-size:14px}
 .da-fc .lg i.line{height:0;border-top:2px solid #1d2433;border-radius:0}.da-fc .lg i.dash{height:0;border-top:1px dashed #f08c00;border-radius:0}
 .da-subhead{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
 .da-table tr.own td{background:#f7f9ff}.da-table tr.total td{border-top:2px solid #c9d1de;font-weight:600}
+
+/* Dealer logistics: one restrained flow, with separate destinations and local filters. */
+.dl-flow{margin-bottom:14px;border:1px solid #dce3ed;border-radius:8px;background:#fff;color:#1f3352}
+.dl-flow-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 14px;border-bottom:1px solid #e8ecf2}
+.dl-flow-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px}
+.dl-flow-title h3{font-size:14px;font-weight:650;line-height:1.4}
+.dl-flow-title>span{font-size:12px;color:#61718a}
+.dl-flow-filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.dl-flow-seg{display:flex;flex-wrap:wrap;gap:2px;padding:3px;background:#f3f5f9;border:1px solid #e3e7ee;border-radius:6px}
+.dl-flow-seg button{min-height:28px;border:0;border-radius:4px;padding:4px 10px;background:transparent;color:#61718a;font-size:12px;line-height:1.4;font-weight:550;white-space:nowrap}
+.dl-flow-seg button:hover{background:#e6ebf3;color:#1f3352}
+.dl-flow-seg button[aria-pressed="true"]{background:#1f3352;color:#fff}
+.dl-flow-scroll{overflow-x:auto;padding:30px 14px 16px;scrollbar-width:thin}
+.dl-flow-track{display:grid;grid-template-columns:minmax(160px,1.5fr) repeat(6,minmax(104px,1fr)) minmax(150px,1.35fr);gap:20px;align-items:center;min-width:1074px}
+.dl-flow-step{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:112px;min-width:0;padding:12px 10px;border:1px solid #d6dfeb;border-radius:6px;background:#fff}
+.dl-flow-intake{background:#f5f7fb;border-color:#c7d3e3}
+.dl-flow-label{font-size:12px;font-weight:600;line-height:1.5;min-height:18px}
+.dl-flow-value{display:flex;align-items:baseline;gap:5px;margin:7px 0;font-size:27px;font-weight:650;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.dl-flow-value small{font-size:11px;font-weight:400;color:#7b8799;letter-spacing:0}
+.dl-flow-note{font-size:11px;color:#61718a;line-height:1.5;min-height:17px}
+.dl-flow-breakdown{display:flex;flex-direction:column;gap:2px;font-size:11px;line-height:1.4;color:#61718a}
+.dl-flow-breakdown span{display:flex;justify-content:space-between;gap:8px}
+.dl-flow-breakdown b{font-weight:600;font-variant-numeric:tabular-nums;color:#33415a}
+.dl-flow-arrow{position:absolute;left:calc(100% + 2px);top:calc(50% - 9px);color:#9cabc0;pointer-events:none}
+.dl-flow-step[data-stage="transit"] .dl-flow-arrow{display:none}
+.dl-flow-step[data-stage="transit"]:after{content:'';position:absolute;left:100%;top:50%;width:10px;border-top:1px solid #aebbcf}
+.dl-flow-dealerships{position:relative;display:flex;flex-direction:column;gap:7px;min-width:0}
+.dl-flow-dealerships:before{content:'';position:absolute;left:-11px;top:20px;bottom:20px;border-left:1px solid #aebbcf}
+.dl-flow-destination-label{position:absolute;bottom:calc(100% + 7px);left:0;font-size:11px;color:#61718a;font-weight:600;line-height:1.4}
+.dl-flow-dealer{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;padding:8px 10px;border:1px solid #c7d3e3;border-radius:5px;background:#f5f7fb;color:#1f3352;text-align:left;font-size:12px;line-height:1.4}
+.dl-flow-dealer:before{content:'';position:absolute;right:100%;top:50%;width:10px;border-top:1px solid #aebbcf}
+.dl-flow-dealer:after{content:'';position:absolute;right:100%;top:calc(50% - 3px);border-left:4px solid #aebbcf;border-top:3px solid transparent;border-bottom:3px solid transparent}
+.dl-flow-dealer strong{font-size:18px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums}
+.dl-flow-dealer:hover{border-color:#7189b0;background:#edf2fa}
+.dl-flow-dealer[aria-pressed="true"]{border-color:#1f3352;background:#1f3352;color:#fff}
+.dl-flow-dealer.is-muted{background:#f5f5f6;color:#929baa;border-color:#e3e6eb}
+.dl-flow-dealer.is-muted:before{border-color:#dce1e8}.dl-flow-dealer.is-muted:after{border-left-color:#dce1e8}
+.dl-flow-dealer.is-muted:hover{border-color:#aebbcf;color:#61718a}
+.dl-flow-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 14px;padding:8px 14px;border-top:1px solid #e8ecf2;background:#fafbfd;border-radius:0 0 8px 8px;color:#61718a;font-size:11.5px;line-height:1.5}
+.dl-flow-footer b{color:#1f3352;font-weight:650;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.dl-flow-header{padding:10px}.dl-flow-filters{width:100%;gap:6px}.dl-flow-seg button{padding:4px 7px}.dl-flow-scroll{padding-left:10px;padding-right:10px}.dl-flow-footer{padding:8px 10px}}
