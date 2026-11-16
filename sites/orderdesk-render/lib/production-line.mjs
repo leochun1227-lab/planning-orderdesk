@@ -3,9 +3,8 @@
 //   Longtree      Feishu Bitable "车辆生产发运进度 / 生产海运总表" (China production + shipping dates)
 //   prodReport    Regent production API (AU factory location, station, flags, station history)
 //   SAP           GR / GI per chassis, pushed by an in-network computer (sap-grgi.mjs)
-// Stage rule follows the Dealer Portal (planningIntegration/vehicleStatus.ts getCurrentStatus):
-// the latest node that has a date decides; a vehicle the AU factory reports as received/in
-// production counts as in the AU factory even before the GR date reaches datetrack.
+// Vehicle SAP GR takes precedence. A displayed Shipment record without vehicle GR means shipping.
+// Otherwise retain the Portal stage rules and AU production API facts; missing GR remains flagged.
 import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
@@ -140,14 +139,14 @@ export function stageOf(order, lt = {}, au, portal = {}, today) {
 export const BOARD_GROUPS = [
   { id: 'dealership', band: 'dealer', zh: 'Dealership', en: 'Dealership', note: '五家直营店（Frankston、Geelong、Launceston、St James、Traralgon）店里的车和在途车（PGI 后 100 天内、还没进店也没交付），口径同 Dealer Portal 管理页；标签上的数字是 new stock 合计。上面是每家近三个月交付、目标库存和还缺多少 stock。' },
   { id: 'transport', band: 'execution', zh: 'Transport', en: 'Transport', note: '澳洲生产系统显示在 Transport 的车（已下线，等运去经销商、还没 GI）；放在澳洲生产之前。', phase: 'au' },
-  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR，或澳洲生产系统显示已接收 / 在生产的车，都算澳洲生产；没有 GR 的标红。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，从今天开始按 澳洲生产（QC → 生产 → 预装 → 已接收）→ 海运（Shipment ETA）→ 国内生产 → 排产锁定线（计划顺序）→ 滚动排产线依次填。', phase: 'au' },
-  { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '已发运（飞书有发运 / 离港 / 到港日期，或 Portal 已在海运 / 澳洲），SAP 还没有 GR，澳洲工厂也还没接收。', phase: 'sea' },
+  { id: 'au', band: 'execution', zh: '澳洲生产', en: 'AU production', note: 'SAP 有 GR 的算澳洲生产；没有 Shipment 记录时，澳洲生产系统显示已接收 / 在生产的也算澳洲生产。没有 GR 的标红；有 Shipment 记录且无 GR 的归海运。澳洲预计下线：按 Portal Production & dispatch 每月产量（Towable / SRM / SRV 各算各的）分到工作日历每个工作日，从今天开始按 澳洲生产（QC → 生产 → 预装 → 已接收）→ 海运（Shipment ETA）→ 国内生产 → 排产锁定线（计划顺序）→ 滚动排产线依次填。', phase: 'au' },
+  { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '有「集装箱 · 船 · ETA」（Shipment）记录但没有车辆 SAP GR 的，一律算海运，包括生产系统显示在澳洲的；其他已发运且没有 GR 的也算海运。有 GR 后归入澳洲生产 / Transport。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: 'Longtree 11 / 12 月计划里还没上线的车都在这里（已在国内生产 / 海运 / 澳洲的保持原位），按计划文件顺序；不再看 Portal 的 Schedule Confirmed。' },
-  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '五家直营店的 customer 订单先排（按排产表顺序），再补每家还缺的 stock（用它自己的 stock 订单）；暂定最多 180 台，澳洲预计下线接在排产锁定线后面。其他经销商的订单不进来。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '订单池中所有经销商的 Customer 订单全部进入（按排产表顺序，不受 180 台目标限制）；有剩余目标位置时，再补直营店还缺的 Stock。澳洲预计下线接在排产锁定线后面。' },
   { id: 'empty', band: 'preschedule', zh: 'Towable 造车计划', en: 'Towable build plan', note: '按 Portal Production & dispatch 的 Towable 月产量（总产量 − SRV − SRM），平均分到工作日历的每个工作日，每个位置一个澳洲下线日期；先不放车，以后再分配。Portal 的 SRV / SRM 空 slot 不再显示。' },
-  { id: 'customers', band: 'preschedule', zh: 'Customer 订单池', en: 'Customer pool', note: '其余所有订单：不在 11 / 12 月计划、也没进滚动排产线的（含 stock 订单和其他经销商的订单），按排产表顺序。' },
-  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '暂时为空：原来这里的订单都放到滚动排产线或 Customer 订单池。' },
+  { id: 'customers', band: 'preschedule', zh: '订单池', en: 'Order pool', note: '未进入锁定线、产线或滚动线的 Stock 订单，按排产表顺序。Customer 订单全部进入滚动排产线。客户名以 stock 结尾（忽略大小写）为 Stock，其余为 Customer。' },
+  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '暂时为空：Customer 订单进入滚动排产线，其余 Stock 留在订单池。' },
 ];
 
 // ---- Orderdesk rules on top of the Portal board ------------------------------------------------
@@ -224,9 +223,12 @@ export function datesForGroup(b, group, today, settings = {}, lt = {}, sap = {})
 }
 const SHIPPED_PORTAL = new Set(['au', 'sea']);
 const atTransport = au => String(au?.location || '').toLowerCase() === 'transport';
-export function groupFor(b, lt = {}, sap = {}, today, au = null) {
+export function groupFor(b, lt = {}, sap = {}, today, au = null, ship = null) {
   if (b.empty || !b.chassis) return b.group;
   if (sap.grAt) return atTransport(au) ? 'transport' : 'au';
+  // Match exactly the Shipment object displayed in "Container · vessel · ETA". Vehicle GR is the boundary;
+  // a production API location or a container-level GR must not override Shipment when the vehicle has no GR.
+  if (ship) return 'sea';
   // Physically in the AU factory (production API location, or a Portal production start) without a
   // GR: still AU production; issuesFor flags the missing GR.
   if ((au && AU_LOCATIONS.has(String(au.location || '').toLowerCase())) || b.auActual) return atTransport(au) ? 'transport' : 'au';
@@ -286,8 +288,8 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     if (raw.empty) continue; // Portal SRV / SRM empty slots: replaced by the Towable build plan below
     const chassis = raw.empty ? '' : normalizeChassis(raw.chassis);
     const order = chassis ? orderByChassis.get(chassis) : undefined;
-    const lt = chassis ? longtree.get(chassis) : undefined, au = chassis ? prod.get(chassis) : undefined, p = (chassis && portal.get(chassis)) || {};
-    let group = groupFor(raw, lt || {}, p, today, au), source = raw, planRow = null, notInPlan = false;
+    const lt = chassis ? longtree.get(chassis) : undefined, au = chassis ? prod.get(chassis) : undefined, p = (chassis && portal.get(chassis)) || {}, ship = (chassis && tms.get(chassis)) || null;
+    let group = groupFor(raw, lt || {}, p, today, au, ship), source = raw, planRow = null, notInPlan = false;
     if (activePlan && chassis && !EXECUTION.has(group)) {
       planRow = activePlan.byChassis.get(chassis) || null;
       if (planRow) {
@@ -325,7 +327,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         stage: live.stage, since: live.since, days: daysBetween(live.since, today),
         inLongtree: Boolean(lt), orderAt: lt?.orderAt || '', weldAt: lt?.weldAt || '', furnitureAt: lt?.furnitureAt || '', assemblyAt: lt?.assemblyAt || '', finishedAt: lt?.finishedAt || '', shippedAt: lt?.shippedAt || '',
         etd: lt?.etd || '', atd: lt?.atd || '', eta: lt?.eta || '', ata: lt?.ata || '', notes: lt?.notes || {},
-        ship: (chassis && tms.get(chassis)) || null,
+        ship,
         inSap: Boolean(chassis && portal.has(chassis)), grAt: p.grAt || '', po: p.po || '', grDoc: p.grDoc || '', giAt: p.giAt || '', giDoc: p.giDoc || '',
         inProduction: Boolean(au), location: au?.location || '', station: au?.station || '', flags: au?.flags || [], enteredAt: au?.enteredAt || '', stationSince: au?.stationSince || '', daysAtStation: au ? daysBetween(au.stationSince, today) : null, history: au?.history || [],
       },
@@ -339,20 +341,24 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
       build: { month: slot.month, seq: slot.seq, day: slot.day, perDay: slot.perDay } });
   }
-  // Dealerships + rolling line: first the AU finish of everything already on the line (to know when the rolling-line vans
-  // would reach the dealers), then pick the rolling line, move every other open order to the Customer pool, and forecast again.
-  let dealership = null, dealersAll = null;
+  // Rebuild the rolling queue after physical grouping / the locked plan. All customer orders are admitted even if
+  // the dealer snapshot is unavailable. Dealer stock top-up still depends on the snapshot and target capacity.
+  for (const r of rows) if (r.group === 'rolling') r.group = 'customers';
+  let dealership = null, dealersAll = null, shown = null, needs = [], lockedLast = today, rollingEnd = today;
   if (dealers) {
-    dealersAll = dealers; dealers = dealers.filter(d => d.own !== false); // the rolling line: our five only
-    const shown = dealers; // the Dealership tab lists the Portal's yard + transit only
-    dealers = withTransport(dealers, rows, today); // for the analysis, Transport vans count as in transit
+    dealersAll = dealers; shown = dealers.filter(d => d.own !== false); // Dealership tab: self-owned yard + transit
+    dealers = withTransport(shown, rows, today); // analysis still combines Transport and transit
     if (auCapacity) forecastAuFinish(rows, auCapacity, today);
     // The rolling line takes the Towable places after the last Towable van ahead of it; its last place is `rollingEnd`.
-    const lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
-    const rollingEnd = auCapacity ? placeAfter(auCapacity, lockedLast, rollingSize) : lockedLast;
-    const needs = dealerNeeds(dealers, rows, today, rollingEnd), pick = pickRolling(rows, needs, rollingSize);
-    pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); }); // on the rolling line by design
-    for (const r of rows) if (r.group === 'later') r.group = 'customers';
+    lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
+    const customerCount = pickRolling(rows, [], rollingSize).customers;
+    rollingEnd = auCapacity ? placeAfter(auCapacity, lockedLast, Math.max(rollingSize, customerCount)) : lockedLast;
+    needs = dealerNeeds(dealers, rows, today, rollingEnd);
+  }
+  const pick = pickRolling(rows, needs, rollingSize);
+  pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); });
+  for (const r of rows) if (r.group === 'later') r.group = 'customers';
+  if (shown) {
     const names = new Map(); for (const r of rows) if (r.dealer && !names.has(slugify(r.dealer))) names.set(slugify(r.dealer), r.dealer);
     for (const d of shown) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
     dealership = { lockedLast, rollingEnd, size: rollingSize, picked: pick.picked.length, customers: pick.customers, dispatchDays: DISPATCH_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
