@@ -4,7 +4,8 @@ import { ArrowRight } from 'lucide-react';
 type Counts = { stock: number; customer: number; total: number; stockMonths: Record<string, number>; stockUndated: number };
 type Stage = 'pool' | 'rolling' | 'locked' | 'cn' | 'sea' | 'au' | 'transport' | 'transit' | 'dealership';
 type Kind = 'total' | 'customer' | 'stock';
-export type DealerLogistics = { dealers: { slug: string; name: string; featured: boolean; stages: Record<Stage, Counts> }[] };
+type Vehicle = 'all' | 'motorised' | 'towable';
+export type DealerLogistics = { dealers: { slug: string; name: string; featured: boolean; stages: Record<Stage, Counts>; byVehicle: Record<Exclude<Vehicle, 'all'>, Record<Stage, Counts>> }[] };
 type Dealer = DealerLogistics['dealers'][number];
 const fmt = (n: number) => n.toLocaleString('en-AU');
 
@@ -45,10 +46,12 @@ const steps: { id: Exclude<Stage, 'rolling' | 'dealership'>; zh: string; en: str
 export default function DealerLogisticsFlow({ data, zh }: { data: DealerLogistics; zh: boolean }) {
   const [dealer, setDealer] = useState('all');
   const [kind, setKind] = useState<Kind>('total');
-  const selected = data.dealers.filter(d => dealer === 'all' || d.slug === dealer);
+  const [vehicle, setVehicle] = useState<Vehicle>('all');
+  const displayed = data.dealers.map(d => ({ ...d, stages: vehicle === 'all' ? d.stages : d.byVehicle[vehicle] }));
+  const selected = displayed.filter(d => dealer === 'all' || d.slug === dealer);
   const count = (stage: Stage) => selected.reduce((n, d) => n + d.stages[stage][kind], 0);
-  const featured = data.dealers.filter(d => d.featured);
-  const others = data.dealers.filter(d => !d.featured);
+  const featured = displayed.filter(d => d.featured);
+  const others = displayed.filter(d => !d.featured);
   const otherYard = aggregate(others, ['dealership']);
   const scope = dealer === 'all' ? (zh ? '所有经销商' : 'All dealers') : data.dealers.find(d => d.slug === dealer)?.name;
 
@@ -63,6 +66,10 @@ export default function DealerLogisticsFlow({ data, zh }: { data: DealerLogistic
         <div className="dl-flow-seg" role="group" aria-label={zh ? '物流订单类型筛选' : 'Logistics order type filter'}>
           {([['total', zh ? '全部' : 'All'], ['customer', 'Customer'], ['stock', 'Stock']] as const).map(([id, label]) =>
             <button type="button" key={id} aria-pressed={kind === id} onClick={() => setKind(id)}>{label}</button>)}
+        </div>
+        <div className="dl-flow-seg" role="group" aria-label={zh ? '物流车辆类型筛选' : 'Logistics vehicle type filter'}>
+          {([['all', zh ? '全部' : 'All'], ['motorised', 'Motorised'], ['towable', 'Towable']] as const).map(([id, label]) =>
+            <button type="button" key={id} aria-pressed={vehicle === id} onClick={() => setVehicle(id)}>{label}</button>)}
         </div>
       </div>
     </header>
@@ -92,6 +99,6 @@ export default function DealerLogisticsFlow({ data, zh }: { data: DealerLogistic
       </div>
     </div>
     <footer className="dl-flow-footer"><span>{zh ? '全部订单含所有经销商及未分配订单 · 新车 · 日期缺失标为待确定' : 'All dealers and unassigned orders · new vehicles · missing arrival dates shown as TBC'}</span>
-      <span aria-live="polite">{scope} · {kind === 'total' ? (zh ? '全部' : 'All') : kind === 'customer' ? 'Customer' : 'Stock'} · {zh ? '到店' : 'At dealership'} <b>{fmt(count('dealership'))}</b></span></footer>
+      <span aria-live="polite">{scope} · {vehicle === 'all' ? (zh ? '全部车型' : 'All vehicles') : vehicle === 'motorised' ? 'Motorised' : 'Towable'} · {kind === 'total' ? (zh ? '全部' : 'All') : kind === 'customer' ? 'Customer' : 'Stock'} · {zh ? '到店' : 'At dealership'} <b>{fmt(count('dealership'))}</b></span></footer>
   </section>;
 }
