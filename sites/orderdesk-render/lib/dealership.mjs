@@ -4,16 +4,28 @@
 // From these: how many stock vans each dealership still needs, and the rolling line (180) made of their customer orders
 // first, then that stock. Read-only; nothing is written to the Portal.
 
+// Days from AU finish (下线) to the van being at the dealer: 3 days to dispatch + the road / sea trip. Only used to count
+// when vans arrive at each dealer; the AU finish dates themselves are not changed. Transport vans count as finished today.
+// Traralgon: not calculated for now (paused).
+export const DISPATCH_DAYS = 3;
 export const DEALERSHIPS = [
-  { slug: 'frankston', name: 'Frankston', target: 50 },
-  { slug: 'geelong', name: 'Geelong', target: 40 },
-  { slug: 'launceston', name: 'Launceston', target: 25 },
-  { slug: 'st-james', name: 'St James', target: 60 },
-  { slug: 'traralgon', name: 'Traralgon', target: 25 },
+  { slug: 'frankston', name: 'Frankston', target: 50, travelDays: 1 },
+  { slug: 'geelong', name: 'Geelong', target: 40, travelDays: 1 },
+  { slug: 'launceston', name: 'Launceston', target: 25, travelDays: 20 },
+  { slug: 'st-james', name: 'St James', target: 60, travelDays: 20 },
+  { slug: 'traralgon', name: 'Traralgon', target: 25, travelDays: null, paused: true },
 ];
+export const leadDays = d => (d.travelDays == null ? null : DISPATCH_DAYS + d.travelDays);
+const plusDays = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+/** When a production-line van would be at its dealer: AU finish (Transport: today) + 3 + travel days. */
+export function arrivalAtDealer(r, d, today) {
+  const lead = leadDays(d);
+  if (lead == null) return '';
+  const done = r.group === 'transport' ? today : r.auEnd;
+  return done ? plusDays(done, lead) : '';
+}
 export const IDEAL_STOCK_SOURCE = 'Andrew Crank, 2026-10-27: Ideal Stock Qty per dealer';
 export const ROLLING_SIZE = 180;
-export const DELIVERY_OFFSET_DAYS = 21; // Portal "Forecast Delivery Volume": forecast production + 21 days
 export const HANDOVER_MONTHS = 3; // average over the last 3 completed months
 const TRANSIT_MAX_DAYS = 100; // Portal: a PGI older than 100 days no longer counts as in transit
 const PIPELINE_GROUPS = ['transport', 'au', 'sea', 'cn', 'locked'];
@@ -102,18 +114,24 @@ export function dealerSnapshot(raw, today) {
   });
 }
 
-/** Stock each dealership still needs when the rolling-line vans reach it (`deliveredBy`):
- *  target − (yard stock + transit stock + stock vans already on the line, Transport → locked − average stock handovers per
- *  month × months until then). */
-export function dealerNeeds(snapshot, rows, today, deliveredBy) {
-  const months = Math.max(0, (Date.parse(deliveredBy) - Date.parse(today)) / 86400000 / (365.25 / 12));
+/** Stock each dealership still needs when the rolling line's vans reach it. `rollingEnd` = AU finish of the last
+ *  rolling-line place; the dealer gets it `leadDays` later (= deliveredBy). By then:
+ *  stock = yard stock + transit stock + stock vans from Transport → locked that arrive by then (AU finish + lead)
+ *          − average stock handovers per month × months until then;  need = target − stock. */
+export function dealerNeeds(snapshot, rows, today, rollingEnd) {
   return snapshot.map(d => {
-    const mine = rows.filter(r => slugify(r.dealer) === d.slug);
+    const mine = rows.filter(r => slugify(r.dealer) === d.slug && PIPELINE_GROUPS.includes(r.group));
     const pipeline = Object.fromEntries(PIPELINE_GROUPS.map(g => [g, mine.filter(r => r.group === g && isStockCustomer(r.customer)).length]));
     const pipelineStock = Object.values(pipeline).reduce((a, b) => a + b, 0);
+    const pipelineCustomer = mine.filter(r => !isStockCustomer(r.customer) && r.customer).length;
+    const base = { slug: d.slug, lead: leadDays(d), pipeline, pipelineStock, pipelineCustomer };
+    if (d.paused) return { ...base, paused: true, deliveredBy: '', months: 0, arriving: 0, sold: 0, projected: null, need: 0 };
+    const deliveredBy = plusDays(rollingEnd, leadDays(d));
+    const months = Math.max(0, (Date.parse(deliveredBy) - Date.parse(today)) / 86400000 / (365.25 / 12));
+    const arriving = mine.filter(r => isStockCustomer(r.customer) && (a => a && a <= deliveredBy)(arrivalAtDealer(r, d, today))).length;
     const sold = Math.round(d.handover.avgStock * months);
-    const projected = d.yard.stock + d.transit.stock + pipelineStock - sold;
-    return { slug: d.slug, months: Math.round(months * 10) / 10, deliveredBy, pipeline, pipelineStock, pipelineCustomer: mine.filter(r => PIPELINE_GROUPS.includes(r.group) && !isStockCustomer(r.customer) && r.customer).length, sold, projected, need: Math.max(0, d.target - projected) };
+    const projected = d.yard.stock + d.transit.stock + arriving - sold;
+    return { ...base, deliveredBy, months: Math.round(months * 10) / 10, arriving, sold, projected, need: Math.max(0, d.target - projected) };
   });
 }
 
@@ -124,7 +142,7 @@ export function pickRolling(rows, needs, size = ROLLING_SIZE) {
   const open = rows.filter(r => (r.group === 'later' || r.group === 'customers') && !r.empty && slugs.has(slugify(r.dealer)));
   const byOrder = (a, z) => (a.orderRow ?? 1e9) - (z.orderRow ?? 1e9) || (a.forecast || '9999').localeCompare(z.forecast || '9999') || a.chassis.localeCompare(z.chassis);
   const customers = open.filter(r => r.customer && !isStockCustomer(r.customer)).sort(byOrder).map(r => ({ r, kind: 'customer' }));
-  const stock = needs.flatMap(n => open.filter(r => slugify(r.dealer) === n.slug && isStockCustomer(r.customer)).sort(byOrder).slice(0, n.need).map(r => ({ r, kind: 'stock' })))
+  const stock = needs.filter(n => !n.paused).flatMap(n => open.filter(r => slugify(r.dealer) === n.slug && isStockCustomer(r.customer)).sort(byOrder).slice(0, n.need).map(r => ({ r, kind: 'stock' })))
     .sort((a, z) => byOrder(a.r, z.r));
   const picked = [...customers, ...stock].slice(0, size);
   const stockPicked = Object.fromEntries(DEALERSHIPS.map(d => [d.slug, picked.filter(p => p.kind === 'stock' && slugify(p.r.dealer) === d.slug).length]));
@@ -134,17 +152,17 @@ export function pickRolling(rows, needs, size = ROLLING_SIZE) {
 
 /** Month by month for one dealership (this month + the next `count` − 1): vans expected to arrive (stock / customer),
  *  stock handovers at the 3-month average, and stock at the end of the month.
- *  Arrival = expected AU finish + 21 days (Transport: today + 21; transit: this month). */
+ *  Arrival = expected AU finish (Transport: today) + 3 + travel days; transit: this month. Paused dealers: none. */
 export function dealerMonthly(d, rows, today, count = 8) {
   const [y, m] = today.split('-').map(Number);
   const keys = Array.from({ length: count }, (_, i) => { const x = new Date(Date.UTC(y, m - 1 + i, 1)); return `${x.getUTCFullYear()}-${pad(x.getUTCMonth() + 1)}`; });
   const months = keys.map(month => ({ month, stockIn: 0, customerIn: 0, stockOut: 0, endStock: 0 }));
   const at = key => months.find(x => x.month === key);
-  const plus = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  if (d.paused || leadDays(d) == null) return [];
   for (const v of d.vehicles || []) if (v.where === 'transit' && v.category !== 'second') at(keys[0])[v.category === 'stock' ? 'stockIn' : 'customerIn']++;
   for (const r of rows) {
     if (slugify(r.dealer) !== d.slug || r.group === 'dealership' || r.empty) continue;
-    const day = r.group === 'transport' ? plus(today, DELIVERY_OFFSET_DAYS) : r.auEnd ? plus(r.auEnd, DELIVERY_OFFSET_DAYS) : '';
+    const day = arrivalAtDealer(r, d, today);
     const x = day && at(day.slice(0, 7)); if (!x) continue;
     if (isStockCustomer(r.customer)) x.stockIn++; else if (r.customer) x.customerIn++;
   }

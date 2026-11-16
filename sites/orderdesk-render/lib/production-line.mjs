@@ -10,7 +10,7 @@ import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, slugify, ROLLING_SIZE, DELIVERY_OFFSET_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -342,14 +342,16 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   // would reach the dealers), then pick the rolling line, move every other open order to the Customer pool, and forecast again.
   let dealership = null;
   if (dealers) {
-    const first = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
-    const lockedLast = first?.locked?.last || first?.last || today, deliveredBy = addDays(lockedLast, DELIVERY_OFFSET_DAYS);
-    const needs = dealerNeeds(dealers, rows, today, deliveredBy), pick = pickRolling(rows, needs, rollingSize);
+    if (auCapacity) forecastAuFinish(rows, auCapacity, today);
+    // The rolling line takes the Towable places after the last Towable van ahead of it; its last place is `rollingEnd`.
+    const lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
+    const rollingEnd = auCapacity ? placeAfter(auCapacity, lockedLast, rollingSize) : lockedLast;
+    const needs = dealerNeeds(dealers, rows, today, rollingEnd), pick = pickRolling(rows, needs, rollingSize);
     pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); }); // on the rolling line by design
     for (const r of rows) if (r.group === 'later') r.group = 'customers';
     const names = new Map(); for (const r of rows) if (r.dealer && !names.has(slugify(r.dealer))) names.set(slugify(r.dealer), r.dealer);
     for (const d of dealers) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
-    dealership = { deliveredBy, lockedLast, size: rollingSize, picked: pick.picked.length, customers: pick.customers, offsetDays: DELIVERY_OFFSET_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
+    dealership = { lockedLast, rollingEnd, size: rollingSize, picked: pick.picked.length, customers: pick.customers, dispatchDays: DISPATCH_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
       dealers: dealers.map((d, i) => { const { vehicles, ...rest } = d; return { ...rest, ...needs[i], monthly: [], stockPicked: pick.stockPicked[d.slug], stockAvailable: pick.stockAvailable[d.slug], customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length }; }) };
   }
   for (const id of Object.keys(counts)) counts[id] = rows.filter(r => r.group === id).length;
@@ -359,6 +361,12 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
+}
+/** The day of the n-th Towable place after `after` (the rolling line's last place if it were full). */
+function placeAfter(capacity, after, n) {
+  let left = n, last = after;
+  for (const d of [...capacity.keys()].filter(d => d > after).sort()) { const c = capacity.get(d).towable || 0; if (!c) continue; last = d; left -= c; if (left <= 0) break; }
+  return last;
 }
 /** A vehicle at (or on its way to) one of our dealerships, shaped like a production-line row. */
 function dealerRow(d, v, dealerName, today) {

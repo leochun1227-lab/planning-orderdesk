@@ -41,11 +41,19 @@ test('dealership snapshot follows the Dealer Portal admin page and handover dash
   assert.equal(dayOf('05/12/2025'), '2025-12-05');
 });
 
-test('need = target − (yard + transit + stock on the line − average stock handovers until delivery)', () => {
-  const snap = [{ slug: 'traralgon', target: 25, yard: { stock: 17 }, transit: { stock: 4 }, handover: { avgStock: 6 } }];
-  const rows = [{ dealer: 'Traralgon', group: 'sea', customer: 'Traralgon Stock' }, { dealer: 'Traralgon', group: 'later', customer: 'Traralgon Stock' }, { dealer: 'Traralgon', group: 'au', customer: 'Bob' }];
-  const [n] = dealerNeeds(snap, rows, '2026-11-16', '2027-05-16');
-  assert.equal(n.pipelineStock, 1); assert.equal(n.sold, 36); assert.equal(n.projected, 17 + 4 + 1 - 36); assert.equal(n.need, 25 - (17 + 4 + 1 - 36));
+test('need = target − (yard + transit + stock vans arriving by then (AU finish + 3 + travel days) − average stock handovers)', () => {
+  const snap = [{ slug: 'frankston', target: 50, travelDays: 1, yard: { stock: 20 }, transit: { stock: 2 }, handover: { avgStock: 10 } },
+    { slug: 'traralgon', target: 25, travelDays: null, paused: true, yard: { stock: 17 }, transit: { stock: 4 }, handover: { avgStock: 6 } }];
+  const rows = [
+    { dealer: 'Frankston', group: 'transport', customer: 'Frankston Stock' }, // finished today → there 2026-11-20
+    { dealer: 'Frankston', group: 'au', auEnd: '2027-01-10', customer: 'Frankston Stock' }, // there 2027-01-14
+    { dealer: 'Frankston', group: 'locked', auEnd: '2027-02-27', customer: 'Frankston Stock' }, // there 2027-03-03: after the date
+    { dealer: 'Frankston', group: 'later', customer: 'Frankston Stock' }, { dealer: 'Frankston', group: 'au', auEnd: '2026-12-01', customer: 'Bob' }];
+  const [f, t] = dealerNeeds(snap, rows, '2026-11-16', '2027-02-12'); // rolling ends 2027-02-12 → Frankston gets it 2027-02-16
+  assert.equal(f.deliveredBy, '2027-02-16'); assert.equal(f.lead, 4);
+  assert.equal(f.pipelineStock, 3); assert.equal(f.arriving, 2); assert.equal(f.pipelineCustomer, 1);
+  assert.equal(f.sold, 30, '10 a month × 3 months'); assert.equal(f.projected, 20 + 2 + 2 - 30); assert.equal(f.need, 50 - (20 + 2 + 2 - 30));
+  assert.equal(t.paused, true); assert.equal(t.need, 0, 'Traralgon is not calculated for now');
 });
 
 test('rolling line: the five dealerships’ customer orders first, then their stock need; others stay out', () => {
@@ -70,13 +78,13 @@ test('production line: Dealership group first, rolling after locked, every other
   assert.equal(out.dealership.dealers.find(d => d.slug === 'frankston').customerPicked, 1);
 });
 
-test('month by month: arrivals at AU finish + 21 days, stock handovers at the average, stock at month end', async () => {
+test('month by month: arrivals at AU finish + 3 + travel days (12-29 + 4 → January), stock handovers at the average, stock at month end', async () => {
   const { dealerMonthly } = await import('../lib/dealership.mjs');
-  const d = { slug: 'traralgon', yard: { stock: 10 }, handover: { avgStock: 3 }, vehicles: [{ where: 'transit', category: 'stock' }, { where: 'transit', category: 'customer' }] };
-  const rows = [{ dealer: 'Traralgon', group: 'au', auEnd: '2026-11-20', customer: 'Traralgon Stock' }, { dealer: 'Traralgon', group: 'sea', auEnd: '2026-12-25', customer: 'Bob' }, { dealer: 'Geelong', group: 'au', auEnd: '2026-11-20', customer: 'Geelong Stock' }];
+  const d = { slug: 'geelong', travelDays: 1, yard: { stock: 10 }, handover: { avgStock: 3 }, vehicles: [{ where: 'transit', category: 'stock' }, { where: 'transit', category: 'customer' }] };
+  const rows = [{ dealer: 'Geelong', group: 'au', auEnd: '2026-11-20', customer: 'Geelong Stock' }, { dealer: 'Geelong', group: 'sea', auEnd: '2026-12-29', customer: 'Bob' }, { dealer: 'Frankston', group: 'au', auEnd: '2026-11-20', customer: 'Frankston Stock' }];
   const m = dealerMonthly(d, rows, '2026-11-16', 3);
   assert.deepEqual(m.map(x => x.month), ['2026-11', '2026-12', '2027-01']);
-  assert.deepEqual(m.map(x => [x.stockIn, x.customerIn]), [[1, 1], [1, 0], [0, 1]]);
+  assert.deepEqual(m.map(x => [x.stockIn, x.customerIn]), [[2, 1], [0, 0], [0, 1]]);
   assert.equal(m[0].stockOut, 1.5, 'this month: only the days left (15 of 30)');
-  assert.deepEqual(m.map(x => x.endStock), [10 + 1 - 1.5, 10 + 1 - 1.5 + 1 - 3, 10 + 1 - 1.5 + 1 - 3 - 3].map(Math.round));
+  assert.deepEqual(m.map(x => x.endStock), [11, 8, 5], '10 + 2 − 1.5 = 10.5; − 3 = 7.5; − 3 = 4.5');
 });

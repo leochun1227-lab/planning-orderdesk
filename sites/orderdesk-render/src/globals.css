@@ -499,3 +499,6 @@ body{background:#eef1f6;font-size:14px}
 .da-mini th,.da-mini td{text-align:right;padding:2px 4px;border-bottom:1px solid #f1f3f5;font-variant-numeric:tabular-nums}.da-mini th:first-child,.da-mini td:first-child{text-align:left}
 .da-mini th{color:#61718a;font-weight:600}
 @media (max-width:1200px){.da-kpis{grid-template-columns:repeat(2,1fr)}}
+.da-table tr.paused td{color:#9aa5b5}.da-table td.paused-note{text-align:center;font-style:italic}
+.da-card header b.paused{background:#f1f3f5;color:#7b8799}
+.da-card header b{white-space:nowrap;flex:none}.da-table th,.da-table td{padding:6px 7px}.da-table th{white-space:normal;line-height:1.25;vertical-align:bottom}
