@@ -3,7 +3,7 @@ import { normalizeChassis } from './order-engine.mjs';
 
 // These are quick filters, not the scope of Total: every dealer (including unassigned orders) is counted.
 const FEATURED = ['frankston', 'geelong', 'launceston', 'st-james'];
-const STAGES = ['pool', 'rolling', 'locked', 'cn', 'sea', 'au', 'transport', 'transit', 'dealership'];
+const STAGES = ['processing', 'pool', 'rolling', 'locked', 'cn', 'sea', 'au', 'transport', 'transit', 'dealership'];
 const PRIORITY = Object.fromEntries(STAGES.map((s, i) => [s, i]));
 const emptyStages = () => Object.fromEntries(STAGES.map(s => [s, { stock: 0, customer: 0, total: 0, stockMonths: {}, stockUndated: 0 }]));
 const dealerSlug = value => {
@@ -45,7 +45,7 @@ export function buildDealerLogistics(rows = [], { dealers: snapshot = [], today 
     let arrival = '';
     if (stage === 'dealership') arrival = site?.since || ''; // actual yard receipt month
     else if (stage === 'transit') arrival = site?.arrive || (today ? transitArrival(site?.since, d, today) : '');
-    else if (stage !== 'pool' && today && r.auForecast?.note !== 'overflow') arrival = arrivalAtDealer({ ...r, group: stage }, d, today);
+    else if (!['pool', 'processing'].includes(stage) && today && r.auForecast?.note !== 'overflow') arrival = arrivalAtDealer({ ...r, group: stage }, d, today);
     const day = dayOf(arrival), month = /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(day) ? day.slice(0, 7) : '';
     const previous = vehicles.get(chassis);
     if (!previous || PRIORITY[stage] > PRIORITY[previous.stage]) vehicles.set(chassis, { slug, stage, category, month, vehicle });

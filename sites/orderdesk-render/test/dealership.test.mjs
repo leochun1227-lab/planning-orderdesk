@@ -66,7 +66,7 @@ test('need = target − (yard + transit + stock vans arriving by then (AU finish
 });
 
 test('rolling line: all dealers’ customer orders first without a cutoff, then self-owned stock needs', () => {
-  const r = (chassis, dealer, customer, orderRow) => ({ chassis, dealer, customer, orderRow, group: 'later', forecast: '' });
+  const r = (chassis, dealer, customer, orderRow) => ({ chassis, dealer, customer, orderRow, group: 'later', signedAt: '2026-10-01', forecast: '' });
   const rows = [r('S1', 'Traralgon', 'Traralgon Stock', 5), r('C2', 'Frankston', 'Bob', 9), r('C1', 'ST James', 'Ann', 7), r('X1', 'Wangaratta', 'Zed', 1), r('S2', 'Traralgon', 'Traralgon Stock', 6), r('S3', 'Geelong', 'Geelong Stock', 2)];
   const out = pickRolling(rows, [{ slug: 'traralgon', need: 1 }, { slug: 'geelong', need: 0 }], 180);
   assert.deepEqual(out.picked.map(p => p.r.chassis), ['X1', 'C1', 'C2', 'S1']);
@@ -74,7 +74,7 @@ test('rolling line: all dealers’ customer orders first without a cutoff, then 
 });
 
 test('production line: Dealership group first and customer orders from every dealer enter rolling', () => {
-  const row = (id, group, extra = {}) => ({ id, chassis: id, group, cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', locked: false, warnings: [], ...extra });
+  const row = (id, group, extra = {}) => ({ id, chassis: id, group, signedAt: '2026-10-01', cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', locked: false, warnings: [], ...extra });
   const board = { rows: [row('L1', 'later', { dealer: 'Frankston', customer: 'Bob' }), row('L2', 'later', { dealer: 'Wangaratta', customer: 'Zed' }), row('A1', 'au', { dealer: 'Geelong' })], completed: 0, averages: {} };
   const dealers = dealerSnapshot(raw, '2026-11-16');
   const cap = new Map([['2026-11-17', { towable: 1, srm: 0, srv: 0 }], ['2026-11-18', { towable: 1, srm: 0, srv: 0 }]]);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 
 type Counts = { stock: number; customer: number; total: number; stockMonths: Record<string, number>; stockUndated: number };
-type Stage = 'pool' | 'rolling' | 'locked' | 'cn' | 'sea' | 'au' | 'transport' | 'transit' | 'dealership';
+type Stage = 'processing' | 'pool' | 'rolling' | 'locked' | 'cn' | 'sea' | 'au' | 'transport' | 'transit' | 'dealership';
 type Kind = 'total' | 'customer' | 'stock';
 type Vehicle = 'all' | 'motorised' | 'towable';
 export type DealerLogistics = { dealers: { slug: string; name: string; featured: boolean; stages: Record<Stage, Counts>; byVehicle: Record<Exclude<Vehicle, 'all'>, Record<Stage, Counts>> }[] };
@@ -33,8 +33,8 @@ function StockArrivals({ counts, zh, customerOnly }: { counts: Counts; zh: boole
   </div>;
 }
 
-const steps: { id: Exclude<Stage, 'rolling' | 'dealership'>; zh: string; en: string; noteZh: string; noteEn: string }[] = [
-  { id: 'pool', zh: '订单池 + 滚动排产线', en: 'Order pool + rolling', noteZh: '', noteEn: '' },
+const steps: { id: Exclude<Stage, 'processing' | 'rolling' | 'dealership'>; zh: string; en: string; noteZh: string; noteEn: string }[] = [
+  { id: 'pool', zh: '库存订单池 + 滚动排产线', en: 'Stock pool + rolling', noteZh: '', noteEn: '' },
   { id: 'locked', zh: '排产锁定线', en: 'Locked schedule', noteZh: '已锁定 · 待上线', noteEn: 'Locked · not started' },
   { id: 'cn', zh: '国内生产', en: 'China production', noteZh: 'Longtree', noteEn: 'Longtree' },
   { id: 'sea', zh: '海运', en: 'Sea freight', noteZh: '中国 → 澳洲', noteEn: 'China → Australia' },
@@ -79,7 +79,7 @@ export default function DealerLogisticsFlow({ data, zh }: { data: DealerLogistic
           <div className="dl-flow-step">
             <span className="dl-flow-label">{zh ? step.zh : step.en}</span>
             <strong className="dl-flow-value">{fmt(count(step.id) + (step.id === 'pool' ? count('rolling') : 0))}<small>{zh ? '台' : 'vans'}</small></strong>
-            {step.id === 'pool' ? <div className="dl-flow-breakdown"><span>{zh ? '订单池' : 'Pool'} <b>{fmt(count('pool'))}</b></span><span>{zh ? '滚动排产' : 'Rolling'} <b>{fmt(count('rolling'))}</b></span></div>
+            {step.id === 'pool' ? <div className="dl-flow-breakdown"><span>{zh ? '库存订单池' : 'Stock pool'} <b>{fmt(count('pool'))}</b></span><span>{zh ? '滚动排产' : 'Rolling'} <b>{fmt(count('rolling'))}</b></span></div>
               : <span className="dl-flow-note">{zh ? step.noteZh : step.noteEn}</span>}
             <ArrowRight className="dl-flow-arrow" size={18} aria-hidden="true" />
           </div>
@@ -99,6 +99,6 @@ export default function DealerLogisticsFlow({ data, zh }: { data: DealerLogistic
       </div>
     </div>
     <footer className="dl-flow-footer"><span>{zh ? '全部订单含所有经销商及未分配订单 · 新车 · 日期缺失标为待确定' : 'All dealers and unassigned orders · new vehicles · missing arrival dates shown as TBC'}</span>
-      <span aria-live="polite">{scope} · {vehicle === 'all' ? (zh ? '全部车型' : 'All vehicles') : vehicle === 'motorised' ? 'Motorised' : 'Towable'} · {kind === 'total' ? (zh ? '全部' : 'All') : kind === 'customer' ? 'Customer' : 'Stock'} · {zh ? '到店' : 'At dealership'} <b>{fmt(count('dealership'))}</b></span></footer>
+      <span aria-live="polite">{scope} · {vehicle === 'all' ? (zh ? '全部车型' : 'All vehicles') : vehicle === 'motorised' ? 'Motorised' : 'Towable'} · {kind === 'total' ? (zh ? '全部' : 'All') : kind === 'customer' ? 'Customer' : 'Stock'} · {zh ? '处理中订单' : 'Orders in progress'} <b>{fmt(count('processing'))}</b> · {zh ? '到店' : 'At dealership'} <b>{fmt(count('dealership'))}</b></span></footer>
   </section>;
 }
