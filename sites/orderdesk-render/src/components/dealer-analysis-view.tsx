@@ -2,14 +2,16 @@
 // vans each still needs, and the rolling line built from it. Data: /api/dealer-analysis (read-only). The server re-reads
 // the Dealer Portal every 2 hours on its own; this page re-asks the server every 30 minutes while it is open.
 import { useEffect, useState } from 'react';
-import { RefreshCw, AlertTriangle, Store } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Store, ArrowDownToLine } from 'lucide-react';
 
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
 type MonthRow = { month: string; stockIn: number; customerIn: number; stockOut: number; endStock: number };
 export type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   travelDays: number | null; lead: number | null; paused?: boolean; arriving: number; transitArriving: number; sold: number; projected: number | null; need: number; stockPicked: number; stockAvailable: number; customerPicked: number; monthly: MonthRow[] };
-export type Dealership = { lockedLast: string; rollingEnd: string; size: number; picked: number; customers: number; dispatchDays: number; months: number; targetSource: string; dealers: DealerSummary[] };
+export type DealerNow = { slug: string; name: string; own: boolean; target: number | null; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; total: number; pgiStock?: number; transportStock?: number };
+  handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number }; line: Record<string, number>; lineStock: number; lineCustomer: number; inSight: number; ordersOpen: { stock: number; customer: number }; monthsCover: number | null; yardVsTarget: number | null };
+export type Dealership = { lockedLast: string; rollingEnd: string; size: number; picked: number; customers: number; dispatchDays: number; months: number; targetSource: string; dealers: DealerSummary[]; all?: DealerNow[] };
 type Payload = { today: string; dealership: Dealership | null; sources: Record<string, { at: string; error: string; count: number } | undefined>; refreshing?: boolean; error?: string };
 
 const POLL_MS = 30 * 60 * 1000;
@@ -72,6 +74,60 @@ function DealerCard({ d, zh }: { d: DealerSummary; zh: boolean }) {
   </article>;
 }
 
+/** Every dealer now (stock only): yard, transit (incl. Transport), stock orders on the line, handovers, months of cover. */
+function AllDealers({ list, zh, today }: { list: DealerNow[]; zh: boolean; today: string }) {
+  const m = list[0]?.handover.months.map(x => x.month.slice(5)) || [];
+  const total = (f: (d: DealerNow) => number) => list.reduce((n, d) => n + f(d), 0);
+  async function exportExcel() {
+    const ExcelJS = await import('exceljs');
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(zh ? '全部经销商' : 'All dealers');
+    const head = [zh ? 'Dealer' : 'Dealer', zh ? '直营' : 'Own', zh ? '目标库存' : 'Target', zh ? '店里 new stock' : 'Yard new stock', zh ? '店里 vs 目标' : 'Yard vs target', zh ? '在途 stock（PGI + Transport）' : 'Transit stock',
+      zh ? '澳洲生产 stock' : 'AU production', zh ? '海运 stock' : 'Shipping', zh ? '国内生产 stock' : 'China production', zh ? '锁定线 stock' : 'Locked', zh ? '线上 stock 合计' : 'Stock on the line',
+      zh ? '看得见的 stock（店里 + 在途 + 线上）' : 'Stock in sight', ...m.map(x => `${zh ? 'stock 交付 ' : 'Stock handovers '}${x}${zh ? '月' : ''}`), zh ? '本月 stock 交付' : 'Stock handovers MTD', zh ? '月均 stock 交付' : 'Avg stock handovers / month', zh ? '够卖几个月' : 'Months of cover',
+      zh ? '月均 customer 交付' : 'Avg customer handovers / month', zh ? '线上 customer 车' : 'Customer vans on the line', zh ? '未排产 stock 订单' : 'Unscheduled stock orders', zh ? '未排产 customer 订单' : 'Unscheduled customer orders'];
+    ws.addRow([zh ? `全部经销商 · stock 现状（${today}，Dealer Portal + Orderdesk 产线）` : `All dealers · stock now (${today})`]); ws.getRow(1).font = { bold: true, size: 13 };
+    ws.addRow([]); ws.addRow(head); ws.getRow(3).font = { bold: true, color: { argb: 'FFFFFFFF' } }; ws.getRow(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3352' } }; ws.getRow(3).alignment = { wrapText: true, vertical: 'middle' };
+    list.forEach(d => ws.addRow([d.name, d.own ? (zh ? '是' : 'Yes') : '', d.target ?? '', d.yard.stock, d.yardVsTarget ?? '', d.transit.stock, d.line.au || 0, d.line.sea || 0, d.line.cn || 0, d.line.locked || 0, d.lineStock, d.inSight,
+      ...d.handover.months.map(x => x.stock), d.handover.thisMonth.stock, d.handover.avgStock, d.monthsCover ?? '', d.handover.avgCustomer, d.lineCustomer, d.ordersOpen.stock, d.ordersOpen.customer]));
+    const first = 4, last = 3 + list.length, cols = head.length;
+    const sumRow = ws.addRow([zh ? '合计' : 'Total', '', ...Array.from({ length: cols - 2 }, (_, i) => { const col = ws.getColumn(i + 3).letter; return { formula: `SUM(${col}${first}:${col}${last})` }; })]);
+    const avgCol = 12 + m.length + 2, coverCol = avgCol + 1, sightCol = 12; // Dealer, Own, Target, Yard, vs, Transit, AU, Sea, CN, Locked, Line, Sight, months…, MTD, Avg, Cover
+    sumRow.getCell(coverCol).value = { formula: `IF(${ws.getColumn(avgCol).letter}${last + 1}>0,ROUND(${ws.getColumn(sightCol).letter}${last + 1}/${ws.getColumn(avgCol).letter}${last + 1},1),"")` };
+    sumRow.font = { bold: true };
+    ws.addRow([]);
+    [zh ? '说明' : 'Notes',
+      zh ? '店里 new stock：Dealer Portal 管理页的数（直营店看开票对象 Regent / Snowy River / United；其他经销商看客户名 / 类型）。' : 'Yard new stock: as the Dealer Portal admin page.',
+      zh ? '在途 stock：已 PGI、100 天内、还没进店也没交付的 stock 车 + 在 Transport 的 stock 车。' : 'Transit: PGI within 100 days not in a yard or handed over, plus Transport.',
+      zh ? '线上 stock：Orderdesk 产线里澳洲生产、海运、国内生产、排产锁定线中客户名以 Stock 结尾的订单。' : 'Stock on the line: orders whose customer ends with Stock, AU production → locked.',
+      zh ? `stock 交付：Dealer Portal handover，按排产表客户名分 stock / customer（同 YTD Handover），月均取 ${m.join('、')} 月。` : 'Stock handovers: Dealer Portal handovers, average of the last 3 full months.',
+      zh ? '够卖几个月 = 看得见的 stock ÷ 月均 stock 交付。目标库存：Andrew Crank 2026-10-27 邮件。' : 'Months of cover = stock in sight ÷ average stock handovers. Targets: Andrew Crank, 2026-10-27.'].forEach((t, i) => { const r = ws.addRow([t]); if (!i) r.font = { bold: true }; });
+    ws.columns.forEach((c, i) => { c.width = i === 0 ? 24 : 12; });
+    ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 3 }];
+    ws.eachRow(r => r.eachCell(c => { c.font = { name: 'Arial', size: 10, ...(c.font || {}) }; }));
+    const buf = await wb.xlsx.writeBuffer(), a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = `Dealer-stock-${today}.xlsx`; a.click(); URL.revokeObjectURL(a.href);
+  }
+  return <>
+    <div className="da-subhead"><h3 className="da-sub">{zh ? `全部经销商 · 现在（只看 stock，${list.length} 家）` : `All dealers · now (stock only, ${list.length})`}</h3>
+      <button className="pl-export" onClick={() => void exportExcel()}><ArrowDownToLine size={13} />{zh ? '导出 Excel' : 'Export Excel'}</button></div>
+    <div className="da-table"><table>
+      <thead><tr><th>Dealer</th><th>{zh ? '目标库存' : 'Target'}</th><th>{zh ? '店里 new stock' : 'Yard new stock'}</th><th>{zh ? '店里 vs 目标' : 'vs target'}</th><th title={zh ? '已 PGI 在路上的 + 在 Transport 的' : ''}>{zh ? '在途 stock' : 'Transit stock'}</th>
+        <th title={zh ? '澳洲生产 / 海运 / 国内生产 / 排产锁定线' : ''}>{zh ? '线上 stock（澳洲 / 海运 / 国内 / 锁定）' : 'Stock on the line (AU / sea / CN / locked)'}</th><th>{zh ? '看得见的 stock' : 'Stock in sight'}</th>
+        <th>{zh ? `stock 交付（${m.join(' / ')} 月）` : `Stock handovers (${m.join(' / ')})`}</th><th>{zh ? '月均 stock 交付' : 'Avg / month'}</th><th title={zh ? '看得见的 stock ÷ 月均 stock 交付' : ''}>{zh ? '够卖几个月' : 'Months of cover'}</th><th>{zh ? '未排产 stock / customer 订单' : 'Unscheduled stock / customer orders'}</th></tr></thead>
+      <tbody>{list.map(d => <tr key={d.slug} className={d.own ? 'own' : ''}>
+        <td><b>{d.name}</b>{d.own ? <small> · {zh ? '直营' : 'own'}</small> : null}</td><td>{d.target ?? '—'}</td><td><b>{d.yard.stock}</b></td>
+        <td className={d.yardVsTarget == null ? '' : d.yardVsTarget >= 0 ? 'over' : 'short'}>{d.yardVsTarget == null ? '—' : `${d.yardVsTarget > 0 ? '+' : ''}${d.yardVsTarget}`}</td>
+        <td title={zh ? `已 PGI ${d.transit.pgiStock ?? 0} + Transport ${d.transit.transportStock ?? 0}` : ''}>{d.transit.stock}</td>
+        <td>{d.lineStock}<small> · {d.line.au || 0} / {d.line.sea || 0} / {d.line.cn || 0} / {d.line.locked || 0}</small></td><td><b>{d.inSight}</b></td>
+        <td>{d.handover.months.map(x => x.stock).join(' / ')}<small> · {zh ? '本月' : 'MTD'} {d.handover.thisMonth.stock}</small></td><td>{d.handover.avgStock}</td>
+        <td className={d.monthsCover != null && d.monthsCover > 6 ? 'over' : d.monthsCover != null && d.monthsCover < 2 ? 'short' : ''}>{d.monthsCover ?? '—'}</td><td>{d.ordersOpen.stock} / {d.ordersOpen.customer}</td>
+      </tr>)}
+        <tr className="total"><td><b>{zh ? '合计' : 'Total'}</b></td><td>{total(d => d.target || 0)}</td><td><b>{total(d => d.yard.stock)}</b></td><td></td><td>{total(d => d.transit.stock)}</td><td>{total(d => d.lineStock)}</td><td><b>{total(d => d.inSight)}</b></td><td></td><td>{total(d => d.handover.avgStock).toFixed(1)}</td><td>{(total(d => d.inSight) / Math.max(1, total(d => d.handover.avgStock))).toFixed(1)}</td><td>{total(d => d.ordersOpen.stock)} / {total(d => d.ordersOpen.customer)}</td></tr>
+      </tbody></table></div>
+    <p className="da-note">{zh ? '店里 new stock 用 Dealer Portal 管理页的数；在途 = 已 PGI 在路上的 + Transport；线上 stock = 产线里客户名以 Stock 结尾的订单；够卖几个月 = 看得见的 stock ÷ 近三个月月均 stock 交付（绿 > 6 个月，红 < 2 个月）。目标库存只有 Andrew 邮件里列了的经销商有。' : ''}</p>
+  </>;
+}
+
 export default function DealerAnalysisView({ zh }: { zh: boolean }) {
   const [data, setData] = useState<Payload | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   async function load(refresh = false) {
@@ -107,6 +163,7 @@ export default function DealerAnalysisView({ zh }: { zh: boolean }) {
       <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途 = 已 PGI 在路上的 + 在 Transport 的：已 PGI 的按 PGI 日期 + 路上天数，Transport 的按今天 + 3 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），排满 ${dl.size} 台时最后一台 ${dl.rollingEnd} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线先排五家的 customer 订单，再补还缺的 stock。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd}.`}</p>
       <h3 className="da-sub">{zh ? '每月 stock：月底 stock = 上月底 + 到店 stock（含在途）− 卖出 stock；customer 车不算库存，这页只看 stock' : 'Stock per month: month end = previous + stock in (incl. transit) − stock sold; customer vans are not stock'}</h3>
       <div className="da-cards">{dl.dealers.map(d => <DealerCard key={d.slug} d={d} zh={zh} />)}</div>
+      {dl.all?.length ? <AllDealers list={dl.all} zh={zh} today={data?.today || ''} /> : null}
     </>}
   </section>;
 }

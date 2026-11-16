@@ -10,7 +10,7 @@ import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -340,8 +340,9 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   }
   // Dealerships + rolling line: first the AU finish of everything already on the line (to know when the rolling-line vans
   // would reach the dealers), then pick the rolling line, move every other open order to the Customer pool, and forecast again.
-  let dealership = null;
+  let dealership = null, dealersAll = null;
   if (dealers) {
+    dealersAll = dealers; dealers = dealers.filter(d => d.own !== false); // the rolling line: our five only
     const shown = dealers; // the Dealership tab lists the Portal's yard + transit only
     dealers = withTransport(dealers, rows, today); // for the analysis, Transport vans count as in transit
     if (auCapacity) forecastAuFinish(rows, auCapacity, today);
@@ -359,7 +360,10 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   for (const id of Object.keys(counts)) counts[id] = rows.filter(r => r.group === id).length;
   if (dealership) counts.dealership = dealership.dealers.reduce((n, d) => n + d.yard.stock, 0);
   const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
-  if (dealership) dealership.dealers.forEach((x, i) => { x.monthly = dealerMonthly(dealers[i], rows, today); });
+  if (dealership) {
+    dealership.dealers.forEach((x, i) => { x.monthly = dealerMonthly(dealers[i], rows, today); });
+    dealership.all = dealerOverview(dealersAll, rows, today);
+  }
   return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
@@ -519,7 +523,7 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
     let dealers = null, dealersError = '';
-    try { dealers = raw.yard ? dealerSnapshot(raw, today) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
+    try { dealers = raw.yard ? dealerSnapshot(raw, today, { all: true }) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
     boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(built.rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, dealersError,
     };
     return boardCache;

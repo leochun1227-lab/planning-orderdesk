@@ -517,3 +517,5 @@ body{background:#eef1f6;font-size:14px}
 .da-fc .lg{display:flex;align-items:center;gap:4px;font-weight:400;color:#61718a;font-size:10.5px;line-height:1.5}
 .da-fc .lg i{display:inline-block;width:9px;height:9px;border-radius:2px}.da-fc .lg i.stock{background:#3b6fe0}.da-fc .lg i.cust{background:#22a36a}
 .da-fc .lg i.line{height:0;border-top:2px solid #1d2433;border-radius:0}.da-fc .lg i.dash{height:0;border-top:1px dashed #f08c00;border-radius:0}
+.da-subhead{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
+.da-table tr.own td{background:#f7f9ff}.da-table tr.total td{border-top:2px solid #c9d1de;font-weight:600}

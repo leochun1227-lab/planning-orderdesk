@@ -32,6 +32,9 @@ export function arrivalAtDealer(r, d, today) {
   return done ? plusDays(done, lead) : '';
 }
 export const IDEAL_STOCK_SOURCE = 'Andrew Crank, 2026-10-27: Ideal Stock Qty per dealer';
+// Ideal stock per dealer from the same email (Vanari (S) / (N) and Sydney have no active dealer in the Portal).
+export const IDEAL_STOCK = { abco: 15, bundaberg: 40, 'destiny-rv': 35, 'forest-glen': 70, frankston: 50, geelong: 40, heatherbrae: 40, launceston: 25, 'slacks-creek': 40, 'st-james': 60, toowoomba: 35, townsville: 30, traralgon: 25, wangaratta: 25 };
+const SELF_OWNED = new Set(DEALERSHIPS.map(d => d.slug));
 export const ROLLING_SIZE = 180;
 export const HANDOVER_MONTHS = 3; // average over the last 3 completed months
 const TRANSIT_MAX_DAYS = 100; // Portal: a PGI older than 100 days no longer counts as in transit
@@ -40,7 +43,7 @@ const PIPELINE_GROUPS = ['au', 'sea', 'cn', 'locked'];
 
 /** Extra Portal nodes (2-hourly with the Portal copy): all yards (a van in any yard is not in transit), the delivery-to
  *  overrides, and the handovers of the five dealerships only. pgirecord and schedule are already in the copy. */
-export const PORTAL_DEALER_SOURCES = [['yard', 'yardstock'], ['deliveryTo', 'deliveryToAssignments'], ...DEALERSHIPS.map(d => [`handover_${d.slug}`, `handover/${d.slug}`])];
+export const PORTAL_DEALER_SOURCES = [['yard', 'yardstock'], ['deliveryTo', 'deliveryToAssignments'], ['handover', 'handover'], ['dealerConfigs', 'dealerConfigs']];
 
 export const slugify = v => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const norm = v => String(v ?? '').replace(/[-\s]/g, '').toUpperCase();
@@ -81,8 +84,17 @@ const secondHandHandover = r => {
 const listOf = v => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);
 const monthsBefore = (today, n) => { const [y, m] = today.split('-').map(Number); return Array.from({ length: n }, (_, i) => { const d = new Date(Date.UTC(y, m - 1 - n + i, 1)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`; }); };
 
-/** The five dealerships as the Dealer Portal shows them today. */
-export function dealerSnapshot(raw, today) {
+/** Every active dealer in the Portal (not groups), our five first; without dealerConfigs, just our five. */
+export function dealerList(raw) {
+  const own = DEALERSHIPS.map(d => ({ ...d, own: true }));
+  const configs = Object.entries(raw?.dealerConfigs || {}).filter(([, c]) => c && c.isGroup !== true && c.isActive !== false);
+  const others = configs.map(([slug, c]) => ({ slug: slugify(slug), name: String(c.name || slug), target: IDEAL_STOCK[slugify(slug)] ?? null, travelDays: null, own: false }))
+    .filter(d => !SELF_OWNED.has(d.slug)).sort((a, z) => a.name.localeCompare(z.name));
+  return [...own, ...others];
+}
+
+/** Our dealers (or every dealer with all = true) as the Dealer Portal shows them today. */
+export function dealerSnapshot(raw, today, { all = false } = {}) {
   const yards = raw?.yard || {}, pgi = raw?.pgi || {}, assignments = raw?.deliveryTo || {};
   const customerType = new Map(); // Orderlist customer name: "... Stock" = stock, else customer (handover classification)
   for (const r of listOf(raw?.schedule)) { const c = norm(r?.Chassis), cu = String(r?.Customer ?? '').trim(); if (c && cu) customerType.set(c, isStockCustomer(cu) ? 'stock' : 'customer'); }
@@ -95,14 +107,17 @@ export function dealerSnapshot(raw, today) {
     return slugify(a.deliveryTo) || (own === 'green-show' ? 'forest-glen' : own);
   };
   const months = monthsBefore(today, HANDOVER_MONTHS), thisMonth = today.slice(0, 7);
-  return DEALERSHIPS.map(d => {
+  const transitBy = new Map(); // effective dealer → active PGI records
+  for (const [c, r] of Object.entries(pgi)) { if (!r || r.history) continue; const chassis = c.trim().toUpperCase(); if (!chassis) continue; const slug = effectiveDealer(chassis, r); transitBy.set(slug, [...(transitBy.get(slug) || []), [c, r]]); }
+  return (all ? dealerList(raw) : DEALERSHIPS.map(d => ({ ...d, own: true }))).map(d => {
+    const useBillTo = SELF_OWNED.has(d.slug); // Admin.tsx: self-owned / price-enabled dealers go by the bill-to name
     const yardRows = Object.entries(yards[d.slug] || {}).filter(([c, r]) => c !== 'dealer-chassis' && r && !r.history)
-      .map(([c, r]) => { const since = dayOf(r.receivedAt ?? r.createdAt ?? r.movementDate); return { chassis: String(r.chassis || r.Chassis || c).trim(), where: 'yard', category: yardCategory(r), model: String(r.model || ''), customer: String(r.customer || ''), since, days: daysBetween(since, today) }; });
-    const handovers = Object.entries(raw?.[`handover_${d.slug}`] || {}).map(([c, r]) => ({ chassis: c, ...(r || {}) }));
+      .map(([c, r]) => { const since = dayOf(r.receivedAt ?? r.createdAt ?? r.movementDate); return { chassis: String(r.chassis || r.Chassis || c).trim(), where: 'yard', category: yardCategory(r, useBillTo), model: String(r.model || ''), customer: String(r.customer || ''), since, days: daysBetween(since, today) }; });
+    const handovers = Object.entries(raw?.handover?.[d.slug] || raw?.[`handover_${d.slug}`] || {}).map(([c, r]) => ({ chassis: c, ...(r || {}) }));
     const handedOver = new Set(handovers.map(h => h.chassis.trim().toUpperCase()));
-    const transit = Object.entries(pgi).filter(([, r]) => r && !r.history).flatMap(([c, r]) => {
+    const transit = (transitBy.get(d.slug) || []).flatMap(([c, r]) => {
       const chassis = c.trim().toUpperCase(), day = dayOf(r.pgidate), days = daysBetween(day, today) ?? 0;
-      if (!chassis || effectiveDealer(chassis, r) !== d.slug || days > TRANSIT_MAX_DAYS || inAnyYard.has(chassis) || handedOver.has(chassis)) return [];
+      if (days > TRANSIT_MAX_DAYS || inAnyYard.has(chassis) || handedOver.has(chassis)) return [];
       return [{ chassis: c.trim(), where: 'transit', category: yardCategory(r, Boolean(String(r.wholesaleBillToName ?? r.WholesaleBillToName ?? '').trim())), model: String(r.model || r.materialCode || ''), customer: String(r.customer || ''), since: day, days, arrive: transitArrival(day, d, today) }];
     });
     const monthly = new Map();
@@ -193,4 +208,21 @@ export function dealerMonthly(d, rows, today, count = 8) {
   let stock = d.yard.stock;
   months.forEach((x, i) => { x.stockOut = Math.round(d.handover.avgStock * (i ? 1 : left) * 10) / 10; stock += x.stockIn - x.stockOut; x.endStock = Math.round(stock); });
   return months;
+}
+
+/** Every dealer now: yard, transit (incl. Transport), stock orders on the line, handovers, and how many months the stock
+ *  in sight (yard + transit + line) would last at the 3-month average. Small: no vehicle lists. */
+export function dealerOverview(all, rows, today) {
+  const withT = withTransport(all, rows, today);
+  return withT.map(d => {
+    const mine = rows.filter(r => slugify(r.dealer) === d.slug);
+    const line = Object.fromEntries(PIPELINE_GROUPS.map(g => [g, mine.filter(r => r.group === g && isStockCustomer(r.customer)).length]));
+    const lineStock = Object.values(line).reduce((a, b) => a + b, 0);
+    const lineCustomer = mine.filter(r => PIPELINE_GROUPS.includes(r.group) && r.customer && !isStockCustomer(r.customer)).length;
+    const later = mine.filter(r => ['rolling', 'customers', 'later'].includes(r.group));
+    const inSight = d.yard.stock + d.transit.stock + lineStock;
+    const { vehicles, ...rest } = d;
+    return { ...rest, line, lineStock, lineCustomer, inSight, ordersOpen: { stock: later.filter(r => isStockCustomer(r.customer)).length, customer: later.filter(r => r.customer && !isStockCustomer(r.customer)).length },
+      monthsCover: d.handover.avgStock > 0 ? Math.round((inSight / d.handover.avgStock) * 10) / 10 : null, yardVsTarget: d.target == null ? null : d.yard.stock - d.target };
+  });
 }
