@@ -38,9 +38,10 @@ test('AU finish forecast: SRM / SRV use their own capacity, queue by line progre
 test('AU finish forecast queue: AU production → shipping → China production → rolling 60 days', async () => {
   const { forecastAuFinish } = await import('../lib/production-line.mjs');
   const cap = new Map([['2026-11-17', { towable: 2, srm: 0, srv: 0 }], ['2026-11-18', { towable: 2, srm: 0, srv: 0 }], ['2027-03-01', { towable: 2, srm: 0, srv: 0 }]]);
-  const rows = [{ chassis: 'R', group: 'rolling', planOrder: 1, model: 'SRC', cnPlanEnd: '2026-12-01' }, { chassis: 'C', group: 'cn', model: 'SRH', ltRank: 3, cnPlanEnd: '2026-11-30' }, { chassis: 'S', group: 'sea', model: 'SRT', live: { eta: '2026-11-01' } }, { chassis: 'A', group: 'au', model: 'SRP', live: { location: 'qc' } }, { chassis: 'T', group: 'transport', model: 'SRC' }];
+  const rows = [{ chassis: 'R', group: 'rolling', planOrder: 1, model: 'SRC', cnPlanEnd: '2026-12-01' }, { chassis: 'C', group: 'cn', model: 'SRH', ltRank: 3, cnPlanEnd: '2026-11-30' }, { chassis: 'S', group: 'sea', model: 'SRT', live: { eta: '2026-11-01', ship: { eta: '2026-12-01', arrived: false } } }, { chassis: 'A', group: 'au', model: 'SRP', live: { location: 'qc' } }, { chassis: 'T', group: 'transport', model: 'SRC' }];
   forecastAuFinish(rows, cap, '2026-11-16');
   const by = Object.fromEntries(rows.map(r => [r.chassis, r]));
   assert.deepEqual(['A', 'S', 'C', 'R', 'T'].map(c => by[c].auEnd || ''), ['2026-11-17', '2026-11-17', '2026-11-18', '2026-11-18', '']);
-  assert.equal(by.C.auForecast.beforeArrival, '2027-01-19', 'CN finish + 50 sea days');
+  assert.equal(by.S.auForecast.beforeArrival, '2026-12-01', 'slot before the Shipment page ETA');
+  assert.equal(by.C.auForecast.beforeArrival, undefined, 'no Shipment ETA = nothing estimated');
 });

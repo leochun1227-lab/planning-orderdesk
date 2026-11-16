@@ -348,7 +348,6 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
 // station, then GR date; the queue fills today's places first, then the next working day, and so on.
 const AU_STAGE = { qc: 0, production: 1, 'pre-assembly': 2, received: 3 };
 const CRM_DONE = new Set(['Finished', 'Ready for Dispatch']);
-const SEA_DAYS = 50;
 export function forecastAuFinish(rows, capacity, today) {
   const slots = { towable: [], srm: [], srv: [] };
   for (const d of [...capacity.keys()].filter(d => d >= today).sort()) for (const k of Object.keys(slots)) for (let i = 0; i < capacity.get(d)[k]; i++) slots[k].push([d, capacity.get(d)[k]]);
@@ -368,10 +367,9 @@ export function forecastAuFinish(rows, capacity, today) {
     r.auEnd = slot[0]; r.auEndActual = false;
     r.auForecast = { kind, seq: used[kind], order, perDay: slot[1], stage: r.live?.location || '' };
     summary[kind]++;
-    // Not physically possible: the van would finish in AU before it can be there (shipping: ETA; not shipped yet:
-    // CN finish, actual or Longtree plan, + 50 sea days as in the Portal plan).
-    const cnDone = r.cnEndActual ? r.cnEnd : r.cnPlanEnd; // a month-only plan is not precise enough to flag
-    const arrive = r.group === 'sea' ? etaKey(r) : r.group !== 'au' && cnDone ? addDays(cnDone, SEA_DAYS) : '';
+    // Not physically possible: the van would finish in AU before the Shipment page ETA. Only vehicles that are on the
+    // Shipment page and not arrived yet; nothing is estimated for vehicles without a Shipment ETA.
+    const ship = r.live?.ship, arrive = ship && !ship.arrived ? ship.eta || '' : '';
     if (arrive && r.auEnd < arrive) r.auForecast.beforeArrival = arrive;
   }
   for (const g of ['au', 'sea', 'cn', 'locked', 'rolling']) summary[g] = queue.filter(r => r.group === g).reduce((m, r) => ({ first: m.first && m.first < r.auEnd ? m.first : r.auEnd, last: r.auEnd > m.last ? r.auEnd : m.last, n: m.n + 1 }), { first: '', last: '', n: 0 });
@@ -382,12 +380,10 @@ export function forecastAuFinish(rows, capacity, today) {
 
 /** CN finish for sorting: actual, else the plan day, else the end of the plan month (2027-01 → 2027-01-32). */
 export const cnFinishKey = r => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd || (r.cnPlanMonth ? `${r.cnPlanMonth}-32` : '')) || '';
-/** When the vehicle reaches / reached the Melbourne port: actual arrival once arrived, else the vessel ETA (Portal shipping), else the Longtree ETA. */
+/** Port ETA: only the Dealer Portal Shipment page (tmssystem Vessel movements & ETA) — never filled in from Longtree
+ *  (Feishu) dates or our own estimates. No vehicle on the Shipment page = no ETA. */
 export function etaKey(r) {
-  const l = r.live || {}, ship = l.ship;
-  if (ship?.arrived) return l.ata || ship.eta || '';
-  if (l.ata && l.ata <= (r.today || '9999')) return l.ata;
-  return ship?.eta || l.eta || '';
+  return r.live?.ship?.eta || '';
 }
 const by = (...keys) => (a, z) => { for (const k of keys) { const d = k(a, z); if (d) return d; } return 0; };
 const asc = f => (a, z) => (f(a) || '9999').localeCompare(f(z) || '9999');

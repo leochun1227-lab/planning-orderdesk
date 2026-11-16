@@ -29,8 +29,8 @@ type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: 
 const KIND_NAME: Record<string, string> = { towable: 'Towable', srm: 'SRM', srv: 'SRV' };
 type Issue = { code: string; level: 'error' | 'warn'; zh: string; en: string };
 type SortKey = 'status' | 'date' | 'eta' | 'au';
-/** Same as the server's etaKey: actual arrival once arrived, else vessel ETA, else Longtree ETA. */
-const etaOf = (r: Row) => { const l = r.live; if (!l) return ''; if (l.ship?.arrived) return l.ata || l.ship.eta || ''; if (l.ata && l.ata <= (r.today || '9999')) return l.ata; return l.ship?.eta || l.eta || ''; };
+/** Same as the server's etaKey: only the Dealer Portal Shipment page ETA; nothing filled in from Longtree or estimates. */
+const etaOf = (r: Row) => r.live?.ship?.eta || '';
 const NO_AU_FINISH = new Set(['transport']);
 const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['plan', 'cnEnd', 'auEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
 type BuildMonth = { month: string; total: number; srvSrm: number; towable: number; workingDays: number; portalWorkingDays: number; perDay: number | null };
@@ -156,7 +156,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         cellRenderer: (p: any) => { const r: Row | undefined = p.data, f = r?.auForecast; if (!r) return null;
           if (r.build) return <div className="pl-two"><strong>{r.auEnd}</strong><small>{zh ? '造车计划' : 'Build plan'}</small></div>;
           if (f?.note === 'overflow') return <span className="pl-late" title={zh ? 'Portal 计划的产能排到 2027-12 还不够' : 'Not enough planned capacity up to 2027-12'}>{zh ? '超出计划产能' : 'Beyond plan'}</span>;
-          if (r.auEnd && f?.beforeArrival) return <div className="pl-two" title={zh ? `排到的日子早于预计到澳 ${f.beforeArrival}（海运看 ETA，没发运的看国内下线 + 50 天海运）` : `Slot is before the van can be in AU (${f.beforeArrival})`}><strong>{r.auEnd}</strong><small className="pl-late">{zh ? `早于预计到澳 ${f.beforeArrival}` : `before arrival ${f.beforeArrival}`}</small></div>;
+          if (r.auEnd && f?.beforeArrival) return <div className="pl-two" title={zh ? `排到的日子早于 Shipment ETA ${f.beforeArrival}` : `Slot is before the Shipment ETA ${f.beforeArrival}`}><strong>{r.auEnd}</strong><small className="pl-late">{zh ? `早于到港 ETA ${f.beforeArrival}` : `before ETA ${f.beforeArrival}`}</small></div>;
           if (r.auEnd && f) return <div className="pl-two" title={zh ? `${KIND_NAME[f.kind || 'towable']} 第 ${f.seq} 台 · 当天 ${KIND_NAME[f.kind || 'towable']} 产能 ${f.perDay} 台` : ''}><strong>{r.auEnd}</strong><small>{zh ? '预计' : 'expected'} · {KIND_NAME[f.kind || 'towable']} #{f.seq}</small></div>;
           return r.auEnd ? <strong>{r.auEnd}</strong> : <span className="pl-quiet">{zh ? '待排' : 'To schedule'}</span>; } },
       { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
@@ -202,8 +202,9 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       const pool = new Map<string, any>(head.children.map((c: any) => [c.colId || c.field, c]));
       for (const g of rest) { const plan = g.children.find((c: any) => c.colId === 'plan'); if (plan) { pool.set('plan', { ...plan, pinned: 'left' }); g.children = g.children.filter((c: any) => c.colId !== 'plan'); } }
       pool.set('eta', { colId: 'eta', headerName: zh ? '到港 ETA' : 'Port ETA', pinned: 'left', width: 140, valueGetter: (p: any) => p.data ? etaOf(p.data) : '',
-        cellRenderer: (p: any) => { if (!p.data) return null; const v = etaOf(p.data), l = p.data.live, arrived = Boolean(l?.ship?.arrived || (l?.ata && l.ata <= (p.data.today || '9999')));
-          return v ? <div className="pl-two"><strong>{v}</strong><small><span className={`pl-kind ${arrived ? 'actual' : ''}`}>{arrived ? (zh ? '已到港' : 'Arrived') : l?.ship?.eta ? (zh ? '船期 ETA' : 'Vessel ETA') : (zh ? '飞书 ETA' : 'Longtree ETA')}</span>{!arrived && l?.ship?.confidence ? ` ${l.ship.confidence}` : ''}</small></div> : <span className="pl-missing">{zh ? '没有 ETA' : 'No ETA'}</span>; } });
+        cellRenderer: (p: any) => { if (!p.data) return null; const v = etaOf(p.data), ship = p.data.live?.ship, arrived = Boolean(ship?.arrived);
+          return v ? <div className="pl-two" title={zh ? '取自 Dealer Portal 船运页（Shipment）' : 'From the Dealer Portal Shipment page'}><strong>{v}</strong><small><span className={`pl-kind ${arrived ? 'actual' : ''}`}>{arrived ? (zh ? '已到港' : 'Arrived') : (zh ? '船期 ETA' : 'Vessel ETA')}</span>{!arrived && ship?.confidence ? ` ${ship.confidence}` : ''}</small></div>
+            : <span className="pl-missing" title={zh ? 'Dealer Portal 船运页（Shipment）里还没有这台车的 ETA；不用飞书或估算补' : 'Not on the Dealer Portal Shipment page yet; not filled in'}>{ship ? (zh ? 'Shipment 没有 ETA' : 'No Shipment ETA') : (zh ? 'Shipment 没有这台车' : 'Not on Shipment')}</span>; } });
       pool.set('forecast', { colId: 'forecast', headerName: zh ? '排产表 Forecast' : 'Orderlist forecast', pinned: 'left', width: 140, valueGetter: (p: any) => p.data?.forecast || '',
         cellRenderer: (p: any) => p.data && (p.data.forecast || p.data.orderRow ? <div className="pl-two"><strong>{p.data.forecast || '—'}</strong><small>{p.data.orderRow ? (zh ? `排产表第 ${p.data.orderRow} 行` : `Orderlist row ${p.data.orderRow}`) : (zh ? '不在排产表' : 'No Orderlist row')}</small></div> : <span className="pl-missing">{zh ? '不在排产表' : 'No Orderlist row'}</span>) });
       pool.set('transportSince', { colId: 'transportSince', headerName: zh ? '进入 Transport' : 'At Transport since', pinned: 'left', width: 140, valueGetter: (p: any) => String(p.data?.live?.stationSince || p.data?.live?.enteredAt || '').slice(0, 10),
