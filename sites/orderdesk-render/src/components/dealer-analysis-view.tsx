@@ -3,6 +3,7 @@
 // the Dealer Portal every 2 hours on its own; this page re-asks the server every 30 minutes while it is open.
 import { useEffect, useState } from 'react';
 import { RefreshCw, AlertTriangle, Store, ArrowDownToLine } from 'lucide-react';
+import DealerLogisticsFlow, { type DealerLogistics } from './dealer-logistics-flow';
 
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
 type MonthRow = { month: string; stockIn: number; customerIn: number; stockOut: number; endStock: number };
@@ -12,7 +13,7 @@ export type DealerSummary = { slug: string; name: string; target: number; yard: 
 export type DealerNow = { slug: string; name: string; own: boolean; target: number | null; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number }; line: Record<string, number>; lineStock: number; lineCustomer: number; inSight: number; ordersOpen: { stock: number; customer: number }; monthsCover: number | null; yardVsTarget: number | null };
 export type Dealership = { lockedLast: string; rollingEnd: string; size: number; picked: number; customers: number; dispatchDays: number; months: number; targetSource: string; dealers: DealerSummary[]; all?: DealerNow[] };
-type Payload = { today: string; dealership: Dealership | null; sources: Record<string, { at: string; error: string; count: number } | undefined>; refreshing?: boolean; error?: string };
+type Payload = { today: string; dealership: Dealership | null; logistics?: DealerLogistics | null; sources: Record<string, { at: string; error: string; count: number } | undefined>; refreshing?: boolean; error?: string };
 
 const POLL_MS = 30 * 60 * 1000;
 const time = (v?: string) => v ? new Date(v).toLocaleString('en-AU', { timeZone: 'Australia/Sydney', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -152,6 +153,7 @@ export default function DealerAnalysisView({ zh }: { zh: boolean }) {
     {!data && !error && <div className="pl-loading">{zh ? '正在读取 Dealer Portal 和产线…第一次大约需要 30–40 秒' : 'Loading… the first load takes ~30–40 s'}</div>}
     {data && !dl && <div className="pl-loading">{zh ? 'Dealer Portal 的店铺数据还没读到' : 'Dealership data not available yet'}{src.dealers?.error ? `：${src.dealers.error}` : ''}</div>}
     {dl && <>
+      {data?.logistics && <DealerLogisticsFlow data={data.logistics} zh={zh} />}
       <div className="da-kpis">
         <div><span>{zh ? '店里 new stock / 目标合计' : 'Yard new stock / targets'}</span><strong>{sum(d => d.yard.stock)} <small>/ {sum(d => d.target)}</small></strong></div>
         <div><span>{zh ? '在途 stock' : 'Stock in transit'}</span><strong>{sum(d => d.transit.stock)}</strong></div>
