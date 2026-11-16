@@ -123,7 +123,7 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
   app.get('/api/dealer-analysis', async c => {
     try {
       const { sources, line } = await currentLine(c.req.query('refresh') === '1');
-      return json({ today: line.today, dealership: line.dealership, logistics: line.dealership ? buildDealerLogistics(line.rows) : null, counts: line.counts, sources: { portal: sources.status.portal, dealers: sources.status.dealers, plan: sources.status.plan, longtree: sources.status.longtree, prod: sources.status.prod }, refreshing: sources.refreshing });
+      return json({ today: line.today, dealership: line.dealership, logistics: line.dealership ? buildDealerLogistics(line.rows, { dealers: sources.dealers, today: line.today }) : null, counts: line.counts, sources: { portal: sources.status.portal, dealers: sources.status.dealers, plan: sources.status.plan, longtree: sources.status.longtree, prod: sources.status.prod }, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, 'Dealer 分析暂时读取不到') }, 502); }
   });
 
