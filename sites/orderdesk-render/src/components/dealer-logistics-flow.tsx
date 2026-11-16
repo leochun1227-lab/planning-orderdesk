@@ -18,11 +18,11 @@ function aggregate(dealers: Dealer[], stages: Stage[]): Counts {
   return out;
 }
 
-function StockArrivals({ counts, zh, customerOnly, arrived = false }: { counts: Counts; zh: boolean; customerOnly: boolean; arrived?: boolean }) {
+function StockArrivals({ counts, zh, customerOnly }: { counts: Counts; zh: boolean; customerOnly: boolean }) {
   const months = customerOnly ? [] : Object.entries(counts.stockMonths).sort(([a], [b]) => a.localeCompare(b));
   const undated = customerOnly ? 0 : counts.stockUndated;
   return <div className="dl-flow-arrivals">
-    <span>{arrived ? (zh ? '已到店 Stock' : 'Stock received') : (zh ? '预计到店 Stock' : 'Stock arrivals')}</span>
+    <span>{zh ? '预计到店 Stock' : 'Stock arrivals'}</span>
     <div className="dl-flow-months" tabIndex={months.length > 4 ? 0 : undefined}>
       {months.length || undated ? <table aria-label={zh ? '到店 Stock 月份及数量' : 'Stock arrival months and quantities'}><tbody>
         {months.map(([month, n]) => <tr key={month}><td>{month}</td><td>{fmt(n)}</td></tr>)}
@@ -84,11 +84,9 @@ export default function DealerLogisticsFlow({ data, zh }: { data: DealerLogistic
             <button type="button" className="dl-flow-dealer" aria-pressed={dealer === d.slug} onClick={() => setDealer(d.slug)}>
               <span>{d.name}</span><strong>{fmt(d.stages.dealership[kind])}</strong>
             </button>
-            <StockArrivals counts={d.stages.dealership} zh={zh} customerOnly={kind === 'customer'} arrived />
           </div>)}
           <div className={`dl-flow-destination${dealer !== 'all' ? ' is-muted' : ''}`} data-dealer="other-dealers">
             <div className="dl-flow-dealer dl-flow-other"><span>{zh ? '其他经销商' : 'Other dealers'}</span><strong>{fmt(otherYard[kind])}</strong></div>
-            <StockArrivals counts={otherYard} zh={zh} customerOnly={kind === 'customer'} arrived />
           </div>
         </div>
       </div>
