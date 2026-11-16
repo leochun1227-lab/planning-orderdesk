@@ -65,22 +65,22 @@ test('need = target − (yard + transit + stock vans arriving by then (AU finish
   assert.equal(t.paused, true); assert.equal(t.need, 0, 'Traralgon is not calculated for now');
 });
 
-test('rolling line: the five dealerships’ customer orders first, then their stock need; others stay out', () => {
+test('rolling line: all dealers’ customer orders first without a cutoff, then self-owned stock needs', () => {
   const r = (chassis, dealer, customer, orderRow) => ({ chassis, dealer, customer, orderRow, group: 'later', forecast: '' });
   const rows = [r('S1', 'Traralgon', 'Traralgon Stock', 5), r('C2', 'Frankston', 'Bob', 9), r('C1', 'ST James', 'Ann', 7), r('X1', 'Wangaratta', 'Zed', 1), r('S2', 'Traralgon', 'Traralgon Stock', 6), r('S3', 'Geelong', 'Geelong Stock', 2)];
   const out = pickRolling(rows, [{ slug: 'traralgon', need: 1 }, { slug: 'geelong', need: 0 }], 180);
-  assert.deepEqual(out.picked.map(p => p.r.chassis), ['C1', 'C2', 'S1']);
-  assert.deepEqual(pickRolling(rows, [{ slug: 'traralgon', need: 5 }], 2).picked.map(p => p.r.chassis), ['C1', 'C2'], 'at most the rolling size, customers first');
+  assert.deepEqual(out.picked.map(p => p.r.chassis), ['X1', 'C1', 'C2', 'S1']);
+  assert.deepEqual(pickRolling(rows, [{ slug: 'traralgon', need: 5 }], 2).picked.map(p => p.r.chassis), ['X1', 'C1', 'C2'], 'all customers enter even beyond the target; no stock top-up');
 });
 
-test('production line: Dealership group first, rolling after locked, every other open order in the Customer pool', () => {
+test('production line: Dealership group first and customer orders from every dealer enter rolling', () => {
   const row = (id, group, extra = {}) => ({ id, chassis: id, group, cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', locked: false, warnings: [], ...extra });
   const board = { rows: [row('L1', 'later', { dealer: 'Frankston', customer: 'Bob' }), row('L2', 'later', { dealer: 'Wangaratta', customer: 'Zed' }), row('A1', 'au', { dealer: 'Geelong' })], completed: 0, averages: {} };
   const dealers = dealerSnapshot(raw, '2026-11-16');
   const cap = new Map([['2026-11-17', { towable: 1, srm: 0, srv: 0 }], ['2026-11-18', { towable: 1, srm: 0, srv: 0 }]]);
   const out = buildProductionLine({ board, orders: {}, longtree: new Map(), prod: new Map([['A1', { location: 'qc' }]]), portal: new Map([['A1', { grAt: '2026-10-01' }]]), today: '2026-11-16', settings: {}, dealers, auCapacity: cap });
   const by = Object.fromEntries(out.rows.filter(r => r.group !== 'dealership').map(r => [r.chassis, r]));
-  assert.equal(by.L1.group, 'rolling'); assert.equal(by.L2.group, 'customers'); assert.equal(out.counts.later, 0);
+  assert.equal(by.L1.group, 'rolling'); assert.equal(by.L2.group, 'rolling'); assert.equal(out.counts.later, 0);
   assert.equal(by.A1.auEnd, '2026-11-17'); assert.equal(by.L1.auEnd, '2026-11-18', 'rolling continues after the cars ahead');
   assert.equal(out.rows[0].group, 'dealership');
   assert.equal(out.counts.dealership, 2, 'tab count = new stock in the five yards (Traralgon 1 + Geelong 1)');
