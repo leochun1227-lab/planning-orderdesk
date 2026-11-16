@@ -65,3 +65,21 @@ test('sources: unconfigured sources are reported; the Portal board is built from
   assert.equal(r.board.rows.length, 1); assert.equal(r.board.completed, 7); assert.equal(r.portal.size, 0); assert.equal(r.status.sap.error, 'not configured');
   await src.current({ today: '2026-11-09' }); assert.equal(portal.calls, 2); // the shared copy decides when to download
 });
+
+test('production model year survives the Portal board adapter, with explicit Orderdesk year taking precedence', async () => {
+  const raw = { schedule: [{ Chassis: 'SRC-1', 'Model Year': 2026 }, { Chassis: 'SRV1', 'Model Year': 2025 }],
+    campers: { one: { chassisNumber: 'SRV-1', modelYear: 2024 }, two: { chassisNumber: 'SRM-1', ModelYear: '2027' } },
+    motorhome: { orders: [{ chassis: 'SRV1', modelYear: 2028 }] } };
+  const rows = ['SRC1', 'SRV1', 'SRM1', 'SRC270001'].map(chassis => ({ id: chassis, chassis, group: 'sea', customer: 'Portal Stock', warnings: [] }));
+  const src = createProductionLineSource({}, { portal: portalCopy(raw), board: fakeBoard(rows) });
+  const sources = await src.current({ today: '2026-11-17' });
+  assert.deepEqual(sources.board.rows.map(r => r.modelYear), ['2026', '2028', '2027', '']);
+  assert.ok(rows.every(r => r.modelYear === undefined), 'the bundled board rows are not mutated');
+  const line = buildProductionLine({ ...sources, orders: { SRC1: { chassis: 'SRC-1', customer: 'Alex / sToCk', modelYear: '2029' },
+    SRV1: { chassis: 'SRV1', customer: '' } }, today: '2026-11-17' });
+  const by = Object.fromEntries(line.rows.map(r => [r.chassis, r]));
+  assert.equal(by.SRC1.modelYear, '2029'); assert.equal(by.SRC1.customer, 'Alex / sToCk');
+  assert.equal(by.SRV1.modelYear, '2028'); assert.equal(by.SRV1.customer, '', 'an explicit empty name is not replaced with a stale Stock name');
+  assert.equal(by.SRM1.modelYear, '2027');
+  assert.equal(by.SRC270001.modelYear, '', 'model year is never guessed from a chassis or the current year');
+});

@@ -6,6 +6,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { themeQuartz, type ColDef, type ColGroupDef } from 'ag-grid-community';
 import { Button } from '@/components/ui/button';
 import ValueFilter from '@/components/value-filter';
+import { isStockCustomer } from '@/lib/dealership.mjs';
 import { ArrowDownToLine, Factory, CalendarDays, Layers, Store, Search, X, ListFilter, RefreshCw, AlertTriangle } from 'lucide-react';
 
 type Group = { id: string; band: 'dealer' | 'execution' | 'scheduling' | 'preschedule' | 'later'; zh: string; en: string; note: string; phase?: 'au' | 'sea' | 'cn' };
@@ -17,7 +18,7 @@ type Row = {
   liveStageName?: string; liveTone?: string; v?: View;
   id: string; chassis: string; empty: boolean; line: string; source: string; group: string; portalGroup: string; status: string;
   planOrder: number | null; planRef: string; planWeld: string; planAssembly: string;
-  regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; range: string; customer: string; orderId: string;
+  regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; modelYear?: string; range: string; customer: string; orderId: string;
   production: null | { status: string; stage: string; location: string };
   cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; cnPlanMonth?: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
   today?: string; orderRow: number | null; forecast: string;
@@ -143,7 +144,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const chipCounts = useMemo(() => Object.fromEntries(CHIPS.map(c => [c.id, inGroup.filter(c.test).length])), [inGroup]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/[-\s]/g, '');
-    let list = searching ? base.filter(r => [r.chassis, r.model, r.dealer, r.customer, r.live?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q))) : inGroup;
+    let list = searching ? base.filter(r => [r.chassis, r.model, r.modelYear, r.dealer, r.customer, r.live?.station].some(v => String(v || '').toLowerCase().replace(/[-\s]/g, '').includes(q))) : inGroup;
     const c = CHIPS.find(x => x.id === chip);
     if (c && !searching) list = list.filter(c.test);
     const key = sort === 'date' ? (r: Row) => cnFinishKey(r) : sort === 'eta' ? etaOf : sort === 'au' ? (r: Row) => r.auEnd || '' : null;
@@ -175,13 +176,18 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       ...(group === 'locked' && !searching ? [{ colId: 'plan', headerName: zh ? 'Longtree 排产计划' : 'Longtree plan', width: 168, valueGetter: (p: any) => p.data?.planOrder ? `#${p.data.planOrder}` : '',
         cellRenderer: (p: any) => p.data && (p.data.planOrder ? <Two strong top={`#${p.data.planOrder} · ${p.data.planRef.replace(/2026-(\d+)#/g, (_: string, m: string) => `${Number(m)}${zh ? '月' : '/'}#`)}`} sub={[p.data.planWeld && `${zh ? '钣焊' : 'Weld'} ${p.data.planWeld}`, p.data.planAssembly && `${zh ? '总装' : 'Assy'} ${p.data.planAssembly}`].filter(Boolean).join(' · ')} /> : <span className="pl-missing">{zh ? '不在计划' : 'Not in plan'}</span>) }] : []),
       { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
+      { field: 'customer', headerName: 'Customer name', width: 190 },
+      { field: 'modelYear', headerName: 'Model year', width: 90 },
       { field: 'model', headerName: 'Model / Range', width: 118, cellRenderer: (p: any) => p.data && <Two strong top={p.data.model || (zh ? '未提供车型' : 'No model')} sub={p.data.range} /> },
+      { colId: 'orderType', headerName: zh ? '订单类型' : 'Order type', width: 100,
+        valueGetter: p => !p.data || p.data.empty ? '' : p.data.group === 'dealership'
+          ? (({ stock: 'New stock', customer: 'Customer', second: zh ? '二手' : '2nd hand' } as Record<string, string>)[p.data.dealerSite?.category || ''] || '')
+          : isStockCustomer(p.data.customer) ? 'Stock' : 'Customer' },
       { colId: 'prodStatus', headerName: zh ? '生产状态' : 'Production status', width: 170, valueGetter: p => p.data ? (p.data.production?.status || p.data.production?.stage || (p.data.empty ? (zh ? '待补订单' : 'Awaiting order') : p.data.status)) : '',
         cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.group}`}>{p.value}</span>{p.data.production && <small>{p.data.status}{p.data.production.stage ? ` · ${p.data.production.stage}` : ''}</small>}</div> },
       { colId: 'prodLocation', headerName: zh ? '生产库位' : 'Location', width: 92, valueGetter: p => p.data?.production?.location || '', cellRenderer: (p: any) => p.value || (p.data?.build ? '' : <span className="pl-missing">{zh ? '未提供' : '—'}</span>) },
       { field: 'cnMrp', headerName: zh ? '国内 MRP 日期' : 'CN MRP', width: 96, valueFormatter: p => p.value || '—' },
       { field: 'auMrp', headerName: zh ? '澳洲 MRP 日期' : 'AU MRP', width: 96, valueFormatter: p => p.value || '—' },
-      ...(group === 'customers' && !searching ? [{ colId: 'orderType', headerName: zh ? '订单类型 / Customer' : 'Order type / customer', width: 160, valueGetter: (p: any) => p.data?.customer, cellRenderer: (p: any) => p.data && <Two top={/\/.*stock/i.test(p.data.customer) ? 'Transfer from stock' : 'Customer'} sub={p.data.customer} /> } as ColDef<Row>] : []),
       ...(!exec ? [{ colId: 'scheduleState', headerName: group === 'empty' || group === 'customers' ? (zh ? '订单进度' : 'Order progress') : (zh ? '排产状态' : 'Schedule state'), width: 150,
         valueGetter: (p: any) => !p.data ? '' : p.data.empty ? (p.data.dealer ? (zh ? '等待车架号' : 'Waiting for chassis') : (zh ? '待分配 Dealer / 车架号' : 'Needs dealer / chassis')) : group === 'customers' ? (zh ? '待匹配 slot' : 'Needs slot') : group === 'later' ? (p.data.cnPlanStart ? (zh ? '60 天以外' : 'Beyond 60 days') : (zh ? '计划日期待补' : 'Plan date missing')) : p.data.locked ? (zh ? '已确认锁定' : 'Locked') : (zh ? '待确认' : 'To confirm'),
         cellRenderer: (p: any) => p.data && <div className="pl-two"><span className={`pl-tag ${p.data.overdue ? 'overdue' : 'neutral'}`}>{p.value}</span>{p.data.overdue && <small className="pl-delay">{zh ? '已过国内计划上线日' : 'Past CN plan start'}</small>}</div> } as ColDef<Row>] : []),
