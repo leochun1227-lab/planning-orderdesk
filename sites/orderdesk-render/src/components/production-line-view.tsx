@@ -19,7 +19,7 @@ type Row = {
   planOrder: number | null; planRef: string; planWeld: string; planAssembly: string;
   regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; range: string; customer: string; orderId: string;
   production: null | { status: string; stage: string; location: string };
-  cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
+  cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; cnPlanMonth?: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
   today?: string; orderRow: number | null; forecast: string;
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
@@ -69,11 +69,18 @@ const daysSince = (from: string, to: string) => Math.round((Date.parse(to) - Dat
 function CnFinish({ r, zh }: { r: Row; zh: boolean }) {
   if (r.cnEndActual) return <OnlineDate zh={zh} actual={r.cnEnd} expected={r.cnEnd} baseline={r.cnPlanEnd} />;
   const today = r.today || new Date().toISOString().slice(0, 10), late = r.cnPlanEnd && r.cnPlanEnd < today ? daysSince(r.cnPlanEnd, today) : 0;
-  if (PAST_CN.has(r.group)) return <div className="pl-two" title={zh ? '已离开 Longtree，但飞书和 Portal 都没有总装入库日期' : 'Left Longtree, but no finish date in Longtree or Portal'}><strong className="pl-quiet">{zh ? '没有下线记录' : 'No finish record'}</strong><small>{r.cnPlanEnd ? `${zh ? '计划' : 'Plan'} ${r.cnPlanEnd}` : ''}</small></div>;
-  return <div className="pl-two" title={zh ? '还没有总装入库日期（飞书 / Portal）' : 'No finish date yet (Longtree / Portal)'}><strong className="pl-quiet">{zh ? '未下线' : 'Not finished'}</strong>
-    <small>{r.cnPlanEnd ? `${zh ? '计划' : 'Plan'} ${r.cnPlanEnd}` : (zh ? '没有计划日期' : 'No plan date')}{late > 0 && <span className="pl-late">{zh ? ` 已超期 ${late} 天` : ` ${late} d overdue`}</span>}</small></div>;
+  const plan = planText(r, zh);
+  if (PAST_CN.has(r.group)) return <div className="pl-two" title={zh ? '已离开 Longtree，但飞书没有总装入库日期' : 'Left Longtree, but no finish date in Longtree'}><strong className="pl-quiet">{zh ? '没有下线记录' : 'No finish record'}</strong><small>{plan}</small></div>;
+  return <div className="pl-two" title={zh ? '还没有总装入库日期（飞书）；计划取自 Longtree 排产计划表的总装计划交付 / 下线日期' : 'No finish date yet (Longtree); plan from the Longtree plan sheets'}><strong className="pl-quiet">{zh ? '未下线' : 'Not finished'}</strong>
+    <small>{plan}{late > 0 && <span className="pl-late">{zh ? ` 已超期 ${late} 天` : ` ${late} d overdue`}</span>}</small></div>;
 }
-export const cnFinishKey = (r: { cnEndActual?: boolean; cnEnd?: string; cnPlanEnd?: string }) => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd) || '';
+/** Plan from the Longtree plan sheets: a day, or only a month (「总装1月计划」 → 计划 1 月), or nothing. */
+function planText(r: Row, zh: boolean) {
+  if (r.cnPlanEnd) return `${zh ? '计划' : 'Plan'} ${r.cnPlanEnd}`;
+  if (r.cnPlanMonth) return zh ? `计划 ${Number(r.cnPlanMonth.slice(5))} 月` : `Plan ${r.cnPlanMonth}`;
+  return '';
+}
+export const cnFinishKey = (r: { cnEndActual?: boolean; cnEnd?: string; cnPlanEnd?: string; cnPlanMonth?: string }) => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd || (r.cnPlanMonth ? `${r.cnPlanMonth}-32` : '')) || '';
 
 const LT_NODES: [keyof Live, string, string][] = [['ata', '实际到港', 'Arrived AU port'], ['atd', '实际离港', 'Left CN port'], ['shippedAt', '发运', 'Shipped'], ['finishedAt', '总装入库', 'Finished'], ['assemblyAt', '总装上线', 'Assembly'], ['weldAt', '钣焊上线', 'Welding'], ['furnitureAt', '家具上线', 'Furniture'], ['orderAt', '订单接收', 'Order received']];
 const LOCATION_ZH: Record<string, string> = { received: '已接收', 'pre-assembly': '预装', production: '生产', qc: '质检', transport: '待运输' };
@@ -275,7 +282,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     {detail && <aside className="pl-detail" role="dialog" aria-label={detail.chassis || 'slot'}>
       <header><div><strong>{detail.empty ? 'Empty slot' : detail.chassis}</strong><span>{detail.model} · {detail.dealer || '—'} · {detail.customer || '—'}</span></div><button className="icon-button" aria-label={zh ? '关闭' : 'Close'} onClick={() => setDetail(null)}><X size={16} /></button></header>
       <div className="pl-plan">
-        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEndActual ? detail.cnEnd : (zh ? '未下线' : 'not finished'), detail.cnEndActual ? (zh ? '实际' : 'actual') : (detail.cnPlanEnd ? `${zh ? '计划' : 'plan'} ${detail.cnPlanEnd}` : '')], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd || (detail.auForecast?.note === 'overflow' ? (zh ? '超出计划产能' : 'beyond plan') : (zh ? '待排' : 'to schedule')), detail.auForecast?.seq && detail.auEnd ? `${zh ? '预计' : 'expected'} · ${KIND_NAME[detail.auForecast.kind || 'towable']} #${detail.auForecast.seq}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
+        {([[zh ? '国内上线' : 'CN start', detail.cnActual || detail.cnStart, detail.cnActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '国内下线' : 'CN finish', detail.cnEndActual ? detail.cnEnd : (zh ? '未下线' : 'not finished'), detail.cnEndActual ? (zh ? '实际' : 'actual') : planText(detail, zh)], [zh ? '澳洲上线' : 'AU start', detail.auActual || detail.auStart, detail.auActual ? (zh ? '实际' : 'actual') : (zh ? '预计' : 'expected')], [zh ? '澳洲下线（完工）' : 'AU finish', detail.auEnd || (detail.auForecast?.note === 'overflow' ? (zh ? '超出计划产能' : 'beyond plan') : (zh ? '待排' : 'to schedule')), detail.auForecast?.seq && detail.auEnd ? `${zh ? '预计' : 'expected'} · ${KIND_NAME[detail.auForecast.kind || 'towable']} #${detail.auForecast.seq}` : ''], [zh ? '国内 MRP' : 'CN MRP', detail.cnMrp, ''], [zh ? '澳洲 MRP' : 'AU MRP', detail.auMrp, '']] as string[][])
           .map(([l, v, n]) => <div key={l}><span>{l}</span><b>{v || '—'}</b><em>{n}</em></div>)}
       </div>
       {detail.live && <ol className="pl-timeline">

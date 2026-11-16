@@ -290,12 +290,16 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       planRow = activePlan.byChassis.get(chassis) || null;
       if (planRow) {
         group = 'locked'; // every plan car not yet on the line: 排产锁定线 (Portal Schedule Confirmed no longer used)
-        source = { ...raw, cnPlanStart: planRow.weldPlan || planRow.assemblyPlan || raw.cnPlanStart, cnPlanEnd: planRow.finishPlan || raw.cnPlanEnd };
+        source = { ...raw, cnPlanStart: planRow.weldPlan || planRow.assemblyPlan || raw.cnPlanStart };
       } else if (ROLLING.has(group)) { group = 'later'; notInPlan = true; }
     }
     const dateGroup = group === 'transport' ? 'au' : group, moved = dateGroup !== raw.group || source !== raw;
     const b = !moved ? raw : { ...source, ...datesForGroup(source, dateGroup, today, settings, lt || {}, p), overdue: Boolean(ROLLING.has(group) && source.cnPlanStart && source.cnPlanStart < today) };
     const regent = regentStatus(order), progress = longtreeProgress(lt || {}, today);
+    // CN planned finish (国内计划下线): only the Longtree plan sheets — 总装计划交付日期, else 总装计划下线日期; a cell that
+    // only says 「总装1月计划」 gives a month; nothing in the sheets (or not in them) = empty. Never the Portal.
+    const sheet = (chassis && plan?.byChassis?.get(chassis)) || null;
+    const cnPlan = { date: sheet?.finishPlan || sheet?.assemblyEndPlan || '', month: sheet ? sheet.finishMonth || sheet.assemblyEndMonth || '' : '' };
     // CRM already Finished / Ready for Dispatch and not on the AU production system: taken off the line (only counted).
     if (group === 'au' && CRM_DONE.has(regent.label) && !au?.location) { crmDone.push(chassis); continue; }
     counts[group] = (counts[group] || 0) + 1;
@@ -311,7 +315,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         ...issuesFor({ b, group, lt, au, sap: p, regent, today })],
       dealer: b.dealer || '', model: b.model || '', range: b.range || '', customer: order?.customer || b.customer || '', orderId: order ? chassis : '',
       production: b.production ? { status: b.production.status || '', stage: b.production.stage || '', location: b.production.location || '' } : null,
-      cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: b.cnPlanEnd, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
+      cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: cnPlan.date, cnPlanMonth: cnPlan.date ? '' : cnPlan.month, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
       ...finishDates(b, lt, p, today),
       planStart: b.planStart, planEnd: b.planEnd, expectedEnd: b.expectedEnd, delay: b.delay, cnMrp: b.cnMrp, auMrp: b.auMrp, overdue: Boolean(b.overdue), locked: Boolean(b.locked), warnings: b.warnings || [],
       live: live && {
@@ -366,7 +370,7 @@ export function forecastAuFinish(rows, capacity, today) {
     summary[kind]++;
     // Not physically possible: the van would finish in AU before it can be there (shipping: ETA; not shipped yet:
     // CN finish, actual or Longtree plan, + 50 sea days as in the Portal plan).
-    const cnDone = r.cnEndActual ? r.cnEnd : r.cnPlanEnd;
+    const cnDone = r.cnEndActual ? r.cnEnd : r.cnPlanEnd; // a month-only plan is not precise enough to flag
     const arrive = r.group === 'sea' ? etaKey(r) : r.group !== 'au' && cnDone ? addDays(cnDone, SEA_DAYS) : '';
     if (arrive && r.auEnd < arrive) r.auForecast.beforeArrival = arrive;
   }
@@ -376,6 +380,8 @@ export function forecastAuFinish(rows, capacity, today) {
   return { ...summary, today: first ? { date: first, ...capacity.get(first) } : null, last: queue.reduce((m, r) => (r.auEnd > m ? r.auEnd : m), '') };
 }
 
+/** CN finish for sorting: actual, else the plan day, else the end of the plan month (2027-01 → 2027-01-32). */
+export const cnFinishKey = r => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd || (r.cnPlanMonth ? `${r.cnPlanMonth}-32` : '')) || '';
 /** When the vehicle reaches / reached the Melbourne port: actual arrival once arrived, else the vessel ETA (Portal shipping), else the Longtree ETA. */
 export function etaKey(r) {
   const l = r.live || {}, ship = l.ship;
@@ -392,7 +398,7 @@ export const GROUP_SORT = {
   // AU production: by expected AU finish (下线) date; cars beyond the planned capacity last.
   au: by(num(r => (r.auEnd ? 1 : 2)), asc(r => r.auEnd), num(r => r.auForecast?.order), asc(r => r.live?.grAt)),
   sea: by(asc(etaKey)),
-  cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(r => (r.cnEndActual ? r.cnEnd : r.cnPlanEnd))),
+  cn: by((a, z) => (z.ltRank ?? 0) - (a.ltRank ?? 0), asc(cnFinishKey)),
   locked: by(num(r => r.planOrder)),
   rolling: by(num(r => r.planOrder)),
   empty: by(asc(r => r.auEnd), num(r => r.build?.seq)),

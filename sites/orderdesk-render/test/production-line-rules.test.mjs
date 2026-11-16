@@ -88,3 +88,14 @@ test('CRM Finished / Ready for Dispatch cars not on the AU line are taken off th
   const out = buildProductionLine({ board, orders, longtree: new Map(), prod, portal, today: '2026-11-16', settings: {} });
   assert.deepEqual(out.crmDone, ['SRC1']); assert.deepEqual(out.rows.map(r => r.chassis), ['SRC2']);
 });
+test('CN plan finish comes only from the Longtree plan sheets (day, month or nothing), never the Portal', () => {
+  const row = (id, group, extra = {}) => ({ id, chassis: id, group, cnPlanStart: '2026-12-01', cnPlanEnd: '2027-02-22', auPlanStart: '', auPlanEnd: '', locked: false, warnings: [], ...extra });
+  const board = { rows: [row('A', 'rolling'), row('B', 'rolling'), row('C', 'cn'), row('D', 'later')], completed: 0, averages: {} };
+  const p = (order, extra) => ({ order, months: ['2026-12#1'], weldPlan: '', assemblyPlan: '', assemblyEndPlan: '', assemblyEndMonth: '', finishPlan: '', finishMonth: '', ...extra });
+  const plan = { activeUntil: '2026-12-31', rows: [], byChassis: new Map([['A', p(1, { finishPlan: '2026-12-28' })], ['B', p(2, { assemblyEndMonth: '2027-01' })], ['C', p(3, { assemblyEndPlan: '2026-12-20' })]]) };
+  const out = buildProductionLine({ board, orders: {}, longtree: new Map(), prod: new Map(), portal: new Map(), today: '2026-11-16', settings: {}, plan });
+  const by = Object.fromEntries(out.rows.map(r => [r.chassis, r]));
+  assert.equal(by.A.cnPlanEnd, '2026-12-28'); assert.equal(by.B.cnPlanEnd, ''); assert.equal(by.B.cnPlanMonth, '2027-01');
+  assert.equal(by.C.cnPlanEnd, '2026-12-20', 'a car already in China production still takes the sheet date');
+  assert.equal(by.D.cnPlanEnd, ''); assert.equal(by.D.cnPlanMonth, '');
+});
