@@ -6,7 +6,7 @@ import { RefreshCw, AlertTriangle, Store } from 'lucide-react';
 
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
 type MonthRow = { month: string; stockIn: number; customerIn: number; stockOut: number; endStock: number };
-export type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number };
+export type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   travelDays: number | null; lead: number | null; paused?: boolean; arriving: number; transitArriving: number; sold: number; projected: number | null; need: number; stockPicked: number; stockAvailable: number; customerPicked: number; monthly: MonthRow[] };
 export type Dealership = { lockedLast: string; rollingEnd: string; size: number; picked: number; customers: number; dispatchDays: number; months: number; targetSource: string; dealers: DealerSummary[] };
@@ -21,16 +21,16 @@ export function DealerTable({ dl, zh }: { dl: Dealership; zh: boolean }) {
   const m = dl.dealers[0]?.handover.months.map(x => x.month.slice(5)) || [];
   return <div className="da-table"><table>
     <thead><tr>
-      <th>Dealer</th><th>{zh ? '目标库存' : 'Target'}</th><th>{zh ? '店里 new stock' : 'Yard new stock'}</th><th>{zh ? '在途 stock' : 'Transit stock'}</th>
+      <th>Dealer</th><th>{zh ? '目标库存' : 'Target'}</th><th>{zh ? '店里 new stock' : 'Yard new stock'}</th><th title={zh ? '已 PGI 在路上的 + 在 Transport 的（已下线、正在运过来）' : 'PGI on the road + at Transport'}>{zh ? '在途 stock' : 'Transit stock'}</th>
       <th title={zh ? '交付按排产表客户名分 stock / customer，同 Dealer Portal YTD Handover' : 'As the Dealer Portal YTD Handover'}>{zh ? `近三月交付 stock（${m.join(' / ')} 月）` : `Stock handovers (${m.join(' / ')})`}</th><th>{zh ? '月均 stock 交付' : 'Avg stock handovers / month'}</th>
       <th title={zh ? '到店 = 澳洲预计下线（Transport 按今天）+ 3 天出车 + 路上天数' : 'At the dealer = AU finish (Transport: today) + 3 + travel days'}>{zh ? '到店天数' : 'Days to dealer'}</th>
-      <th title={zh ? 'Transport、澳洲生产、海运、国内生产、排产锁定线里这家的 stock 订单' : 'Stock orders of this dealer from Transport to the locked line'}>{zh ? '线上 stock' : 'Stock on the line'}</th>
+      <th title={zh ? '澳洲生产、海运、国内生产、排产锁定线里这家的 stock 订单（Transport 已算在途）' : 'Stock orders of this dealer from AU production to the locked line'}>{zh ? '线上 stock' : 'Stock on the line'}</th>
       <th title={zh ? '滚动排产线最后一台澳洲下线 + 到店天数' : ''}>{zh ? '滚动线到店' : 'Rolling line at dealer'}</th>
       <th title={zh ? '线上 stock 里那天之前能到店的' : ''}>{zh ? '那天前到店 stock' : 'Stock arriving by then'}</th>
       <th title={zh ? '店里 + 那天前到店的在途 stock + 那天前到店的线上 stock − 月均 stock 交付 × 月数' : ''}>{zh ? '那天预计 stock' : 'Stock then'}</th><th>{zh ? '还缺' : 'Need'}</th><th>{zh ? '排进滚动 stock' : 'Stock on the rolling line'}</th>
     </tr></thead>
     <tbody>{dl.dealers.map(d => <tr key={d.slug} className={d.paused ? 'paused' : ''}>
-      <td><b>{d.name}</b></td><td>{d.target}</td><td className={d.yard.stock > d.target ? 'over' : ''}><b>{d.yard.stock}</b></td><td>{d.transit.stock}</td>
+      <td><b>{d.name}</b></td><td>{d.target}</td><td className={d.yard.stock > d.target ? 'over' : ''}><b>{d.yard.stock}</b></td><td title={zh ? `已 PGI ${d.transit.pgiStock ?? 0} + Transport ${d.transit.transportStock ?? 0}` : ''}>{d.transit.stock}</td>
       <td>{d.handover.months.map(x => x.stock).join(' / ')}<small> · {zh ? '本月' : 'MTD'} {d.handover.thisMonth.stock}</small></td><td>{d.handover.avgStock}</td>
       {d.paused ? <><td colSpan={1}>—</td><td title={Object.entries(d.pipeline).map(([g, n]) => `${zh ? GROUP_ZH[g] || g : g} ${n}`).join(' · ')}>{d.pipelineStock}</td><td colSpan={4} className="paused-note">{zh ? '暂不计算' : 'Not calculated for now'}</td></> : <>
         <td>{dl.dispatchDays} + {d.travelDays}</td>
@@ -104,7 +104,7 @@ export default function DealerAnalysisView({ zh }: { zh: boolean }) {
         <div><span>{zh ? '滚动排产线' : 'Rolling line'}</span><strong>{dl.picked} <small>/ {dl.size} · customer {dl.customers} · stock {sum(d => d.stockPicked)}</small></strong></div>
       </div>
       <DealerTable dl={dl} zh={zh} />
-      <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途的车已经 PGI，按 PGI 日期 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），排满 ${dl.size} 台时最后一台 ${dl.rollingEnd} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线先排五家的 customer 订单，再补还缺的 stock。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd}.`}</p>
+      <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途 = 已 PGI 在路上的 + 在 Transport 的：已 PGI 的按 PGI 日期 + 路上天数，Transport 的按今天 + 3 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），排满 ${dl.size} 台时最后一台 ${dl.rollingEnd} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线先排五家的 customer 订单，再补还缺的 stock。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd}.`}</p>
       <h3 className="da-sub">{zh ? '每月 stock：月底 stock = 上月底 + 到店 stock（含在途）− 卖出 stock；customer 车不算库存，这页只看 stock' : 'Stock per month: month end = previous + stock in (incl. transit) − stock sold; customer vans are not stock'}</h3>
       <div className="da-cards">{dl.dealers.map(d => <DealerCard key={d.slug} d={d} zh={zh} />)}</div>
     </>}

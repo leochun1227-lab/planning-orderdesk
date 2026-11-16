@@ -23,7 +23,7 @@ type Row = {
   today?: string; orderRow: number | null; forecast: string;
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
-  rollingOrder?: number; rollingKind?: 'customer' | 'stock'; dealerSite?: { slug: string; where: 'yard' | 'transit'; category: 'stock' | 'customer' | 'second'; since: string; days: number | null; arrive?: string; target: number };
+  rollingOrder?: number; rollingKind?: 'customer' | 'stock'; dealerSite?: { slug: string; where: 'yard' | 'transit'; via?: 'pgi' | 'transport'; category: 'stock' | 'customer' | 'second'; since: string; days: number | null; arrive?: string; target: number };
 };
 type AuForecast = { beforeArrival?: string; kind?: 'towable' | 'srm' | 'srv'; seq?: number; order?: number; perDay?: number; stage?: string; note?: string };
 type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
@@ -35,7 +35,7 @@ const etaOf = (r: Row) => r.live?.ship?.eta || '';
 const NO_AU_FINISH = new Set(['transport']);
 const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['rollingRef', 'auEnd', 'cnEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], dealership: [], later: ['forecast', 'cnEnd', 'auEnd'], empty: ['cnEnd', 'auEnd'] };
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
-type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number };
+type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; transportStock?: number; transportCustomer?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   sold: number; projected: number; need: number; stockPicked: number; stockAvailable: number; customerPicked: number };
 type Dealership = { deliveredBy: string; lockedLast: string; size: number; picked: number; customers: number; offsetDays: number; months: number; targetSource: string; dealers: DealerSummary[] };
@@ -285,7 +285,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <button className="pl-export" onClick={exportCsv} disabled={!visible.length}><ArrowDownToLine size={13} />CSV</button>
       <button aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={14} /></button>
     </div>
-    {group === 'dealership' && !searching && dl && <p className="pl-dealer-note">{zh ? `五家店里 new stock ${dl.dealers.reduce((n, d) => n + d.yard.stock, 0)} 台、在途 ${dl.dealers.reduce((n, d) => n + d.transit.total, 0)} 台；交付、目标库存、还缺多少见左侧「Dealer 分析」页。` : 'Handovers, targets and stock needs: see the Dealer analysis page.'}</p>}
+    {group === 'dealership' && !searching && dl && <p className="pl-dealer-note">{zh ? `五家店里 new stock ${dl.dealers.reduce((n, d) => n + d.yard.stock, 0)} 台、在途 ${dl.dealers.reduce((n, d) => n + d.transit.total - (d.transit.transportStock || 0) - (d.transit.transportCustomer || 0), 0)} 台；交付、目标库存、还缺多少见左侧「Dealer 分析」页。` : 'Handovers, targets and stock needs: see the Dealer analysis page.'}</p>}
     {group === 'rolling' && !searching && dl && <p className="pl-dealer-note">{zh ? `滚动排产线 ${dl.picked} / ${dl.size} 台：五家直营店 customer ${dl.customers} 台 + stock 补货 ${dl.dealers.reduce((n, d) => n + d.stockPicked, 0)} 台（${dl.dealers.filter(d => d.stockPicked).map(d => `${d.name} ${d.stockPicked}`).join('、') || '无'}）。澳洲预计下线接在排产锁定线（最后一台 ${dl.lockedLast}）后面。` : `Rolling line ${dl.picked} / ${dl.size}: ${dl.customers} customer orders + ${dl.dealers.reduce((n, d) => n + d.stockPicked, 0)} stock.`}</p>}
     {group === 'empty' && !searching && data?.buildPlan && <div className="pl-build-strip">
       {data.buildPlan.months.map(m => <button type="button" key={m.month} onClick={() => jumpTo(m.month)} aria-pressed={jumpMonth === m.month} className={`${m.portalWorkingDays && m.portalWorkingDays !== m.workingDays ? 'diff' : ''} ${jumpMonth === m.month ? 'on' : ''}`} title={`${zh ? '总产量' : 'Total'} ${m.total} − SRV/SRM ${m.srvSrm} = Towable ${m.towable}${m.portalWorkingDays !== m.workingDays ? ` · ${zh ? 'Portal 工作日' : 'Portal working days'} ${m.portalWorkingDays}` : ''}`}>

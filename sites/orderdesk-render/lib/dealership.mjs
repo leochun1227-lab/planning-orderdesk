@@ -35,7 +35,8 @@ export const IDEAL_STOCK_SOURCE = 'Andrew Crank, 2026-10-27: Ideal Stock Qty per
 export const ROLLING_SIZE = 180;
 export const HANDOVER_MONTHS = 3; // average over the last 3 completed months
 const TRANSIT_MAX_DAYS = 100; // Portal: a PGI older than 100 days no longer counts as in transit
-const PIPELINE_GROUPS = ['transport', 'au', 'sea', 'cn', 'locked'];
+// Transport vans count as in transit (withTransport below); "on the line" = AU production → locked.
+const PIPELINE_GROUPS = ['au', 'sea', 'cn', 'locked'];
 
 /** Extra Portal nodes (2-hourly with the Portal copy): all yards (a van in any yard is not in transit), the delivery-to
  *  overrides, and the handovers of the five dealerships only. pgirecord and schedule are already in the copy. */
@@ -121,9 +122,22 @@ export function dealerSnapshot(raw, today) {
   });
 }
 
+/** Transit = PGI'd vans on the road + vans at Transport (finished, being sent to the dealer: AU finish = today). Returns
+ *  new dealer objects (the snapshot is cached and shared). */
+export function withTransport(snapshot, rows, today) {
+  return snapshot.map(d => {
+    const extra = rows.filter(r => r.group === 'transport' && !r.empty && slugify(r.dealer) === d.slug).map(r => {
+      const since = String(r.live?.stationSince || r.live?.enteredAt || '').slice(0, 10);
+      return { chassis: r.chassis, where: 'transit', via: 'transport', category: isStockCustomer(r.customer) ? 'stock' : 'customer', model: r.model || '', customer: r.customer || '', since, days: since ? Math.round((Date.parse(today) - Date.parse(since)) / 86400000) : null, arrive: arrivalAtDealer(r, d, today) };
+    });
+    const n = cat => extra.filter(v => v.category === cat).length;
+    return { ...d, vehicles: [...d.vehicles, ...extra], transit: { ...d.transit, stock: d.transit.stock + n('stock'), customer: d.transit.customer + n('customer'), total: d.transit.total + extra.length, pgiStock: d.transit.stock, transportStock: n('stock'), transportCustomer: n('customer') } };
+  });
+}
+
 /** Stock each dealership still needs when the rolling line's vans reach it. `rollingEnd` = AU finish of the last
  *  rolling-line place; the dealer gets it `leadDays` later (= deliveredBy). By then:
- *  stock = yard stock + transit stock arriving by then (PGI + travel days) + stock vans from Transport → locked that arrive by then (AU finish + lead)
+ *  stock = yard stock + transit stock arriving by then (PGI + travel days; Transport: today + lead) + stock vans from AU production → locked that arrive by then (AU finish + lead)
  *          − average stock handovers per month × months until then;  need = target − stock. */
 export function dealerNeeds(snapshot, rows, today, rollingEnd) {
   return snapshot.map(d => {
@@ -169,7 +183,7 @@ export function dealerMonthly(d, rows, today, count = 8) {
   if (d.paused || leadDays(d) == null) return [];
   for (const v of d.vehicles || []) { const x = v.where === 'transit' && v.category !== 'second' && v.arrive && at(v.arrive.slice(0, 7)); if (x) x[v.category === 'stock' ? 'stockIn' : 'customerIn']++; }
   for (const r of rows) {
-    if (slugify(r.dealer) !== d.slug || r.group === 'dealership' || r.empty) continue;
+    if (slugify(r.dealer) !== d.slug || r.group === 'dealership' || r.group === 'transport' || r.empty) continue; // Transport: in d.vehicles as transit
     const day = arrivalAtDealer(r, d, today);
     const x = day && at(day.slice(0, 7)); if (!x) continue;
     if (isStockCustomer(r.customer)) x.stockIn++; else if (r.customer) x.customerIn++;

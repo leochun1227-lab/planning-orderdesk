@@ -10,7 +10,7 @@ import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -342,6 +342,8 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   // would reach the dealers), then pick the rolling line, move every other open order to the Customer pool, and forecast again.
   let dealership = null;
   if (dealers) {
+    const shown = dealers; // the Dealership tab lists the Portal's yard + transit only
+    dealers = withTransport(dealers, rows, today); // for the analysis, Transport vans count as in transit
     if (auCapacity) forecastAuFinish(rows, auCapacity, today);
     // The rolling line takes the Towable places after the last Towable van ahead of it; its last place is `rollingEnd`.
     const lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
@@ -350,7 +352,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); }); // on the rolling line by design
     for (const r of rows) if (r.group === 'later') r.group = 'customers';
     const names = new Map(); for (const r of rows) if (r.dealer && !names.has(slugify(r.dealer))) names.set(slugify(r.dealer), r.dealer);
-    for (const d of dealers) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
+    for (const d of shown) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
     dealership = { lockedLast, rollingEnd, size: rollingSize, picked: pick.picked.length, customers: pick.customers, dispatchDays: DISPATCH_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
       dealers: dealers.map((d, i) => { const { vehicles, ...rest } = d; return { ...rest, ...needs[i], monthly: [], stockPicked: pick.stockPicked[d.slug], stockAvailable: pick.stockAvailable[d.slug], customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length }; }) };
   }
@@ -371,12 +373,12 @@ function placeAfter(capacity, after, n) {
 /** A vehicle at (or on its way to) one of our dealerships, shaped like a production-line row. */
 function dealerRow(d, v, dealerName, today) {
   const prefix = v.chassis.slice(0, 3).toUpperCase();
-  return { id: `dealer-${d.slug}-${v.where}-${v.chassis}`, chassis: v.chassis, empty: false, line: prefix === 'SRV' || prefix === 'SRM' ? prefix : 'Towable', source: 'Dealer Portal', group: 'dealership', portalGroup: 'dealership', status: '',
+  return { id: `dealer-${d.slug}-${v.via || v.where}-${v.chassis}`, chassis: v.chassis, empty: false, line: prefix === 'SRV' || prefix === 'SRM' ? prefix : 'Towable', source: 'Dealer Portal', group: 'dealership', portalGroup: 'dealership', status: '',
     regent: '', regentRank: 99, regentDerived: false, ltRank: 0, ltField: '', ltDate: '', today, orderRow: null, forecast: '', planOrder: null, planRef: '', planWeld: '', planAssembly: '', issues: [],
     dealer: dealerName, model: v.model, range: prefix, customer: v.customer, orderId: '', production: null,
     cnActual: '', cnStart: '', cnPlanStart: '', cnPlanEnd: '', cnPlanMonth: '', auActual: '', auStart: '', auPlanStart: '', auPlanEnd: '', cnEnd: '', cnEndActual: false, auEnd: '', auEndActual: false,
     planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
-    dealerSite: { slug: d.slug, where: v.where, category: v.category, since: v.since, days: v.days, arrive: v.arrive || '', target: d.target } };
+    dealerSite: { slug: d.slug, where: v.where, via: v.via || 'pgi', category: v.category, since: v.since, days: v.days, arrive: v.arrive || '', target: d.target } };
 }
 // Expected AU finish (下线) for the AU production group. Capacity per working day comes from the Dealer Portal
 // "Production & dispatch" plan: Towable = total − SRM − SRV, and SRM / SRV each have their own number, so they never take

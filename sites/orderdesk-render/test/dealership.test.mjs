@@ -45,15 +45,15 @@ test('need = target − (yard + transit + stock vans arriving by then (AU finish
   const snap = [{ slug: 'frankston', target: 50, travelDays: 1, yard: { stock: 20 }, transit: { stock: 3 }, handover: { avgStock: 10 }, vehicles: [{ where: 'transit', category: 'stock', arrive: '2026-11-16' }, { where: 'transit', category: 'stock', arrive: '2026-11-20' }, { where: 'transit', category: 'stock', arrive: '2027-03-01' }] },
     { slug: 'traralgon', target: 25, travelDays: null, paused: true, yard: { stock: 17 }, transit: { stock: 4 }, handover: { avgStock: 6 } }];
   const rows = [
-    { dealer: 'Frankston', group: 'transport', customer: 'Frankston Stock' }, // finished today → there 2026-11-20
+    { dealer: 'Frankston', group: 'transport', customer: 'Frankston Stock' }, // Transport: counted as transit (withTransport), not here
     { dealer: 'Frankston', group: 'au', auEnd: '2027-01-10', customer: 'Frankston Stock' }, // there 2027-01-14
     { dealer: 'Frankston', group: 'locked', auEnd: '2027-02-27', customer: 'Frankston Stock' }, // there 2027-03-03: after the date
     { dealer: 'Frankston', group: 'later', customer: 'Frankston Stock' }, { dealer: 'Frankston', group: 'au', auEnd: '2026-12-01', customer: 'Bob' }];
   const [f, t] = dealerNeeds(snap, rows, '2026-11-16', '2027-02-12'); // rolling ends 2027-02-12 → Frankston gets it 2027-02-16
   assert.equal(f.deliveredBy, '2027-02-16'); assert.equal(f.lead, 4);
-  assert.equal(f.pipelineStock, 3); assert.equal(f.arriving, 2); assert.equal(f.pipelineCustomer, 1);
+  assert.equal(f.pipelineStock, 2); assert.equal(f.arriving, 1); assert.equal(f.pipelineCustomer, 1);
   assert.equal(f.transitArriving, 2, 'transit counted only when it arrives by then');
-  assert.equal(f.sold, 30, '10 a month × 3 months'); assert.equal(f.projected, 20 + 2 + 2 - 30); assert.equal(f.need, 50 - (20 + 2 + 2 - 30));
+  assert.equal(f.sold, 30, '10 a month × 3 months'); assert.equal(f.projected, 20 + 2 + 1 - 30); assert.equal(f.need, 50 - (20 + 2 + 1 - 30));
   assert.equal(t.paused, true); assert.equal(t.need, 0, 'Traralgon is not calculated for now');
 });
 
@@ -95,4 +95,14 @@ test('transit arrives PGI + travel days; overdue counts as today; Traralgon not 
   assert.equal(transitArrival('2026-11-10', { travelDays: 20 }, '2026-11-16'), '2026-11-30');
   assert.equal(transitArrival('2026-11-10', { travelDays: 1 }, '2026-11-16'), '2026-11-16');
   assert.equal(transitArrival('2026-11-10', { travelDays: null }, '2026-11-16'), '');
+});
+
+test('Transport vans join the dealer\'s transit: AU finish = today, + 3 + travel days', async () => {
+  const { withTransport } = await import('../lib/dealership.mjs');
+  const snap = [{ slug: 'st-james', travelDays: 20, target: 60, yard: { stock: 1 }, transit: { stock: 2, customer: 0, second: 0, total: 2 }, vehicles: [], handover: { avgStock: 1 } }];
+  const rows = [{ group: 'transport', dealer: 'ST James', chassis: 'T1', customer: 'St James Stock', live: { stationSince: '2026-11-10T01:00:00Z' } }, { group: 'transport', dealer: 'ST James', chassis: 'T2', customer: 'Ann' }, { group: 'au', dealer: 'ST James', chassis: 'A1', customer: 'St James Stock' }];
+  const [d] = withTransport(snap, rows, '2026-11-16');
+  assert.deepEqual(d.transit, { stock: 3, customer: 1, second: 0, total: 4, pgiStock: 2, transportStock: 1, transportCustomer: 1 });
+  assert.equal(d.vehicles.find(v => v.chassis === 'T1').arrive, '2026-12-09');
+  assert.equal(snap[0].vehicles.length, 0, 'the cached snapshot is not changed');
 });
