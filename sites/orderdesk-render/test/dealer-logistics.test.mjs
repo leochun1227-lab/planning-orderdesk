@@ -10,6 +10,33 @@ const dealer = (data, slug = 'frankston') => data.dealers.find(d => d.slug === s
 const total = data => data.dealers.reduce((n, d) => n + Object.values(d.stages).reduce((m, s) => m + s.total, 0), 0);
 const counts = ({ stock, customer, total }) => ({ stock, customer, total });
 
+test('Motorised = SRM/SRV models or chassis; all other vehicles are Towable, across stages and stock months', () => {
+  const snapshot = [{ slug: 'wangaratta', name: 'Wangaratta', vehicles: [
+    { chassis: 'YARD1', model: 'SRV19.1', where: 'yard', category: 'stock', since: '2026-10-01' },
+    { chassis: 'SRM270001', model: '', where: 'transit', category: 'stock', arrive: '2026-12-01' },
+  ] }];
+  const data = buildDealerLogistics([
+    row('A1', 'au', 'Frankston', 'Stock', { model: 'srm22.1', auEnd: '2026-12-29' }),
+    row('SRV-270002', 'locked', 'Geelong', 'Jane'),
+    row('T1', 'au', 'Frankston', 'Stock', { model: 'SRC21', auEnd: '2026-12-29' }),
+    row('T2', 'customers', '', 'Stock'),
+    row('YARD1', 'transport', 'Frankston', 'Stock', { model: 'SRV19.1' }),
+  ], { dealers: snapshot, today: '2026-11-17' });
+  const f = dealer(data), w = dealer(data, 'wangaratta');
+  assert.deepEqual(f.byVehicle.motorised.au.stockMonths, { '2027-01': 1 });
+  assert.deepEqual(f.byVehicle.towable.au.stockMonths, { '2027-01': 1 });
+  assert.equal(dealer(data, 'geelong').byVehicle.motorised.locked.customer, 1);
+  assert.equal(dealer(data, 'unassigned').byVehicle.towable.pool.stock, 1);
+  assert.equal(w.byVehicle.motorised.dealership.stock, 1, 'yard classification uses the Portal model');
+  assert.equal(w.byVehicle.motorised.transit.stock, 1, 'missing models fall back to SRM/SRV chassis');
+  assert.equal(f.byVehicle.motorised.transport.stock, 0, 'a downstream copy wins before vehicle-type aggregation');
+  for (const d of data.dealers) for (const [stage, all] of Object.entries(d.stages)) {
+    const m = d.byVehicle.motorised[stage], t = d.byVehicle.towable[stage];
+    for (const k of ['stock', 'customer', 'total', 'stockUndated']) assert.equal(m[k] + t[k], all[k]);
+    for (const month of Object.keys(all.stockMonths)) assert.equal((m.stockMonths[month] || 0) + (t.stockMonths[month] || 0), all.stockMonths[month]);
+  }
+});
+
 test('All orders includes every dealer and unassigned orders; the four dealers are quick filters only', () => {
   const rows = [row('P1', 'customers'), row('P2', 'later', 'Geelong', 'Jane'), row('R1', 'rolling', 'ST James', 'Ann'),
     row('L1', 'locked'), row('C1', 'cn'), row('S1', 'sea'), row('A1', 'au'), row('T1', 'transport'),
