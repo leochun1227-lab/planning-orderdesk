@@ -6,7 +6,7 @@ import { parseTms } from '../lib/tms-shipping.mjs';
 
 const today = '2026-11-17';
 const row = (chassis, group, extra = {}) => ({ id: chassis, chassis, group, customer: 'Jane', dealer: 'Frankston',
-  model: 'SRC21', cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', warnings: [], ...extra });
+  model: 'SRC21', signedAt: '2026-10-01', cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', warnings: [], ...extra });
 const build = (rows, extra = {}) => buildProductionLine({ board: { rows, completed: 0, averages: {} }, orders: {},
   longtree: new Map(), prod: new Map(), portal: new Map(), today, settings: {}, ...extra });
 

@@ -9,6 +9,7 @@ import { normalizeChassis } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
+import { signedPlansDate } from './order-signoff.mjs';
 import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
@@ -143,10 +144,10 @@ export const BOARD_GROUPS = [
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '有「集装箱 · 船 · ETA」（Shipment）记录但没有车辆 SAP GR 的，一律算海运，包括生产系统显示在澳洲的；其他已发运且没有 GR 的也算海运。有 GR 后归入澳洲生产 / Transport。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: 'Longtree 11 / 12 月计划里还没上线的车都在这里（已在国内生产 / 海运 / 澳洲的保持原位），按计划文件顺序；不再看 Portal 的 Schedule Confirmed。' },
-  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '订单池中所有经销商的 Customer 订单全部进入（按排产表顺序，不受 180 台目标限制）；有剩余目标位置时，再补直营店还缺的 Stock。澳洲预计下线接在排产锁定线后面。' },
-  { id: 'empty', band: 'preschedule', zh: 'Towable 造车计划', en: 'Towable build plan', note: '按 Portal Production & dispatch 的 Towable 月产量（总产量 − SRV − SRM），平均分到工作日历的每个工作日，每个位置一个澳洲下线日期；先不放车，以后再分配。Portal 的 SRV / SRM 空 slot 不再显示。' },
-  { id: 'customers', band: 'preschedule', zh: '订单池', en: 'Order pool', note: '未进入锁定线、产线或滚动线的 Stock 订单，按排产表顺序。Customer 订单全部进入滚动排产线。客户名以 stock 结尾（忽略大小写）为 Stock，其余为 Customer。' },
-  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '暂时为空：Customer 订单进入滚动排产线，其余 Stock 留在订单池。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '所有经销商已签字的 Customer 订单进入（按排产表顺序，不受 180 台目标限制）；有剩余目标位置时，再补直营店已签字的 Stock。未签字订单进入「处理中订单」。澳洲预计下线接在排产锁定线后面。' },
+  { id: 'customers', band: 'preschedule', zh: '库存订单池', en: 'Stock order pool', note: '已签字、未进入锁定线、产线或滚动线的 Stock 订单，按排产表顺序。已签字 Customer 订单进入滚动排产线，未签字订单进入「处理中订单」。' },
+  { id: 'processing', band: 'preschedule', zh: '处理中订单', en: 'Orders in progress', note: '原滚动排产线及订单池中尚未收到签字图纸的订单，包含 Customer 和 Stock，不分配滚动线产能。收到签字日期后，重新按 Customer / Stock 规则进入滚动排产线或库存订单池。' },
+  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '暂时为空：已签字 Customer 进入滚动排产线，已签字 Stock 留在库存订单池，未签字订单进入「处理中订单」。' },
 ];
 
 // ---- Orderdesk rules on top of the Portal board ------------------------------------------------
@@ -285,9 +286,10 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   const counts = Object.fromEntries(BOARD_GROUPS.map(g => [g.id, 0]));
   const rows = [], crmDone = [];
   for (const raw of board.rows) {
-    if (raw.empty) continue; // Portal SRV / SRM empty slots: replaced by the Towable build plan below
+    if (raw.empty) continue; // Capacity-only slots are not orders and are not displayed on the production line.
     const chassis = raw.empty ? '' : normalizeChassis(raw.chassis);
     const order = chassis ? orderByChassis.get(chassis) : undefined;
+    const signedAt = signedPlansDate([order?.signedAt, raw.signedAt], today);
     const lt = chassis ? longtree.get(chassis) : undefined, au = chassis ? prod.get(chassis) : undefined, p = (chassis && portal.get(chassis)) || {}, ship = (chassis && tms.get(chassis)) || null;
     let group = groupFor(raw, lt || {}, p, today, au, ship), source = raw, planRow = null, notInPlan = false;
     if (activePlan && chassis && !EXECUTION.has(group)) {
@@ -296,6 +298,10 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         group = 'locked'; // every plan car not yet on the line: 排产锁定线 (Portal Schedule Confirmed no longer used)
         source = { ...raw, cnPlanStart: planRow.weldPlan || planRow.assemblyPlan || raw.cnPlanStart };
       } else if (ROLLING.has(group)) { group = 'later'; notInPlan = true; }
+    }
+    if (['rolling', 'customers', 'later', 'processing'].includes(group)) {
+      group = signedAt ? (group === 'processing' ? 'customers' : group) : 'processing';
+      if (group === 'processing') notInPlan = false;
     }
     const dateGroup = group === 'transport' ? 'au' : group, moved = dateGroup !== raw.group || source !== raw;
     const b = !moved ? raw : { ...source, ...datesForGroup(source, dateGroup, today, settings, lt || {}, p), overdue: Boolean(ROLLING.has(group) && source.cnPlanStart && source.cnPlanStart < today) };
@@ -318,7 +324,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         ...((seen.get(chassis) || []).length > 1 ? [{ code: 'duplicate', level: 'error', zh: `车架号在产线出现 ${seen.get(chassis).length} 次（${seen.get(chassis).map(x => BOARD_GROUPS.find(gr => gr.id === x)?.zh || x).join('、')}）`, en: `Chassis appears ${seen.get(chassis).length} times on the line (${seen.get(chassis).join(', ')})` }] : []),
         ...(notInPlan ? [{ code: 'notInPlan', level: 'warn', zh: `不在 Longtree 11 / 12 月排产计划里（Portal 国内计划上线 ${raw.cnPlanStart || '—'}，原在${raw.group === 'locked' ? '排产锁定线' : '滚动排产线'}）`, en: `Not in the Longtree Nov / Dec plan (Portal CN plan start ${raw.cnPlanStart || '—'}, was ${raw.group})` }] : []),
         ...issuesFor({ b, group, lt, au, sap: p, regent, today })],
-      dealer: b.dealer || '', customer, modelYear: String(order?.modelYear || b.modelYear || '').trim(), model: b.model || '', range: b.range || '', orderId: order ? chassis : '',
+      dealer: b.dealer || '', customer, signedAt, modelYear: String(order?.modelYear || b.modelYear || '').trim(), model: b.model || '', range: b.range || '', orderId: order ? chassis : '',
       production: b.production ? { status: b.production.status || '', stage: b.production.stage || '', location: b.production.location || '' } : null,
       cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: cnPlan.date, cnPlanMonth: cnPlan.date ? '' : cnPlan.month, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
       ...finishDates(b, lt, p, today),
@@ -333,15 +339,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       },
     });
   }
-  for (const slot of buildPlan?.rows || []) {
-    counts.empty = (counts.empty || 0) + 1;
-    rows.push({ id: slot.id, chassis: '', empty: true, line: 'Towable', source: 'build-plan', group: 'empty', portalGroup: 'empty', status: '', regent: '', regentRank: 99, regentDerived: false, ltRank: 0, ltField: '', ltDate: '',
-      planOrder: null, planRef: '', planWeld: '', planAssembly: '', issues: [], dealer: '', model: '', modelYear: '', range: '', customer: '', orderId: '', production: null,
-      cnActual: '', cnStart: '', cnPlanStart: '', cnPlanEnd: '', auActual: '', auStart: '', auPlanStart: '', auPlanEnd: '', cnEnd: '', cnEndActual: false, auEnd: slot.date, auEndActual: false,
-      planStart: '', planEnd: '', expectedEnd: '', delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false, warnings: [], live: null,
-      build: { month: slot.month, seq: slot.seq, day: slot.day, perDay: slot.perDay } });
-  }
-  // Rebuild the rolling queue after physical grouping / the locked plan. All customer orders are admitted even if
+  // Rebuild the rolling queue after physical grouping / the locked plan. Signed customer orders are admitted even if
   // the dealer snapshot is unavailable. Dealer stock top-up still depends on the snapshot and target capacity.
   for (const r of rows) if (r.group === 'rolling') r.group = 'customers';
   let dealership = null, dealersAll = null, shown = null, needs = [], lockedLast = today, rollingEnd = today;
@@ -449,11 +447,11 @@ export const GROUP_SORT = {
   locked: by(num(r => r.planOrder)),
   rolling: by(num(r => r.rollingOrder)),
   dealership: by(asc(r => r.dealerSite?.slug), asc(r => (r.dealerSite?.where === 'yard' ? 'a' : 'b')), asc(r => ({ stock: 'a', customer: 'b', second: 'c' })[r.dealerSite?.category] || 'z'), num(r => -(r.dealerSite?.days ?? 0))),
-  empty: by(asc(r => r.auEnd), num(r => r.build?.seq)),
   customers: by(num(r => r.orderRow), asc(r => r.forecast)),
+  processing: by(num(r => r.orderRow), asc(r => r.forecast)),
   later: by(num(r => r.orderRow), asc(r => r.forecast), num(r => r.regentRank ?? 99)),
 };
-const GROUP_INDEX = ['dealership', 'transport', 'au', 'sea', 'cn', 'locked', 'rolling', 'empty', 'customers', 'later'];
+const GROUP_INDEX = ['dealership', 'transport', 'au', 'sea', 'cn', 'locked', 'rolling', 'customers', 'processing', 'later'];
 export function sortLineRows(rows) {
   return rows.map((r, i) => ({ r, i })).sort((a, z) => (GROUP_INDEX.indexOf(a.r.group) - GROUP_INDEX.indexOf(z.r.group)) || (GROUP_SORT[a.r.group] || (() => 0))(a.r, z.r)
     || (a.r.cnStart || '9999').localeCompare(z.r.cnStart || '9999') || a.i - z.i).map(x => x.r);
@@ -505,18 +503,18 @@ async function prodReportRows(env, fetcher) {
 }
 /** Cached sources; each keeps its last good copy when a refresh fails. Portal comes from the shared copy. */
 export const SOURCE_TTL_MS = { longtree: 30 * 60 * 1000, prod: 15 * 60 * 1000 };
-// The bundled Portal board drops model year. Carry explicit years from the same cached source records;
-// never derive a model year from a chassis prefix, a production date or a slot's calendar year.
-function portalModelYears(raw) {
-  const years = new Map();
+// The bundled Portal board drops model year and sign-off. Carry explicit values from the same cached records.
+function portalOrderDetails(raw, today) {
+  const details = new Map();
   const list = v => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);
   for (const records of [raw.campers, raw.schedule, raw.motorhome?.orders]) for (const r of list(records)) {
     if (!r || typeof r !== 'object') continue;
     const chassis = normalizeChassis(r.chassisNumber || r.Chassis || r.chassis);
     const year = [r.modelYear, r.ModelYear, r['Model Year']].map(v => String(v ?? '').trim()).find(Boolean);
-    if (chassis && year) years.set(chassis, year);
+    const signedAt = signedPlansDate([r.signedAt, r['Signed Plans Received'], r.signedOrderReceived, r.signedOffDate], today);
+    if (chassis && (year || signedAt)) details.set(chassis, { modelYear: year || details.get(chassis)?.modelYear || '', signedAt: signedAt || details.get(chassis)?.signedAt || '' });
   }
-  return years;
+  return details;
 }
 export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = SOURCE_TTL_MS, portal, board = loadPortalBoard(), sap = null } = {}) {
   const calendar = loadWorkCalendar();
@@ -542,8 +540,9 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     if (boardCache && boardCache.at === copy.at && boardCache.today === today) return boardCache;
     const mod = await board, raw = copy.raw;
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
-    const years = portalModelYears(raw);
-    const rows = built.rows.map(r => ({ ...r, modelYear: years.get(normalizeChassis(r.chassis)) || r.modelYear || '' }));
+    const details = portalOrderDetails(raw, today);
+    const rows = built.rows.map(r => { const d = details.get(normalizeChassis(r.chassis));
+      return { ...r, modelYear: d?.modelYear || r.modelYear || '', signedAt: signedPlansDate([r.signedAt, d?.signedAt], today) }; });
     let dealers = null, dealersError = '';
     try { dealers = raw.yard ? dealerSnapshot(raw, today, { all: true }) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
     boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, dealersError,

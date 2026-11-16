@@ -96,7 +96,7 @@ test('flow uses the final production line after rolling selection and the existi
     YARD: { dealer: 'Frankston', pgidate: '16/11/2026', customer: 'Stock' },
   }, handover: { frankston: { HANDED: { handoverAt: today } } } }, today);
   const board = { rows: [row('ROLL', 'later', 'Frankston', 'Jane'), row('WAIT', 'later'), row('READY', 'au')]
-    .map(r => ({ ...r, id: r.chassis, warnings: [], cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '' })), completed: 0, averages: {} };
+    .map(r => ({ ...r, id: r.chassis, signedAt: '2026-10-01', warnings: [], cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '' })), completed: 0, averages: {} };
   const line = buildProductionLine({ board, orders: {}, dealers, today, settings: {}, rollingSize: 1,
     longtree: new Map(), portal: new Map(), prod: new Map([['READY', { location: 'transport' }]]) });
   const f = dealer(buildDealerLogistics(line.rows));

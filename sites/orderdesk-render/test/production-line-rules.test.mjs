@@ -57,7 +57,7 @@ test('a row moved to AU gets AU plan dates', () => {
 });
 import { buildProductionLine } from '../lib/production-line.mjs';
 test('the plan snapshot orders the rolling 60 days and flags duplicates', () => {
-  const row = (id, group, extra = {}) => ({ id, chassis: id, group, customer: 'Fixture Stock', cnPlanStart: '2026-12-01', cnPlanEnd: '2026-12-20', auPlanStart: '2027-02-01', auPlanEnd: '2027-03-01', locked: false, warnings: [], ...extra });
+  const row = (id, group, extra = {}) => ({ id, chassis: id, group, customer: 'Fixture Stock', signedAt: '2026-10-01', cnPlanStart: '2026-12-01', cnPlanEnd: '2026-12-20', auPlanStart: '2027-02-01', auPlanEnd: '2027-03-01', locked: false, warnings: [], ...extra });
   const board = { rows: [row('A', 'rolling'), row('B', 'later'), row('C', 'rolling'), row('D', 'locked', { locked: true }), row('E', 'cn'), row('E', 'later')], completed: 0, averages: {} };
   const plan = { activeUntil: '2026-12-31', rows: [], byChassis: new Map([['B', { order: 1, months: ['2026-11#5'], weldPlan: '2026-11-20', finishPlan: '2026-12-05' }], ['D', { order: 2, months: ['2026-12#1'], weldPlan: '2026-12-02' }], ['A', { order: 3, months: ['2026-12#2'], weldPlan: '2026-12-03' }]]) };
   const out = buildProductionLine({ board, orders: {}, longtree: new Map(), prod: new Map(), portal: new Map(), today: '2026-11-11', settings: {}, plan });
