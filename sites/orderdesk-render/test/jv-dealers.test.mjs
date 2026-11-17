@@ -27,7 +27,7 @@ const build = (rows, dealers) => buildProductionLine({ board: { rows, completed:
 test('the four named JV dealers have distinct identities and existing targets, without joining self-owned', () => {
   const list = dealerList(raw), jv = list.filter(d => d.jv);
   assert.deepEqual(jv.map(d => [d.name, d.target]), [['Bundaberg', 40], ['Heatherbrae', 40], ['Toowoomba', 35], ['Wangaratta', 25]]);
-  assert.ok(jv.every(d => d.own === false && d.travelDays === null));
+  assert.ok(jv.every(d => d.own === false && d.travelDays === 7));
   assert.equal(new Set(list.map(d => d.slug)).size, list.length, 'configured JV dealers are not duplicated');
   assert.equal(list.filter(d => d.own).length, 5);
   assert.ok(!list.some(d => ['group', 'closed'].includes(d.slug)));
@@ -39,7 +39,7 @@ test('JV snapshot uses each dealer’s real yard, transit and last three full mo
   const all = dealerSnapshot(raw, today, { all: true });
   for (const d of all.filter(d => d.jv)) {
     assert.deepEqual(d.yard, { stock: 1, customer: 1, second: 1, total: 3 });
-    assert.equal(d.transit.stock, 1); assert.equal(d.vehicles.find(v => v.where === 'transit').arrive, '');
+    assert.equal(d.transit.stock, 1); assert.equal(d.vehicles.find(v => v.where === 'transit').arrive, '2026-11-23');
     assert.deepEqual(d.handover.months.map(m => m.stock), [3, 6, 9]);
     assert.equal(d.handover.avgStock, 6); assert.equal(d.handover.thisMonth.stock, 1);
   }
@@ -53,7 +53,7 @@ test('JV cards are generated from final production rows, while self-owned totals
   assert.deepEqual(out.dealership.jvDealers.map(d => d.name), JV_DEALERS.map(d => d.name));
   assert.equal(out.counts.dealership, 0, 'JV yard stock does not inflate the self-owned Dealership tab');
   for (const d of out.dealership.jvDealers) {
-    assert.equal(d.monthly.length, 8); assert.equal(d.pipelineStock, 1); assert.equal(d.customerPicked, 1);
+    assert.equal(d.monthly.length, 8); assert.equal(d.lead, 10); assert.ok(d.monthly.every(m => m.stockIn !== null && m.endStock !== null)); assert.equal(d.pipelineStock, 1); assert.equal(d.customerPicked, 1);
     assert.equal(d.transit.stock, 2); assert.equal(d.transit.pgiStock, 1); assert.equal(d.transit.transportStock, 1);
     assert.equal(d.stockAvailable, 1); assert.equal(d.stockPicked, 0);
     assert.equal(out.rows.find(r => r.id === `${d.slug}STOCK`).group, 'customers');
@@ -63,7 +63,7 @@ test('JV cards are generated from final production rows, while self-owned totals
 });
 
 test('missing transport days retain the monthly layout and sales estimate but leave arrivals, closing stock and need pending', () => {
-  const d = dealerSnapshot(raw, today, { all: true }).find(d => d.slug === 'bundaberg');
+  const d = { ...dealerSnapshot(raw, today, { all: true }).find(d => d.slug === 'bundaberg'), travelDays: null };
   const rows = [{ dealer: d.name, group: 'au', customer: 'Stock', auEnd: '2026-12-01' }];
   const [need] = dealerNeeds([d], rows, today, '2027-02-01');
   assert.equal(need.lead, null); assert.equal(need.deliveredBy, ''); assert.equal(need.need, null); assert.equal(need.projected, null);

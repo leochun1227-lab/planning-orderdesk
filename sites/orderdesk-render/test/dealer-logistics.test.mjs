@@ -122,7 +122,8 @@ test('every dealer’s Portal yard and transit are included even when the produc
   assert.equal(w.stages.sea.total, 0); assert.equal(w.stages.transport.total, 0);
   assert.equal(w.stages.dealership.stock, 1); assert.equal(w.stages.transit.stock, 1);
   assert.deepEqual(w.stages.dealership.stockMonths, { '2026-10': 1 });
-  assert.equal(w.stages.transit.stockUndated, 1, 'missing road days are not invented');
+  assert.equal(w.stages.transit.stockUndated, 0);
+  assert.deepEqual(w.stages.transit.stockMonths, { '2026-11': 1 }, 'JV transit arrives after seven road days');
   assert.deepEqual(snapshot, before, 'the shared Portal snapshot is not changed');
 });
 
