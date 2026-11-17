@@ -3,6 +3,10 @@ export type RollingRequest = { id: string; dealer: string; model: string; quanti
 type Week = { week: string; fixedCustomer: number; fixedStock: number; customer: number; stock: number; newOrders: number; blocked: number; unknown: number; customerShare: number | null; plannedCustomerShare: number | null; ratioMet: boolean };
 export type BalancedRolling = { status: string; quantity: number; inputToken: string; expectedId: string | null; opinionId: string | null; canGenerate: boolean;
   proposal: null | { quantity: number; scheduled: number; customerCount: number; stockCount: number; newOrders: number; inventoryBlocked: number; capacityGap: number; customerWaiting: number; earliest: string; latest: string; weeks: Week[]; requests: RollingRequest[] } };
+async function readResponse(response: Response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch { throw new Error(`服务返回异常（HTTP ${response.status}），请刷新查看排产结果后重试。`); }
+}
 const pct = (v: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 export default function BalancedRollingPanel({ data, zh, disabled, reload }: { data: BalancedRolling; zh: boolean; disabled: boolean; reload: () => Promise<void> }) {
   const [quantity, setQuantity] = useState(String(data.quantity)), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -12,8 +16,17 @@ export default function BalancedRollingPanel({ data, zh, disabled, reload }: { d
     const count = Number(quantity); if (!clear && (!quantity.trim() || !Number.isInteger(count) || count < 1 || count > 3000)) { setError(zh ? '请输入1–3000的整数。' : 'Enter an integer from 1 to 3000.'); return; }
     setBusy(true);
     try {
-      const r = await fetch(`/api/rolling-plan${clear ? '/clear' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quantity: count, inputToken: data.inputToken, expectedId: data.expectedId, opinionId: data.opinionId }) }), body = await r.json();
-      if (!r.ok) throw new Error(body.error); await reload();
+      const r = await fetch(`/api/rolling-plan${clear ? '/clear' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quantity: count, background: !clear, inputToken: data.inputToken, expectedId: data.expectedId, opinionId: data.opinionId }) }), body = await readResponse(r);
+      if (!r.ok) throw new Error(body.error);
+      if (body.jobId) {
+        for (;;) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          const poll = await fetch(`/api/rolling-plan/job?id=${encodeURIComponent(body.jobId)}`, { cache: 'no-store' }), job = await readResponse(poll);
+          if (!poll.ok || job.status === 'failed') throw new Error(job.error || '排产失败');
+          if (job.status === 'done') break;
+        }
+      }
+      await reload();
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   }
   const p = data.proposal;
