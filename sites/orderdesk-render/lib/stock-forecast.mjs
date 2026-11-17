@@ -55,7 +55,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
   if (![8, 14].includes(Number(months))) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
   months = Number(months);
   if (!Array.isArray(dealers)) throw new Error('Dealer stock data is unavailable');
-  const inputs = dealers.filter(d => d.slug);
+  const inputs = dealers.filter(d => d.slug && (dealerGroup(d) !== 'independent' || Number.isFinite(d.target) && d.target > 0));
   const index = new Map(inputs.map(d => [d.slug, d]));
   const warnings = [];
   const seen = new Set(), orders = [];

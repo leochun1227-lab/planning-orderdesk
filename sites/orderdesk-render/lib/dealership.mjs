@@ -120,7 +120,7 @@ export function configureDealers(dealers, overrides = {}, today) {
     const setting = overrides[d.slug] || {}, configured = { ...d, ...setting };
     return { ...configured, vehicles: (d.vehicles || []).map(v => v.where === 'transit' && v.via !== 'transport'
       ? { ...v, arrive: transitArrival(v.since, configured, today) } : v) };
-  }) ?? null;
+  }).filter(d => dealerGroup(d) !== 'independent' || Number.isFinite(d.target) && d.target > 0) ?? null;
 }
 
 export function validateDealerSettings(entries, known) {
