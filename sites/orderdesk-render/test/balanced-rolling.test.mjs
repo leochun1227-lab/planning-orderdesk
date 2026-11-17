@@ -190,3 +190,18 @@ test('independent settings persist and invalidate stale opinions and rolling sch
   assert.equal(live.rows.filter(r => r.rollingKind === 'stock').length, 0);
   f.auth.user = () => null; assert.equal((await f.post('/api/rolling-plan', {})).status, 401);
 });
+
+test('background generation returns immediately and exposes the saved result through polling', async () => {
+  const f = await apiFixture(); await f.save(await f.get());
+  const { balanced: b } = await f.get('/api/production-line');
+  const response = await f.post('/api/rolling-plan', { ...b, quantity: 20, background: true });
+  assert.equal(response.status, 202); const { jobId } = await response.json();
+  let job;
+  for (let i = 0; i < 100; i++) {
+    job = await f.get(`/api/rolling-plan/job?id=${jobId}`);
+    if (job.status !== 'running') break;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.equal(job.status, 'done', job.error);
+  assert.equal((await f.get('/api/production-line')).balanced.proposal.quantity, 20);
+});

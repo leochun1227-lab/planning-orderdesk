@@ -180,12 +180,13 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
   });
 
   let rollingBusy = false;
-  app.post('/api/rolling-plan', async c => {
+  let rollingJob = null;
+  const generateRolling = async (c, suppliedBody) => {
     if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
     if (rollingBusy) return json({ error: '正在生成排产，请稍后刷新查看。' }, 409);
     rollingBusy = true;
     try {
-      const body = await planningBody(c), ctx = await currentLine();
+      const body = suppliedBody || await planningBody(c), ctx = await currentLine();
       if (!ctx.state || body.inputToken !== ctx.fingerprint || body.opinionId !== ctx.state.stockForecastPlan?.id || body.expectedId !== (ctx.state.rollingPlan?.id || null)) throw conflict('来源或排产意见已变化，请刷新后重试。');
       const proposal = await runBalancedRolling({ plan: ctx.state.stockForecastPlan, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers, capacity: ctx.sources.auCapacity,
         settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
@@ -198,6 +199,21 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       return json({ ok: true, scheduled: proposal.scheduled, newOrders: proposal.newOrders, blocked: proposal.inventoryBlocked, capacityGap: proposal.capacityGap });
     } catch (e) { return json({ error: message(e, '平衡排产失败') }, e.status || 400); }
     finally { rollingBusy = false; }
+  };
+  app.post('/api/rolling-plan', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    let body; try { body = await planningBody(c); } catch { return json({ error: '请求无效' }, 400); }
+    if (!body.background) return generateRolling(c, body);
+    if (rollingBusy) return json({ error: '正在生成排产，请稍后刷新查看。' }, 409);
+    const job = { id: crypto.randomUUID(), status: 'running', error: '' }; rollingJob = job;
+    void generateRolling(c, body).then(async response => {
+      const result = await response.json(); job.status = response.ok ? 'done' : 'failed'; job.error = result.error || '';
+    }).catch(error => { job.status = 'failed'; job.error = error.message || '排产失败'; });
+    return json({ jobId: job.id }, 202);
+  });
+  app.get('/api/rolling-plan/job', c => {
+    if (!rollingJob || rollingJob.id !== c.req.query('id')) return json({ error: '任务已结束或服务已重启，请刷新查看排产结果。' }, 404);
+    return json(rollingJob);
   });
   app.post('/api/rolling-plan/clear', async c => {
     if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
