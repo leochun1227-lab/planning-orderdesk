@@ -118,14 +118,14 @@ test('AI uses only the existing OPENAI_API env on the server, minimizes data and
 });
 
 async function apiFixture() {
-  const f = fixture(), store = createStore(createMemoryFirebase());
+  const f = fixture(), firebase = createMemoryFirebase(), store = createStore(firebase);
   await store.writeState({ orders: { SRC270001: { id: 'SRC270001', chassis: 'SRC270001', customer: 'Stock', dealer: 'Frankston', status: 'active', signedAt: today } }, events: {}, imports: {}, meta: {}, refs: {} }, '0');
   const auth = { user: () => ({ name: 'Planning Test' }) }, productionSource = { current: async () => f.sources };
   const app = createApp({ store, auth, env: {}, productionSource });
   const get = async () => (await app.request('/api/stock-forecast')).json();
   const post = (path, body, origin = 'http://localhost') => app.request(`/api/stock-forecast/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify(body) });
   const save = async report => { const response = await post('save', { multiplier: report.multiplier, months: report.months, previewToken: report.previewToken, expectedPlanId: report.expectedPlanId }); assert.equal(response.status, 200, await response.clone().text()); return response.json(); };
-  return { ...f, store, app, auth, get, post, save };
+  return { ...f, firebase, store, app, auth, get, post, save };
 }
 
 test('API save → recommend → confirm → refresh survives persistence, excludes nameless processing, and never changes actual orders', async () => {
@@ -175,4 +175,50 @@ test('concurrent admission writes cannot overwrite each other, and stock changes
   const live = await (await f.app.request('/api/production-line')).json();
   assert.equal(live.rows.filter(r => r.rollingKind === 'stock').length, 0);
   assert.equal((await f.post('admissions', { mode: 'remove', planId: p.planId, chassis: held.rolling.requested })).status, 200);
+});
+
+test('both model lists persist together; moving a model to not recommended invalidates the old opinion and its admissions', async () => {
+  const f = await apiFixture(), initial = await f.get(); await f.save(initial);
+  const ready = await f.get(), p = ready.rolling;
+  assert.ok(p.items.some(a => a.chassis === 'SRC270001'));
+  assert.equal((await f.post('admissions', { mode: 'add', planId: p.planId, token: p.token, chassis: ['SRC270001'] })).status, 200);
+  const beforeOrders = (await f.store.readState()).state.orders;
+  const body = { models: ready.displayModels.filter(m => m !== 'SRC21'), notOnYardModels: [...ready.notOnYardModels, ' src21 '], previous: ready.displayModels, previousNotOnYardModels: ready.notOnYardModels };
+  assert.equal((await f.post('models', body, 'https://wrong.example')).status, 403);
+  assert.equal((await f.post('models', body)).status, 200);
+  const updated = await f.get(), persisted = (await createStore(f.firebase).readState()).state;
+  assert.ok(updated.notOnYardModels.includes('SRC21')); assert.ok(!updated.displayModels.includes('SRC21'));
+  assert.deepEqual(persisted.stockNotOnYardModels, updated.notOnYardModels);
+  assert.deepEqual(persisted.stockDisplayModels, updated.displayModels);
+  assert.deepEqual(persisted.orders, beforeOrders);
+  assert.equal(updated.rolling.status, 'stale'); assert.notEqual(updated.previewToken, ready.previewToken);
+  assert.equal((await f.post('admissions', { mode: 'add', planId: p.planId, token: p.token, chassis: ['SRC270001'] })).status, 409);
+  await f.save(updated);
+  const replanned = await f.get(); assert.equal(replanned.rolling.status, 'ready');
+  assert.ok(!replanned.rolling.items.some(a => a.model === 'SRC21'));
+  assert.deepEqual((await f.store.readState()).state.stockForecastPlan.report.notOnYardModels, updated.notOnYardModels);
+  const live = await (await f.app.request('/api/production-line')).json();
+  assert.equal(live.rows.find(r => r.chassis === 'SRC270001').group, 'customers');
+  assert.equal(live.rows.find(r => r.customer === 'Jane Customer').group, 'rolling', 'customer demand still takes priority even for a nonrecommended stock model');
+});
+
+test('nonrecommended-only edits invalidate previews, reject stale or overlapping lists, and preserve explicit empty lists', async () => {
+  const f = await apiFixture(), initial = await f.get();
+  const payload = (current, extra = {}) => ({ models: current.displayModels, notOnYardModels: current.notOnYardModels, previous: current.displayModels, previousNotOnYardModels: current.notOnYardModels, ...extra });
+  assert.equal((await f.post('models', payload(initial))).status, 200);
+  const normalized = await f.get(); await f.save(normalized);
+  assert.equal((await f.post('models', payload(normalized, { notOnYardModels: ['SRC99'] }))).status, 200);
+  const changed = await f.get(); assert.equal(changed.rolling.status, 'stale'); assert.notEqual(changed.previewToken, normalized.previewToken);
+  assert.equal((await f.post('models', payload(changed, { previousNotOnYardModels: normalized.notOnYardModels }))).status, 409);
+  const before = (await f.store.readState()).state;
+  assert.equal((await f.post('models', payload(changed, { notOnYardModels: ['src21'] }))).status, 400);
+  assert.equal((await f.post('models', payload(changed, { notOnYardModels: null }))).status, 400);
+  assert.deepEqual((await f.store.readState()).state, before, 'invalid edits must not partially save either list');
+  assert.equal((await f.post('models', payload(changed, { notOnYardModels: [] }))).status, 200);
+  const cleared = await f.get(); assert.deepEqual(cleared.notOnYardModels, []);
+  assert.deepEqual((await createStore(f.firebase).readState()).state.stockNotOnYardModels, []);
+  assert.equal((await f.post('models', { models: cleared.displayModels, previous: cleared.displayModels })).status, 200, 'existing clients can save the recommended list without resetting exclusions');
+  assert.deepEqual((await f.get()).notOnYardModels, []);
+  f.auth.user = () => null;
+  assert.equal((await f.post('models', payload(cleared))).status, 401);
 });
