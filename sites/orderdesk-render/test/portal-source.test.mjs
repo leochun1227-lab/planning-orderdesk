@@ -17,3 +17,26 @@ test('the small Production & dispatch plan refreshes on its own short interval',
   assert.equal(b.plan.raw.dispatchPlan[2026].totalProduction[0], 288);
   assert.ok(big > 0);
 });
+
+for (const failPlan of [false, true]) {
+  test(`forced refresh keeps its plan promise while the larger board is pending (plan ${failPlan ? 'failure' : 'success'})`, async () => {
+    let release;
+    const boardGate = new Promise(r => { release = r; });
+    const fetcher = async url => {
+      if (PORTAL_PLAN_SOURCES.some(([, path]) => url.endsWith(`/${path}.json`))) {
+        if (failPlan) throw new Error('plan unavailable');
+        return { ok: true, json: async () => ({ total: 288 }) };
+      }
+      await boardGate;
+      return { ok: true, json: async () => ({}) };
+    };
+    const src = createPortalSource({ url: 'https://x', fetcher });
+    const pending = src.current({ force: true });
+    await new Promise(r => setImmediate(r));
+    release();
+    const result = await pending;
+    assert.ok(result.raw);
+    if (failPlan) assert.match(result.planError, /plan unavailable/);
+    else assert.equal(result.plan.raw.dispatchPlan.total, 288);
+  });
+}

@@ -43,8 +43,14 @@ export function createPortalSource({ url = PORTAL_DATABASE_URL, ttlMs = PORTAL_T
       if (force || stale) inflight ??= load().finally(() => { inflight = null; });
       const planStale = !plan || Date.now() - Date.parse(plan.at) > planTtlMs;
       if (force || planStale) planInflight ??= loadPlan().finally(() => { planInflight = null; });
-      if (force || !copy) await inflight;
-      if (force || !plan) await planInflight.catch(() => {});
+      // Either read can finish (and clear its shared slot) while the other is
+      // pending. Capture both and handle rejections immediately, including
+      // background refreshes, before waiting for the larger board response.
+      const copyRead = inflight, planRead = planInflight;
+      copyRead?.catch(() => {});
+      planRead?.catch(() => {});
+      if (force || !copy) await copyRead;
+      if (force || !plan) await planRead?.catch(() => {});
       return { ...copy, plan, planError, error, refreshing: Boolean(inflight) };
     },
   };
