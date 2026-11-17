@@ -542,6 +542,8 @@ body{background:#eef1f6;font-size:14px}
 .sf-detail table{font-size:11.5px}.sf-detail td:last-child{white-space:normal;min-width:230px;max-width:350px;text-align:left}.sf-empty{text-align:center!important;padding:24px!important;color:#7b8799}
 .sf-pager{display:flex;align-items:center;justify-content:flex-end;gap:9px;margin:8px 0;font-size:11.5px;color:#637083}.sf-pager button:disabled{opacity:.45}.sf-pager>span:first-child{margin-right:auto}
 .sf-rules{margin-top:14px;font-size:11.5px;color:#637083;border-top:1px solid #e5eaf2;padding-top:10px}.sf-rules summary{cursor:pointer;color:#33415a}.sf-rules p{margin:6px 0;line-height:1.6}
+.sf-model-editor{margin-bottom:10px}.sf-model-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-width:760px;margin-top:8px}.sf-model-inputs label{display:flex;flex-direction:column;gap:4px;font-weight:600;color:#53647f}.sf-model-inputs textarea{width:100%;min-height:68px;max-height:180px;resize:vertical;padding:6px 8px;font-family:inherit;font-size:12px;line-height:18px;font-weight:400;border:1px solid #ccd5e3;border-radius:5px;background:white;color:#1f3352}
+@media(max-width:480px){.sf-model-inputs{grid-template-columns:1fr}}
 @media(max-width:640px){.sf-download{margin-left:0}.sf-cards,.sf-cards.sf-long{grid-template-columns:minmax(320px,1fr)}.sf-panel{padding:10px}.sf-applied{width:100%}}
 
 /* Dealer logistics: one restrained flow, with separate destinations and local filters. */

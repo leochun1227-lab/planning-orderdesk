@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStockForecast, addCalendarMonth, forecastMultiplier, DISPLAY_MODELS } from '../lib/stock-forecast.mjs';
+import { buildStockForecast, addCalendarMonth, forecastMultiplier, DISPLAY_MODELS, NOT_ON_YARD, modelPolicy, validateStockModelLists } from '../lib/stock-forecast.mjs';
 import { dealerSnapshot } from '../lib/dealership.mjs';
 import { forecastExportSheets, buildForecastWorkbook } from '../lib/stock-forecast-export.mjs';
 import { createApp } from '../server/app.mjs';
@@ -15,6 +15,37 @@ function dealer(slug, { yard = 0, avg = 0, target = 40, own = false, travelDays 
 const row = (chassis, dealer, group = 'locked', auEnd = '2027-01-31', extra = {}) => ({ chassis, dealer, group, auEnd, customer: 'Stock', model: 'SRC21', modelYear: '2027', line: 'Towable', ...extra });
 const run = (dealers, rows, extra = {}) => buildStockForecast({ dealers, rows, today, ...extra });
 const find = (report, chassis) => [...report.own.actions, ...report.jv.actions].find(a => a.chassis === chassis);
+
+test('editable model lists normalize duplicates, reject conflicting recommendations and retain hard model exclusions', () => {
+  assert.deepEqual(validateStockModelLists([' src21 ', 'SRC21'], [' srh13 ', 'srh13']), { displayModels: ['SRC21'], notOnYardModels: ['SRH13'] });
+  assert.deepEqual(validateStockModelLists([], []), { displayModels: [], notOnYardModels: [] });
+  assert.throws(() => validateStockModelLists(['SRC21'], [' src21 ']), /不能同时/);
+  for (const bad of [null, 'SRC21', [''], [10], ['SRC21\nSRC19'], ['X'.repeat(81)], Array(101).fill('SRC21')]) assert.throws(() => validateStockModelLists([], bad));
+  assert.equal(modelPolicy('SRC99', '2027', [], [' src99 ']), 'notOnYard');
+  assert.equal(modelPolicy('SRC20', '2027', [], []), 'check', 'an explicitly empty list must not restore the default Not-on-yard models');
+  assert.equal(modelPolicy('SRT18', '2027', ['SRT18'], []), 'deleted');
+});
+
+test('adding, removing and moving a nonrecommended model changes actual forecast opinions while preserving physical and pool rules', () => {
+  const dealers = [dealer('bundaberg')], rows = [row('SRC1', 'Bundaberg', 'locked', '2027-01-31', { model: 'SRC99' }), row('SRC2', 'Bundaberg', 'cn', '2027-01-31', { model: 'SRC99' }), row('SRC3', 'Bundaberg', 'sea', '2027-01-31', { model: 'SRC99' }), row('SRC4', 'Bundaberg', 'customers', '', { model: 'SRC99' })];
+  const custom = run(dealers, rows, { displayModels: [], notOnYardModels: ['SRC99'] });
+  assert.deepEqual(custom.notOnYardModels, ['SRC99']);
+  assert.equal(find(custom, 'SRC1').action, 'cancel'); assert.equal(find(custom, 'SRC1').reason, 'notOnYard');
+  assert.equal(find(custom, 'SRC2').action, 'pending', 'started vehicles need review rather than cancellation');
+  assert.equal(find(custom, 'SRC3').action, 'keep', 'shipping supply is preserved');
+  assert.equal(find(custom, 'SRC4').action, 'pool', 'pool stock remains excluded from cancellations');
+  assert.equal(find(run(dealers, rows, { displayModels: [], notOnYardModels: [] }), 'SRC1').action, 'pending');
+  assert.equal(find(run(dealers, [rows[0]], { displayModels: ['SRC99'], notOnYardModels: [] }), 'SRC1').action, 'keep');
+  assert.deepEqual(run(dealers, []).notOnYardModels, NOT_ON_YARD);
+});
+
+test('yard reallocation candidates use the saved model lists rather than the original hardcoded lineup', () => {
+  const vehicles = Array.from({ length: 14 }, (_, i) => ({ chassis: `SRCY${i}`, model: 'SRC99', modelYear: '2027', category: 'stock', where: 'yard', days: 100 }));
+  const dealers = [dealer('frankston', { own: true, yard: vehicles.length, target: 1, travelDays: 1, vehicles }), dealer('geelong', { own: true, target: 10, travelDays: 1 })];
+  assert.equal(run(dealers, []).own.summary.reallocated, 0);
+  assert.ok(run(dealers, [], { displayModels: ['SRC99'], notOnYardModels: [] }).own.summary.reallocated > 0);
+  assert.equal(run(dealers, [], { displayModels: [], notOnYardModels: ['SRC99'] }).own.summary.reallocated, 0);
+});
 
 test('Towable snapshot excludes SRV/SRM from yard, PGI and three-month stock sales without altering the original snapshot', () => {
   const raw = { yard: { frankston: { SRC1: { model: 'SRC21', wholesaleBillToName: 'Regent' }, SRM1: { model: 'SRM22.1', wholesaleBillToName: 'Regent' }, BADKEY: { model: 'SRV19.1', wholesaleBillToName: 'Regent' } } },

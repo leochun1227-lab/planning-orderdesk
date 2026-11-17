@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isMotorhomeOrder, isStockCustomer, leadDays, slugify } from './dealership.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
-import { DISPLAY_MODELS, isTowable, modelPolicy } from './stock-forecast.mjs';
+import { DISPLAY_MODELS, NOT_ON_YARD, isTowable, modelPolicy } from './stock-forecast.mjs';
 
 const MS = 86400000;
 const key = v => String(v || '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -89,7 +89,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
     const id = chassisKey(r.chassis), u = units.get(slugify(r.dealer));
     const reason = !id || counts.get(id) !== 1 || physical.has(id) ? 'duplicate' : cancelled.has(id) ? 'cancelled' : r.regentRank < 6 ? 'progress' : isMotorhomeOrder(r) ? 'motorhome'
       : !signedPlansDate([r.signedAt], today) ? 'unsigned' : !u ? 'dealer' : u.d.slug === 'traralgon' || u.d.paused || u.lead == null ? 'receiving'
-      : modelPolicy(r.model, r.modelYear, plan.report.displayModels ?? DISPLAY_MODELS) !== 'display' ? 'model' : unresolved.has(u.d.slug) ? 'unresolved' : '';
+      : modelPolicy(r.model, r.modelYear, plan.report.displayModels ?? DISPLAY_MODELS, plan.report.notOnYardModels ?? NOT_ON_YARD) !== 'display' ? 'model' : unresolved.has(u.d.slug) ? 'unresolved' : '';
     if (reason) { hold(reason); continue; }
     pool.push({ r, u, id });
   }
