@@ -49,10 +49,9 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
   }
   app.runMailSync = runMailSync;
 
-  app.get('/api/health', async c => {
-    try { return json({ ok: true, revision: await store.revision(), store: store.info().backend }); }
-    catch (e) { return json({ ok: false, error: message(e, 'Firebase 不可用') }, 503); }
-  });
+  // Render's liveness check must not wait for a remote database. Dependency
+  // failures are reported separately below, without restarting a healthy Node process.
+  app.get('/api/health', () => json({ ok: true, service: 'regent-orderdesk' }));
 
   // ---- Planning computer endpoint: bearer token, no browser session ----
   app.post('/api/planning-agent', c => handlePlanningAgent(c.req.raw, { env, read: () => store.readState(), write: (state, etag) => store.writeState(state, etag) }));
@@ -89,6 +88,17 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
   app.use('/api/*', compress());
 
   app.get('/api/session', c => json({ user: auth.user(c.req.raw), store: store.info() }));
+  app.get('/api/readiness', async () => {
+    let timer;
+    try {
+      const revision = await Promise.race([
+        store.revision(),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Database check timed out')), 2000); }),
+      ]);
+      return json({ ok: true, revision, store: store.info().backend });
+    } catch { return json({ ok: false, error: 'Database is temporarily unavailable' }, 503); }
+    finally { clearTimeout(timer); }
+  });
   app.get('/api/revision', async c => json({ revision: await store.revision() }));
   // SRV/SRM planned dates, read-only from the Dealer Portal (cached 15 minutes).
   // One shared copy of the Dealer Portal (read every 2 hours at most) for the SRV/SRM plan and 产线.
