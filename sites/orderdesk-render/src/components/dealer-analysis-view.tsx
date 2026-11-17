@@ -6,7 +6,7 @@ import { RefreshCw, AlertTriangle, Store, ArrowDownToLine } from 'lucide-react';
 import DealerLogisticsFlow, { type DealerLogistics } from './dealer-logistics-flow';
 
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
-type MonthRow = { month: string; stockIn: number | null; customerIn: number | null; stockOut: number; endStock: number | null };
+export type MonthRow = { month: string; stockIn: number | null; customerIn?: number | null; stockOut: number; endStock: number | null; baselineEndStock?: number; transferOut?: number; unmet?: number };
 export type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   travelDays: number | null; lead: number | null; paused?: boolean; arriving: number | null; transitArriving: number | null; sold: number | null; projected: number | null; need: number | null; stockPicked: number; stockAvailable: number; customerPicked: number; monthly: MonthRow[] };
@@ -46,33 +46,40 @@ export function DealerTable({ dl, zh }: { dl: Dealership; zh: boolean }) {
   </table></div>;
 }
 
-function DealerCard({ d, zh }: { d: DealerSummary; zh: boolean }) {
+export type DealerCardData = Pick<DealerSummary, 'slug' | 'name' | 'target' | 'yard' | 'transit' | 'handover' | 'lead' | 'need' | 'paused' | 'monthly'> & { cap?: number; stopReceiving?: boolean; overCapMonths?: number; shortageMonths?: number };
+export function DealerCard({ d, zh }: { d: DealerCardData; zh: boolean }) {
   if (d.paused || !d.monthly.length) return <article className="da-card"><header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock}` : `Target ${d.target} · yard ${d.yard.stock}`}</span></div><b className="paused">{zh ? '暂不计算' : 'Paused'}</b></header>
     <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
       <tbody>{([['stock', zh ? 'Stock 交付' : 'Stock handovers', d.handover.avgStock]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table></article>;
-  const pending = d.lead == null;
-  const max = Math.max(1, ...d.monthly.map(x => x.stockIn ?? 0), ...d.monthly.map(x => x.endStock ?? 0), d.target), H = 90, h = (n: number) => `${Math.max(0, Math.min(1, n / max)) * H}px`;
+  const pending = d.lead == null && !d.stopReceiving, ceiling = d.cap ?? d.target, comparison = d.monthly.some(x => x.baselineEndStock != null);
+  const max = Math.max(1, ...d.monthly.map(x => x.stockIn ?? 0), ...d.monthly.map(x => x.endStock ?? 0), ...d.monthly.map(x => x.baselineEndStock ?? 0), ceiling), H = 90, h = (n: number) => `${Math.max(0, Math.min(1, n / max)) * H}px`;
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const label = (k: string, i: number) => { const [y, mm] = k.split('-'); return <>{MON[Number(mm) - 1]}{i === 0 || mm === '01' ? <small> {y}</small> : null}</>; };
   return <article className="da-card" data-dealer={d.slug}>
-    <header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock} · ${pending ? '运输天数待补' : `下线 + ${d.lead} 天到店`}` : `Target ${d.target} · yard ${d.yard.stock} · transit stock ${d.transit.stock} · ${pending ? 'Travel days needed' : `AU finish + ${d.lead} days`}`}</span></div>
-      <b className={pending ? 'paused' : d.need ? 'short' : 'ok'}>{pending ? (zh ? '运输天数待补' : 'Travel days needed') : d.need ? (zh ? `还缺 ${d.need}` : `Need ${d.need}`) : (zh ? '不缺' : 'OK')}</b></header>
+    <header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target}${d.cap != null ? ` · 上限 ${d.cap}` : ''} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock} · ${d.stopReceiving ? '停止收车' : pending ? '运输天数待补' : `下线 + ${d.lead} 天到店`}` : `Target ${d.target}${d.cap != null ? ` · ceiling ${d.cap}` : ''} · yard ${d.yard.stock} · transit stock ${d.transit.stock} · ${d.stopReceiving ? 'Not receiving' : pending ? 'Travel days needed' : `AU finish + ${d.lead} days`}`}</span></div>
+      <b className={pending || d.stopReceiving ? 'paused' : d.need ? 'short' : 'ok'}>{d.stopReceiving ? (zh ? '停止收车' : 'Not receiving') : pending ? (zh ? '运输天数待补' : 'Travel days needed') : d.need ? (zh ? `还缺 ${d.need}` : `Need ${d.need}`) : (zh ? '不缺' : 'OK')}</b></header>
     <table className="da-fc">
       <tbody>
-        <tr className="bars"><th>{zh ? <><span className="lg"><i className="stock" />到店 stock</span><span className="lg"><i className="line" />月底 stock</span><span className="lg"><i className="dash" />目标</span></> : <><span className="lg"><i className="stock" />Stock in</span><span className="lg"><i className="line" />Month-end stock</span><span className="lg"><i className="dash" />Target</span></>}</th>
+        <tr className="bars"><th><span className="lg"><i className="stock" />{zh ? '到店 stock' : 'Stock in'}</span><span className="lg"><i className="line" />{zh ? (comparison ? '预测月底 stock' : '月底 stock') : 'Month-end stock'}</span>{comparison && <span className="lg"><i className="before" />{zh ? '调整前库存' : 'Before changes'}</span>}<span className="lg"><i className="dash" />{zh ? (d.cap != null ? '库存上限' : '目标') : (d.cap != null ? 'Ceiling' : 'Target')}</span></th>
           {d.monthly.map(x => <td key={x.month}><div className="da-col" style={{ height: H }}>
-            <div className="da-tgt" style={{ bottom: h(d.target) }} />
+            <div className="da-tgt" style={{ bottom: h(ceiling) }} />
             {x.stockIn != null && <i className="stock" style={{ height: h(x.stockIn) }} />}
+            {x.stockIn != null && <span className="da-bar-value" style={{ bottom: `calc(${h(x.stockIn)} + 2px)` }}>{x.stockIn}</span>}
+            {x.baselineEndStock != null && <em className="before" style={{ bottom: h(x.baselineEndStock) }} />}
             {x.endStock != null && <em style={{ bottom: h(x.endStock) }} className={x.endStock < d.target ? 'low' : ''} />}
           </div></td>)}</tr>
         <tr className="months"><th>{zh ? '月份' : 'Month'}</th>{d.monthly.map((x, i) => <td key={x.month}>{label(x.month, i)}</td>)}</tr>
         <tr><th>{zh ? '到店 stock' : 'Stock in'}</th>{d.monthly.map(x => <td key={x.month}>{x.stockIn ?? '—'}</td>)}</tr>
-        <tr><th title={zh ? '按近三个月的月均 stock 交付；本月只算剩下的天数' : ''}>{zh ? '卖出 stock' : 'Stock sold'}</th>{d.monthly.map(x => <td key={x.month}>{Math.round(x.stockOut)}</td>)}</tr>
-        <tr className="end"><th>{zh ? '月底 stock' : 'Stock at month end'}</th>{d.monthly.map(x => <td key={x.month} className={x.endStock != null && x.endStock < d.target ? 'short' : ''}>{x.endStock ?? '—'}</td>)}</tr>
+        <tr><th title={zh ? '按近三个月的月均 stock 交付；本月只算剩下的天数' : ''}>{zh ? '卖出 stock' : 'Stock sold'}</th>{d.monthly.map(x => <td key={x.month}>{comparison ? x.stockOut : Math.round(x.stockOut)}</td>)}</tr>
+        {comparison && <tr className="before-row"><th>{zh ? '原月底 stock' : 'Before changes'}</th>{d.monthly.map(x => <td key={x.month}>{x.baselineEndStock ?? '—'}</td>)}</tr>}
+        <tr className="end"><th>{zh ? (comparison ? '预测月底 stock' : '月底 stock') : 'Stock at month end'}</th>{d.monthly.map(x => <td key={x.month} className={x.endStock != null && x.endStock < d.target ? 'short' : ''}>{x.endStock ?? '—'}</td>)}</tr>
+        {d.monthly.some(x => x.transferOut) && <tr><th>{zh ? '现货调出' : 'Yard transfers out'}</th>{d.monthly.map(x => <td key={x.month}>{x.transferOut || 0}</td>)}</tr>}
+        {d.monthly.some(x => x.unmet) && <tr><th>{zh ? '缺货影响销量' : 'Unmet sales'}</th>{d.monthly.map(x => <td key={x.month} className={x.unmet ? 'short' : ''}>{x.unmet || 0}</td>)}</tr>}
       </tbody>
     </table>
     <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
       <tbody>{([['stock', zh ? 'Stock 交付' : 'Stock handovers', d.handover.avgStock]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table>
+    {comparison && Boolean(d.overCapMonths || d.shortageMonths) && <p className="da-note sf-card-note">{zh ? `超上限 ${d.overCapMonths || 0} 个月 · 缺货 ${d.shortageMonths || 0} 个月` : `${d.overCapMonths || 0} months above ceiling · ${d.shortageMonths || 0} months with shortages`}</p>}
   </article>;
 }
 

@@ -76,6 +76,14 @@ node --env-file=.env scripts/import-state.mjs backup.json --force
 
 ## 本地开发
 
+### 库存调整预测
+
+左侧「库存调整预测」（`/#stock-forecast`）是独立的只读测算页。库存倍数可输入1.3、1.5等值并重算，直营与JV分别显示延期、取消、库存池暂不生产的数量及车架号下载。8/14个月选择只改变图表范围，不改变调整建议。
+
+只计Towable Stock，当前库存及近三个月销量均排除SRV/SRM、客户车和二手车。库存池未排入生产，不计到货或取消；国内已开工未落实接收窗口的车辆列待分流。锁定线/滚动线无1个自然月内接收空间才取消。Traralgon不收车，JV不转配，直营可给出跨店及现货调拨候选。候选按库存及车型缓冲依次匹配，不代表全局最优，也不重新预订工厂产能或执行运输。现货未来发车前需核实未售。
+
+图表同时显示调整前及调整后库存、到货柱及柱上台数。已在途及下游车辆仍可能造成超限；库存不足时交付量以可用库存为上限，缺货量单列。下载使用当前已计算结果，改参数后需先重算。
+
 ```bash
 npm install
 FIREBASE_DATABASE_URL=memory:// LOCAL_DB_FILE=.local-db.json FIREBASE_ROOT=demo node scripts/seed-demo.mjs --force

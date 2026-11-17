@@ -513,12 +513,34 @@ body{background:#eef1f6;font-size:14px}
 .da-col i{display:block;width:100%}.da-col i.stock{background:#3b6fe0;border-radius:2px 2px 0 0}.da-col i.cust{background:#22a36a}
 .da-col em{position:absolute;left:-5px;right:-5px;height:0;border-top:2px solid #1d2433}.da-col em.low{border-top-color:#c92a2a}
 .da-col .da-tgt{position:absolute;left:-12px;right:-12px;height:0;border-top:1px dashed #f08c00}
+.da-col .da-bar-value{position:absolute;left:-8px;right:-8px;text-align:center;font-size:10px;font-weight:600;line-height:12px;color:#315fb6;white-space:nowrap;pointer-events:none}
+.da-col em.before{border-top:1px dashed #8996aa}.da-fc .lg i.before{height:0;border-top:1px dashed #8996aa;border-radius:0}
+.da-fc tr.before-row th,.da-fc tr.before-row td{color:#8996aa;font-size:10.5px}
 .da-fc tr.bars td{padding-top:12px}
 .da-fc .lg{display:flex;align-items:center;gap:4px;font-weight:400;color:#61718a;font-size:10.5px;line-height:1.5}
 .da-fc .lg i{display:inline-block;width:9px;height:9px;border-radius:2px}.da-fc .lg i.stock{background:#3b6fe0}.da-fc .lg i.cust{background:#22a36a}
 .da-fc .lg i.line{height:0;border-top:2px solid #1d2433;border-radius:0}.da-fc .lg i.dash{height:0;border-top:1px dashed #f08c00;border-radius:0}
 .da-subhead{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
 .da-table tr.own td{background:#f7f9ff}.da-table tr.total td{border-top:2px solid #c9d1de;font-weight:600}
+
+/* Stock scenarios retain the Dealer analysis card and table style. */
+.view-forecast .page-header{margin-bottom:8px}.view-forecast .page-header .eyebrow{display:none}.view-forecast .page-header h1{font-size:19px}
+.sf-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;padding:10px 12px;border:1px solid #e3e7ee;border-radius:8px;background:#f8faff;margin-bottom:12px}
+.sf-controls label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:#53647f;font-weight:600}
+.sf-number{display:flex;align-items:center;gap:6px;border:1px solid #ccd5e3;border-radius:5px;padding:0 8px;background:#fff;height:33px}
+.sf-number input{width:80px;border:0;outline:0;background:none;font-size:13px;color:#1f3352}.sf-controls select{height:33px;border:1px solid #ccd5e3;border-radius:5px;padding:0 8px;color:#1f3352;background:#fff;font-size:12px}
+.sf-presets,.sf-scope,.sf-filters{display:flex;gap:4px;flex-wrap:wrap}.sf-presets button,.sf-scope button,.sf-filters button,.sf-pager button{border:1px solid #dce3ed;background:#fff;border-radius:5px;padding:7px 10px;font-size:11.5px;color:#53647f}
+.sf-presets button.active,.sf-scope button.active,.sf-filters button.active{color:#285dca;border-color:#b8cdf6;background:#edf3ff}
+.sf-calculate{height:33px;padding:0 14px;background:#1f3352;color:white;border:0;border-radius:5px;font-size:12px;font-weight:600}
+.sf-applied{font-size:11.5px;color:#637083;align-self:center}.sf-download{margin-left:auto}.sf-kpis small{display:block;margin-top:2px;font-size:10.5px}
+.sf-totals{margin-bottom:10px}.sf-cards{margin-bottom:16px}.sf-cards.sf-long{grid-template-columns:repeat(auto-fill,minmax(550px,1fr))}
+.sf-card-note{margin:5px 0 0;font-size:10.5px}.sf-warning{color:#8b6218;background:#fff8e9}.sf-actions{border-top:1px solid #e5eaf2;margin-top:14px;padding-top:4px}
+.sf-list-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:8px 0}.sf-filters button b{margin-left:4px;font-variant-numeric:tabular-nums}
+.sf-search{display:flex;gap:5px;align-items:center;color:#8492a6;border:1px solid #dce3ed;border-radius:5px;padding:7px 9px}.sf-search input{border:0;outline:0;font-size:12px;width:200px;background:none}
+.sf-detail table{font-size:11.5px}.sf-detail td:last-child{white-space:normal;min-width:230px;max-width:350px;text-align:left}.sf-empty{text-align:center!important;padding:24px!important;color:#7b8799}
+.sf-pager{display:flex;align-items:center;justify-content:flex-end;gap:9px;margin:8px 0;font-size:11.5px;color:#637083}.sf-pager button:disabled{opacity:.45}.sf-pager>span:first-child{margin-right:auto}
+.sf-rules{margin-top:14px;font-size:11.5px;color:#637083;border-top:1px solid #e5eaf2;padding-top:10px}.sf-rules summary{cursor:pointer;color:#33415a}.sf-rules p{margin:6px 0;line-height:1.6}
+@media(max-width:640px){.sf-download{margin-left:0}.sf-cards,.sf-cards.sf-long{grid-template-columns:minmax(320px,1fr)}.sf-panel{padding:10px}.sf-applied{width:100%}}
 
 /* Dealer logistics: one restrained flow, with separate destinations and local filters. */
 .dl-flow{margin-bottom:14px;border:1px solid #dce3ed;border-radius:8px;background:#fff;color:#1f3352}

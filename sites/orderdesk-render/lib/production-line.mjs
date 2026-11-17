@@ -551,9 +551,9 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     const details = portalOrderDetails(raw, today);
     const rows = built.rows.map(r => { const d = details.get(normalizeChassis(r.chassis));
       return { ...r, modelYear: d?.modelYear || r.modelYear || '', signedAt: signedPlansDate([r.signedAt, d?.signedAt], today) }; });
-    let dealers = null, dealersError = '';
-    try { dealers = raw.yard ? dealerSnapshot(raw, today, { all: true }) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
-    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, dealersError,
+    let dealers = null, forecastDealers = null, dealersError = '';
+    try { dealers = raw.yard ? dealerSnapshot(raw, today, { all: true }) : null; forecastDealers = raw.yard ? dealerSnapshot(raw, today, { all: true, towableOnly: true }) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
+    boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, forecastDealers, dealersError,
     };
     return boardCache;
   }
@@ -576,7 +576,7 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
       const [copy] = await Promise.all([portal.current({ force }), force || first ? inflight : null]);
       const pb = { ...(await portalBoard(copy, today)), ...portalPlan(copy.plan) };
       const sapCopy = sap ? await sap.current() : { rows: new Map(), at: '', count: 0, error: 'not configured' };
-      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan, auCapacity: pb.auCapacity, dealers: pb.dealers,
+      return { refreshing: Boolean(inflight) || copy.refreshing, longtree: state.longtree.data, prod: state.prod.data, portal: sapCopy.rows, board: pb.board, settings: pb.settings, tms: pb.tms, buildPlan: pb.buildPlan, auCapacity: pb.auCapacity, dealers: pb.dealers, forecastDealers: pb.forecastDealers,
         status: { ...Object.fromEntries(Object.entries(state).map(([k, v]) => [k, { at: v.at, error: v.error, count: v.count, configured: sources[k].configured }])), portal: { at: copy.at, error: copy.error || '', count: pb.board.rows.length, configured: true }, sap: { at: sapCopy.at, error: sapCopy.error, count: sapCopy.count, configured: Boolean(sap) }, tms: { at: pb.tmsAt, error: pb.tms.size ? '' : (copy.error || 'no data'), count: pb.tms.size, configured: true }, plan: { at: copy.plan?.at || '', updatedAt: pb.updatedAt || '', error: copy.planError || '', count: pb.auCapacity?.size || 0, configured: true }, dealers: { at: copy.at, error: pb.dealersError || '', count: pb.dealers ? pb.dealers.reduce((n, d) => n + d.vehicles.length, 0) : 0, configured: true } } };
     },
   };
