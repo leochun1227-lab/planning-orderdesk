@@ -112,6 +112,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const [data, setData] = useState<Payload | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [group, setGroup] = useState('au'), [line, setLine] = useState('All'), [chip, setChip] = useState(''), [sort, setSort] = useState<SortKey>('status');
   const [query, setQuery] = useState(''), [dealer, setDealer] = useState(''), [detail, setDetail] = useState<Row | null>(null);
+  const [orderType, setOrderType] = useState<'all' | 'stock' | 'customer'>('all');
   const grid = useRef<AgGridReact<Row>>(null);
   const [shown, setShown] = useState<number | null>(null), [colFilters, setColFilters] = useState(0);
   const syncShown = () => { const api = grid.current?.api; if (!api) return; const n = Object.keys(api.getFilterModel() || {}).length; setColFilters(n); setShown(n ? api.getDisplayedRowCount() : null); };
@@ -136,7 +137,13 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const rows = useMemo(() => { const lt = down('longtree', zh ? '飞书' : 'Longtree '), pr = down('prod', zh ? '生产系统' : 'Production API '), sp = data?.sources?.sap?.count ? '' : (zh ? 'SAP 未连接' : 'SAP not connected');
     return (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName, lt, pr, sp) })); }, [data, zh]);
   const searching = query.trim().length > 0;
-  const base = useMemo(() => rows.filter(r => (line === 'All' || r.line === line) && (!dealer || r.dealer === dealer)), [rows, line, dealer]);
+  const base = useMemo(() => rows.filter(r => {
+    if ((line !== 'All' && r.line !== line) || (dealer && r.dealer !== dealer)) return false;
+    if (orderType === 'all') return true;
+    if (r.empty || r.build) return false;
+    const type = r.group === 'dealership' ? r.dealerSite?.category : isStockCustomer(r.customer) ? 'stock' : 'customer';
+    return type === orderType;
+  }), [rows, line, dealer, orderType]);
   // The Dealership tab counts new stock in the five yards (as the Dealer Portal does); its list also has transit and customer vans.
   const counts = useMemo(() => Object.fromEntries(groups.map(g => [g.id, base.filter(r => r.group === g.id && (g.id !== 'dealership' || (r.dealerSite?.where === 'yard' && r.dealerSite.category === 'stock'))).length])), [base, groups]);
   const inGroup = useMemo(() => base.filter(r => r.group === group), [base, group]);
@@ -290,6 +297,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         {colFilters > 0 && <button className="pl-clear-filters" onClick={clearColFilters}><X size={13} />{zh ? `清除列筛选（${colFilters}）` : `Clear column filters (${colFilters})`}</button>}
         <label className="search"><Search size={15} /><input placeholder={zh ? '车架号、Dealer、车型或客户…' : 'Chassis, dealer, model or customer…'} value={query} onChange={e => setQuery(e.target.value)} />{query && <button onClick={() => setQuery('')}><X size={14} /></button>}</label>
         <label className="dealer-filter"><ListFilter size={15} /><select value={dealer} onChange={e => setDealer(e.target.value)}><option value="">{zh ? '全部经销商' : 'All dealers'}</option>{dealers.map(d => <option key={d}>{d}</option>)}</select></label>
+        <div className="seg" role="group" aria-label={zh ? '订单类型' : 'Order type'}>{(['all', 'stock', 'customer'] as const).map(v => <button key={v} aria-pressed={orderType === v} onClick={() => setOrderType(v)}>{v === 'all' ? (zh ? '全部' : 'All') : v === 'stock' ? (zh ? '库存' : 'Stock') : (zh ? '客户' : 'Customer')}</button>)}</div>
         <label className="pl-sort" title={zh ? '排序' : 'Sort'}><select value={sort} onChange={e => setSort(e.target.value as SortKey)}><option value="status" title={zh ? 'Transport：进入 Transport 时间；澳洲生产：澳洲预计下线日期；海运：到港 ETA；国内生产：Longtree 节点 → 国内下线；滚动 60 天：计划顺序；后续：排产表行顺序' : ''}>{zh ? '按分组默认排序' : 'Group default order'}</option><option value="date">{zh ? '按国内下线排序' : 'Sort by CN finish'}</option><option value="eta">{zh ? '按到港 ETA 排序' : 'Sort by ETA'}</option><option value="au">{zh ? '按澳洲预计下线排序' : 'Sort by expected AU finish'}</option></select></label>
       </div>
     </div>
