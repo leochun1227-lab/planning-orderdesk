@@ -131,6 +131,7 @@ export default function Dashboard() {
     const [logPage, setLogPage] = useState(1);
     useEffect(() => setLogPage(1), [date, historyAll, query, dealer]);
     const choose = (next: View) => { setView(next); setFilter('active'); setQuery(''); setDealer(''); window.history.replaceState(null, '', next === 'forecast' ? '#stock-forecast' : window.location.pathname + window.location.search); };
+    useEffect(() => { const navigate = () => { if (window.location.hash === '#stock-forecast') { setView('forecast'); setFilter('active'); setQuery(''); setDealer(''); } }; window.addEventListener('hashchange', navigate); return () => window.removeEventListener('hashchange', navigate); }, []);
     const metric = (next: Filter) => { setFilter(next); setView('overview'); };
     const columns = useMemo<ColDef[]>(() => [
         { field: 'chassis', headerName: t("Chassis"), pinned: 'left', width: 158, cellClass: 'chassis-cell', cellRenderer: (p: any) => <button className="chassis-link" onClick={() => setSelected(p.data)}>{p.value}{isCamper(p.data) && <span className="camper-badge">{String(p.data.id).slice(0, 3)}</span>}<ArrowUpRight size={14}/></button> },

@@ -24,7 +24,7 @@ type Row = {
   today?: string; signedAt?: string; orderRow: number | null; forecast: string;
   cnEnd: string; cnEndActual: boolean; auEnd: string; auEndActual: boolean; auForecast?: AuForecast; build?: { month: string; seq: number; day: number; perDay: number };
   planStart: string; planEnd: string; expectedEnd: string; delay: number | null; cnMrp: string; auMrp: string; overdue: boolean; locked: boolean; warnings: string[]; live: Live | null;
-  rollingOrder?: number; rollingKind?: 'customer'; dealerSite?: { slug: string; where: 'yard' | 'transit'; via?: 'pgi' | 'transport'; category: 'stock' | 'customer' | 'second'; since: string; days: number | null; arrive?: string; target: number };
+  rollingOrder?: number; rollingKind?: 'customer' | 'stock'; stockRecommendation?: { admitted: boolean; cnStart: string; auEnd: string; arrival: string; reason: string }; dealerSite?: { slug: string; where: 'yard' | 'transit'; via?: 'pgi' | 'transport'; category: 'stock' | 'customer' | 'second'; since: string; days: number | null; arrive?: string; target: number };
 };
 type AuForecast = { beforeArrival?: string; kind?: 'towable' | 'srm' | 'srv'; seq?: number; order?: number; perDay?: number; stage?: string; note?: string };
 type AuForecastSummary = { towable: number; srm: number; srv: number; overflow: number; today: { date: string; towable: number; srm: number; srv: number } | null; last: string };
@@ -34,13 +34,13 @@ type SortKey = 'status' | 'date' | 'eta' | 'au';
 /** Same as the server's etaKey: only the Dealer Portal Shipment page ETA; nothing filled in from Longtree or estimates. */
 const etaOf = (r: Row) => r.live?.ship?.eta || '';
 const NO_AU_FINISH = new Set(['transport']);
-const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['rollingRef', 'auEnd', 'cnEnd'], customers: ['forecast', 'cnEnd', 'auEnd'], processing: ['forecast', 'cnEnd', 'auEnd'], dealership: [], later: ['forecast', 'cnEnd', 'auEnd'] };
+const KEY_ORDER: Record<string, string[]> = { transport: ['transportSince', 'cnEnd'], au: ['auEnd', 'cnEnd'], sea: ['eta', 'auEnd', 'cnEnd'], cn: ['cnEnd', 'auEnd'], locked: ['plan', 'cnEnd', 'auEnd'], rolling: ['rollingRef', 'stockAdmission', 'auEnd', 'cnEnd'], customers: ['stockAdmission', 'forecast', 'cnEnd', 'auEnd'], processing: ['forecast', 'cnEnd', 'auEnd'], dealership: [], later: ['forecast', 'cnEnd', 'auEnd'] };
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
 type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; transportStock?: number; transportCustomer?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   sold: number; projected: number; need: number; stockPicked: number; stockAvailable: number; customerPicked: number };
 type Dealership = { deliveredBy: string; lockedLast: string; size: number; picked: number; customers: number; offsetDays: number; months: number; targetSource: string; dealers: DealerSummary[] };
-type Payload = { dealership?: Dealership | null; crmDone?: string[]; auForecast?: AuForecastSummary | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
+type Payload = { stockRolling?: { status: string; admitted: string[]; requested: string[] }; dealership?: Dealership | null; crmDone?: string[]; auForecast?: AuForecastSummary | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
 const EXEC = ['transport', 'au', 'sea', 'cn'];
 const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
@@ -138,6 +138,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     return (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName, lt, pr, sp) })); }, [data, zh]);
   const searching = query.trim().length > 0;
   const base = useMemo(() => rows.filter(r => {
+    if (r.group === 'processing' && !String(r.customer || '').trim()) return false;
     if ((line !== 'All' && r.line !== line) || (dealer && r.dealer !== dealer)) return false;
     if (orderType === 'all') return true;
     if (r.empty || r.build) return false;
@@ -179,6 +180,9 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         cellRenderer: (p: any) => p.data && p.data.issues.length > 0 && <div className="pl-issues">{p.data.issues.map((i: Issue) => <span key={i.code} className={`pl-issue ${i.level}`}>{ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code}</span>)}</div> },
     ] },
     { headerName: zh ? 'Dealer Portal 排产（分组按 Orderdesk 规则）' : 'Dealer Portal board (Orderdesk grouping)', children: [
+      ...(['customers', 'rolling'].includes(group) || searching ? [{ colId: 'stockAdmission', headerName: zh ? '库存池补货建议' : 'Pool replenishment', width: 210,
+        valueGetter: p => p.data?.stockRecommendation ? (p.data.stockRecommendation.admitted ? (zh ? '已确认Stock入线' : 'Confirmed stock admission') : (zh ? '推荐加入滚动线' : 'Recommended for rolling')) : '',
+        cellRenderer: (p: any) => p.data?.stockRecommendation ? <Two strong top={p.value} sub={`${zh ? 'AU完工' : 'AU finish'} ${p.data.stockRecommendation.auEnd} · ${zh ? '到店' : 'arrival'} ${p.data.stockRecommendation.arrival}`} /> : <span className="pl-quiet">—</span> } as ColDef<Row>] : []),
       ...(group === 'locked' && !searching ? [{ colId: 'plan', headerName: zh ? 'Longtree 排产计划' : 'Longtree plan', width: 168, valueGetter: (p: any) => p.data?.planOrder ? `#${p.data.planOrder}` : '',
         cellRenderer: (p: any) => p.data && (p.data.planOrder ? <Two strong top={`#${p.data.planOrder} · ${p.data.planRef.replace(/2026-(\d+)#/g, (_: string, m: string) => `${Number(m)}${zh ? '月' : '/'}#`)}`} sub={[p.data.planWeld && `${zh ? '钣焊' : 'Weld'} ${p.data.planWeld}`, p.data.planAssembly && `${zh ? '总装' : 'Assy'} ${p.data.planAssembly}`].filter(Boolean).join(' · ')} /> : <span className="pl-missing">{zh ? '不在计划' : 'Not in plan'}</span>) }] : []),
       { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
@@ -247,7 +251,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       pool.set('transportSince', { colId: 'transportSince', headerName: zh ? '进入 Transport' : 'At Transport since', pinned: 'left', width: 140, valueGetter: (p: any) => String(p.data?.live?.stationSince || p.data?.live?.enteredAt || '').slice(0, 10),
         cellRenderer: (p: any) => { const d = String(p.data?.live?.stationSince || p.data?.live?.enteredAt || '').slice(0, 10); return p.data && (d ? <div className="pl-two"><strong>{d}</strong><small>{p.data.live.daysAtStation != null ? (zh ? `已 ${p.data.live.daysAtStation} 天` : `${p.data.live.daysAtStation} days`) : ''}</small></div> : <span className="pl-missing">—</span>); } });
       pool.set('rollingRef', { colId: 'rollingRef', headerName: zh ? '滚动排产' : 'Rolling line', pinned: 'left', width: 150, valueGetter: (p: any) => p.data?.rollingOrder ?? null,
-        cellRenderer: (p: any) => p.data && p.data.rollingOrder ? <Two strong top={`#${p.data.rollingOrder} · Customer`} sub={p.data.orderRow ? (zh ? `排产表第 ${p.data.orderRow} 行` : `Orderlist row ${p.data.orderRow}`) : ''} /> : null });
+        cellRenderer: (p: any) => p.data && p.data.rollingOrder ? <Two strong top={`#${p.data.rollingOrder} · ${p.data.rollingKind === 'stock' ? 'Stock ✓' : 'Customer'}`} sub={p.data.orderRow ? (zh ? `排产表第 ${p.data.orderRow} 行` : `Orderlist row ${p.data.orderRow}`) : ''} /> : null });
       const order = KEY_ORDER[group], first = order.map(k => pool.get(k)).filter(Boolean);
       const others = head.children.filter((c: any) => !order.includes(c.colId || c.field) && !(NO_AU_FINISH.has(group) && c.colId === 'auEnd'));
       return [{ ...head, headerName: zh ? '关键日期 / 车辆' : 'Key dates / vehicle', children: [...first, ...others] }, ...rest];
@@ -289,7 +293,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <button aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={14} /></button>
     </div>
     {group === 'dealership' && !searching && dl && <p className="pl-dealer-note">{zh ? `五家店里 new stock ${dl.dealers.reduce((n, d) => n + d.yard.stock, 0)} 台、在途 ${dl.dealers.reduce((n, d) => n + d.transit.total - (d.transit.transportStock || 0) - (d.transit.transportCustomer || 0), 0)} 台；交付、目标库存、还缺多少见左侧「Dealer 分析」页。` : 'Handovers, targets and stock needs: see the Dealer analysis page.'}</p>}
-    {group === 'rolling' && !searching && dl && <p className="pl-dealer-note">{zh ? `滚动排产线 ${dl.picked} 台：仅所有经销商已签字的 Towable Customer；不含SRV、SRM和Stock，不按目标容量补Stock。澳洲预计下线接在排产锁定线（最后一台 ${dl.lockedLast}）后面。` : `Rolling line ${dl.picked}: signed Towable Customer orders only, across all dealers; excludes SRV, SRM and Stock, with no stock top-up or count cap.`}</p>}
+    {(group === 'rolling' || group === 'customers') && !searching && <p className="pl-dealer-note">{zh ? `已签字Towable客户车优先；Stock须按已保存库存意见推荐并确认，已确认 ${data?.stockRolling?.admitted.length || 0} 台。` : `Signed Towable customer orders have priority. Stock needs a saved opinion and explicit confirmation; ${data?.stockRolling?.admitted.length || 0} confirmed.`} <a href="#stock-forecast">{zh ? '核对补货建议' : 'Review stock recommendations'}</a>{data?.stockRolling?.status === 'stale' && <b className="pl-delay"> · {zh ? '来源已变化，请重新保存意见' : 'Inputs changed; save a new opinion'}</b>}</p>}
     <div className="schedule-toolbar pl-toolbar">
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
       {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}
