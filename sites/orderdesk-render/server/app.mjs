@@ -15,7 +15,9 @@ import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { createProductionLineSource, buildProductionLine, loadRollingPlan, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { buildDealerLogistics } from '../lib/dealer-logistics.mjs';
 import { buildStockForecast, forecastMultiplier, DISPLAY_MODELS, NOT_ON_YARD, validateStockModelLists } from '../lib/stock-forecast.mjs';
-import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay } from '../lib/stock-rolling.mjs';
+import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay, dealerSettingsToken } from '../lib/stock-rolling.mjs';
+import { configureDealers, validateDealerSettings } from '../lib/dealership.mjs';
+import { runBalancedRolling } from './balanced-runner.mjs';
 import { reviewStockWithAI } from '../lib/stock-rolling-ai.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
 import { createSapSource, SAP_MAX_BYTES } from '../lib/sap-grgi.mjs';
@@ -122,23 +124,32 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
   }
   async function currentLine(force = false) {
     const today = dayInSydney(new Date());
-    const [sources, { state, etag }] = await Promise.all([productionLine.current({ force, today }), store.readState()]);
+    const [rawSources, { state, etag }] = await Promise.all([productionLine.current({ force, today }), store.readState()]);
+    const sources = { ...rawSources, dealers: configureDealers(rawSources.dealers, state?.stockDealerSettings, today), forecastDealers: configureDealers(rawSources.forecastDealers, state?.stockDealerSettings, today) };
     const args = { orders: state?.orders || {}, ...sources, today, plan: rollingPlan };
     args.displayModels = state?.stockDisplayModels ?? DISPLAY_MODELS;
     args.notOnYardModels = state?.stockNotOnYardModels ?? NOT_ON_YARD;
     const baseLine = buildProductionLine(args);
     const fingerprint = stockInputFingerprint({ line: baseLine, dealers: sources.forecastDealers, capacity: sources.auCapacity, settings: { ...sources.settings, displayModels: args.displayModels, notOnYardModels: args.notOnYardModels }, orders: args.orders });
-    const rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
+    let rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
       capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
-    const line = rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
+    const saved = state?.rollingPlan, active = saved && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && !sourceBlockers(sources).length;
+    if (active) rolling = { ...saved.stockResult, ai: state.stockForecastPlan.ai || null };
+    rolling.balanced = Boolean(saved);
+    rolling.balancedActive = Boolean(active);
+    const balanced = { status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
+      canGenerate: Boolean(state?.stockForecastPlan?.fingerprint === fingerprint && !sourceBlockers(sources).length && sources.auCapacity?.size),
+      proposal: saved ? { ...saved, stockResult: undefined } : null };
+    const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity })
+      : !saved && rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
     const recommendations = new Map(rolling.items.map(a => [a.chassis, a]));
     for (const row of line.rows) { const a = recommendations.get(String(row.chassis).replace(/[-\s]/g, '').toUpperCase()); if (a) row.stockRecommendation = a; }
-    return { sources, line, baseLine, state, etag, fingerprint, rolling };
+    return { sources, line, baseLine, state, etag, fingerprint, rolling, balanced };
   }
   app.get('/api/production-line', async c => {
     try {
-      const { sources, line, rolling } = await currentLine(c.req.query('refresh') === '1');
-      return json({ ...productionLineDisplay(line), stockRolling: { ...rolling, items: undefined, monthly: undefined }, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
+      const { sources, line, rolling, balanced } = await currentLine(c.req.query('refresh') === '1');
+      return json({ ...productionLineDisplay(line), balanced, stockRolling: { ...rolling, items: undefined, monthly: undefined }, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
   });
   // Dealer analysis (our five dealerships): the same computation, only the dealership part.
@@ -157,13 +168,55 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (![8, 14].includes(months)) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
     } catch (e) { return json({ error: message(e, 'Invalid forecast settings') }, 400); }
     try {
-      const { sources, baseLine, fingerprint, rolling, state } = await currentLine(c.req.query('refresh') === '1');
+      const { sources, baseLine, fingerprint, rolling, state, balanced } = await currentLine(c.req.query('refresh') === '1');
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
       return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: state?.stockNotOnYardModels ?? NOT_ON_YARD }),
+        dealerSettingsToken: dealerSettingsToken(sources.forecastDealers),
+        balanced,
         previewToken: forecastPreviewToken(fingerprint, multiplier, months), expectedPlanId: state?.stockForecastPlan?.id || null,
         canSave: !sourceBlockers(sources).length && Boolean(sources.auCapacity?.size), rolling: { ...rolling, aiConfigured: Boolean(env.OPENAI_API?.trim()) },
         sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '库存预测暂时无法计算 / Stock forecast is unavailable') }, 502); }
+  });
+
+  let rollingBusy = false;
+  app.post('/api/rolling-plan', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    if (rollingBusy) return json({ error: '正在生成排产，请稍后刷新查看。' }, 409);
+    rollingBusy = true;
+    try {
+      const body = await planningBody(c), ctx = await currentLine();
+      if (!ctx.state || body.inputToken !== ctx.fingerprint || body.opinionId !== ctx.state.stockForecastPlan?.id || body.expectedId !== (ctx.state.rollingPlan?.id || null)) throw conflict('来源或排产意见已变化，请刷新后重试。');
+      const proposal = await runBalancedRolling({ plan: ctx.state.stockForecastPlan, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers, capacity: ctx.sources.auCapacity,
+        settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
+      const latest = await currentLine();
+      if (latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
+      ctx.state.rollingPlanHistory = [...(ctx.state.rollingPlanHistory || []), ...(ctx.state.rollingPlan ? [ctx.state.rollingPlan] : [])].slice(-5);
+      ctx.state.rollingPlan = proposal;
+      ctx.state.stockForecastPlan.admitted = [];
+      await store.writeState(ctx.state, ctx.etag);
+      return json({ ok: true, scheduled: proposal.scheduled, newOrders: proposal.newOrders, blocked: proposal.inventoryBlocked, capacityGap: proposal.capacityGap });
+    } catch (e) { return json({ error: message(e, '平衡排产失败') }, e.status || 400); }
+    finally { rollingBusy = false; }
+  });
+  app.post('/api/rolling-plan/clear', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c), { state, etag } = await store.readState();
+      if (!state?.rollingPlan || body.expectedId !== state.rollingPlan.id) throw conflict('排产已变化，请刷新');
+      state.rollingPlanHistory = [...(state.rollingPlanHistory || []), state.rollingPlan].slice(-5); delete state.rollingPlan;
+      await store.writeState(state, etag); return json({ ok: true });
+    } catch (e) { return json({ error: message(e, '撤回失败') }, e.status || 400); }
+  });
+  app.post('/api/stock-forecast/dealers', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c), ctx = await currentLine();
+      if (!ctx.state || body.previous !== dealerSettingsToken(ctx.sources.forecastDealers)) throw conflict('Dealer设置已变化，请刷新');
+      const values = validateDealerSettings(body.dealers, ctx.sources.forecastDealers || []);
+      ctx.state.stockDealerSettings = { ...ctx.state.stockDealerSettings, ...values };
+      await store.writeState(ctx.state, ctx.etag); return json({ ok: true });
+    } catch (e) { return json({ error: message(e, 'Dealer设置保存失败') }, e.status || 400); }
   });
 
   app.post('/api/stock-forecast/models', async c => {
@@ -217,6 +270,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       const body = await planningBody(c);
       if (!['add', 'remove'].includes(body.mode) || !Array.isArray(body.chassis) || !body.chassis.length || body.chassis.length > 500 || body.chassis.some(id => typeof id !== 'string') || new Set(body.chassis).size !== body.chassis.length) throw new Error('请选择有效且不重复的车架号。');
       const ctx = await currentLine(), plan = ctx.state?.stockForecastPlan;
+      if (ctx.state?.rollingPlan) throw conflict('已启用按数量平衡排产，请在滚动排产线重新生成或撤回安排。');
       if (!plan || body.planId !== plan.id) throw conflict('保存意见已变化，请刷新。');
       const eligible = new Set(ctx.rolling.items.filter(a => !a.admitted).map(a => a.chassis));
       if (body.mode === 'add' && (ctx.rolling.status !== 'ready' || body.token !== ctx.rolling.token || body.chassis.some(id => !eligible.has(id)))) throw conflict('推荐已过期或车辆已不满足入线条件，请重新保存意见并核对。');

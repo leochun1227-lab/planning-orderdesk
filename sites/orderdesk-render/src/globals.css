@@ -654,3 +654,6 @@ body{background:#eef1f6;font-size:14px}
 .sf-rolling .da-subhead{margin-top:0}.sf-rolling>.da-subhead>div>.da-sub{display:none}
 .sf-rolling .sf-warning{font-size:12px;padding:8px 12px;border-radius:6px;border:1px solid #f2d49a;margin:8px 0}
 .da-card header .da-meta em b{background:none;padding:0;border-radius:0;font-size:inherit;color:#1d2433}
+
+/* Weekly rolling proposal and independent dealer inputs. */
+.br-panel{margin:12px}.br-panel input,.sf-settings-table input{width:95px;border:1px solid #ccd5e3;border-radius:5px;padding:6px 8px;font:inherit;background:white}.br-counts{display:flex;flex-direction:column;gap:5px;font-size:12px;margin:8px 0}.br-weeks,.sf-settings-table{max-height:260px;overflow:auto}.br-ok{color:#237747;font-weight:700}.br-gap{color:#a55a12;font-weight:700}.sf-independent-settings{margin:5px 0 12px}.sf-settings-table{max-width:620px;margin-bottom:8px}

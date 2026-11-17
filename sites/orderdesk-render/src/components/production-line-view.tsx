@@ -6,6 +6,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { themeQuartz, type ColDef, type ColGroupDef } from 'ag-grid-community';
 import { Button } from '@/components/ui/button';
 import ValueFilter from '@/components/value-filter';
+import BalancedRollingPanel, { type BalancedRolling, type RollingRequest } from './balanced-rolling-panel';
 import { isStockCustomer } from '@/lib/dealership.mjs';
 import { ArrowDownToLine, Factory, CalendarDays, Layers, Store, Search, X, ListFilter, RefreshCw, AlertTriangle } from 'lucide-react';
 
@@ -15,7 +16,7 @@ type Live = { stage: string; since: string; days: number | null; inLongtree: boo
   inSap: boolean; grAt: string; po: string; grDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
-  liveStageName?: string; liveTone?: string; v?: View;
+  planningRequest?: RollingRequest; liveStageName?: string; liveTone?: string; v?: View;
   id: string; chassis: string; empty: boolean; line: string; source: string; group: string; portalGroup: string; status: string;
   planOrder: number | null; planRef: string; planWeld: string; planAssembly: string;
   regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; modelYear?: string; requestDate?: string; range: string; customer: string; orderId: string;
@@ -40,7 +41,7 @@ type DealerSummary = { slug: string; name: string; target: number; yard: { stock
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   sold: number; projected: number; need: number; stockPicked: number; stockAvailable: number; customerPicked: number };
 type Dealership = { deliveredBy: string; lockedLast: string; size: number; picked: number; customers: number; offsetDays: number; months: number; targetSource: string; dealers: DealerSummary[] };
-type Payload = { stockRolling?: { status: string; admitted: string[]; requested: string[] }; dealership?: Dealership | null; crmDone?: string[]; auForecast?: AuForecastSummary | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
+type Payload = { balanced?: BalancedRolling; stockRolling?: { status: string; admitted: string[]; requested: string[] }; dealership?: Dealership | null; crmDone?: string[]; auForecast?: AuForecastSummary | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
 const EXEC = ['transport', 'au', 'sea', 'cn'];
 const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
@@ -135,18 +136,19 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   // A source that is not configured or could not be read says so, instead of "not found" on every row.
   const down = (k: string, name: string) => { const x = data?.sources?.[k]; if (!x || x.count) return ''; return x.error === 'not configured' ? (zh ? `${name}未配置` : `${name} not configured`) : x.error ? (zh ? `${name}读取失败` : `${name} unavailable`) : ''; };
   const rows = useMemo(() => { const lt = down('longtree', zh ? '飞书' : 'Longtree '), pr = down('prod', zh ? '生产系统' : 'Production API '), sp = data?.sources?.sap?.count ? '' : (zh ? 'SAP 未连接' : 'SAP not connected');
-    return (data?.rows || []).map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName, lt, pr, sp) })); }, [data, zh]);
+    const requests: Row[] = data?.balanced?.status === 'ready' ? (data.balanced.proposal?.requests || []).map((a, i) => ({ id: `request-${a.id}`, chassis: '', empty: true, line: 'Towable', source: zh ? '补单建议' : 'New order suggestion', group: 'rolling', portalGroup: 'rolling', status: a.status === 'newOrder' ? (zh ? '需新建Stock订单' : 'New stock order needed') : (zh ? '库存/设置受限' : 'Inventory/settings blocked'), dealer: a.dealer, model: a.model, customer: 'Stock', range: '', issues: [], warnings: [], live: null, planningRequest: a, auEnd: a.auEnd, cnStart: a.cnStart, cnEnd: '', signedAt: '', production: null, planOrder: null, planRef: '', planWeld: '', planAssembly: '', regent: '', regentRank: 99, regentDerived: false, ltRank: 0, ltField: '', ltDate: '', orderId: '', orderRow: null, forecast: '', cnActual: '', cnPlanStart: a.cnStart, cnPlanEnd: '', auActual: '', auStart: '', auPlanStart: '', auPlanEnd: '', cnEndActual: false, auEndActual: false, planStart: a.cnStart, planEnd: a.auEnd, expectedEnd: a.auEnd, delay: null, cnMrp: '', auMrp: '', overdue: false, locked: false } satisfies Row)) : [];
+    return [...(data?.rows || []), ...requests].map(r => ({ ...r, liveStageName: r.live ? stageName(r.live.stage) : '', liveTone: r.live ? stageTone(r.live.stage) : '', v: viewOf(r, zh, data?.today || '', stageName, groupName, lt, pr, sp) })); }, [data, zh]);
   const searching = query.trim().length > 0;
   const base = useMemo(() => rows.filter(r => {
     if (r.group === 'processing' && !String(r.customer || '').trim()) return false;
     if ((line !== 'All' && r.line !== line) || (dealer && r.dealer !== dealer)) return false;
     if (orderType === 'all') return true;
-    if (r.empty || r.build) return false;
+    if ((r.empty && !r.planningRequest) || r.build) return false;
     const type = r.group === 'dealership' ? r.dealerSite?.category : isStockCustomer(r.customer) ? 'stock' : 'customer';
     return type === orderType;
   }), [rows, line, dealer, orderType]);
   // The Dealership tab counts new stock in the five yards (as the Dealer Portal does); its list also has transit and customer vans.
-  const counts = useMemo(() => Object.fromEntries(groups.map(g => [g.id, base.filter(r => r.group === g.id && (g.id !== 'dealership' || (r.dealerSite?.where === 'yard' && r.dealerSite.category === 'stock'))).length])), [base, groups]);
+  const counts = useMemo(() => Object.fromEntries(groups.map(g => [g.id, base.filter(r => !r.planningRequest && r.group === g.id && (g.id !== 'dealership' || (r.dealerSite?.where === 'yard' && r.dealerSite.category === 'stock'))).length])), [base, groups]);
   const inGroup = useMemo(() => base.filter(r => r.group === group), [base, group]);
   const chipCounts = useMemo(() => Object.fromEntries(CHIPS.map(c => [c.id, inGroup.filter(c.test).length])), [inGroup]);
   const visible = useMemo(() => {
@@ -174,15 +176,15 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
           if (r.auEnd && f?.beforeArrival) return <div className="pl-two" title={zh ? `排到的日子早于 Shipment ETA ${f.beforeArrival}` : `Slot is before the Shipment ETA ${f.beforeArrival}`}><strong>{r.auEnd}</strong><small className="pl-late">{zh ? `早于到港 ETA ${f.beforeArrival}` : `before ETA ${f.beforeArrival}`}</small></div>;
           if (r.auEnd && f) return <div className="pl-two" title={zh ? `${KIND_NAME[f.kind || 'towable']} 第 ${f.seq} 台 · 当天 ${KIND_NAME[f.kind || 'towable']} 产能 ${f.perDay} 台` : ''}><strong>{r.auEnd}</strong><small>{zh ? '预计' : 'expected'} · {KIND_NAME[f.kind || 'towable']} #{f.seq}</small></div>;
           return r.auEnd ? <strong>{r.auEnd}</strong> : <span className="pl-quiet">{zh ? '待排' : 'To schedule'}</span>; } },
-      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
+      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.planningRequest ? <><strong>{zh ? '补单建议' : 'New order needed'}</strong><small>{zh ? '未建单 · 未占实际产能' : 'Not ordered · not booked'}</small></> : p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
       { colId: 'issues', headerName: zh ? '异常' : 'Issues', pinned: 'left', width: 128, valueGetter: p => (p.data?.issues || []).map(i => ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code).join(zh ? '、' : ', '),
         tooltipValueGetter: p => (p.data?.issues || []).map(i => (zh ? i.zh : i.en)).join(zh ? '；' : '; ') || undefined,
         cellRenderer: (p: any) => p.data && p.data.issues.length > 0 && <div className="pl-issues">{p.data.issues.map((i: Issue) => <span key={i.code} className={`pl-issue ${i.level}`}>{ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code}</span>)}</div> },
     ] },
     { headerName: zh ? 'Dealer Portal 排产（分组按 Orderdesk 规则）' : 'Dealer Portal board (Orderdesk grouping)', children: [
       ...(['customers', 'rolling'].includes(group) || searching ? [{ colId: 'stockAdmission', headerName: zh ? '库存池补货建议' : 'Pool replenishment', width: 210,
-        valueGetter: p => p.data?.stockRecommendation ? (p.data.stockRecommendation.admitted ? (zh ? '已确认Stock入线' : 'Confirmed stock admission') : (zh ? '推荐加入滚动线' : 'Recommended for rolling')) : '',
-        cellRenderer: (p: any) => p.data?.stockRecommendation ? <Two strong top={p.value} sub={`${zh ? 'AU完工' : 'AU finish'} ${p.data.stockRecommendation.auEnd} · ${zh ? '到店' : 'arrival'} ${p.data.stockRecommendation.arrival}`} /> : <span className="pl-quiet">—</span> } as ColDef<Row>] : []),
+        valueGetter: p => p.data?.planningRequest ? (p.data.planningRequest.status === 'newOrder' ? (zh ? '需新建Stock订单' : 'New stock order needed') : (zh ? '库存约束 · 暂不生产' : 'Inventory constraint · held')) : p.data?.stockRecommendation ? (p.data.stockRecommendation.admitted ? (zh ? '已确认Stock入线' : 'Confirmed stock admission') : (zh ? '推荐加入滚动线' : 'Recommended for rolling')) : '',
+        cellRenderer: (p: any) => p.data?.planningRequest ? <Two strong top={p.value} sub={`${zh ? '目标AU完工' : 'Target AU finish'} ${p.data.planningRequest.requestedAu}`} /> : p.data?.stockRecommendation ? <Two strong top={p.value} sub={`${zh ? 'AU完工' : 'AU finish'} ${p.data.stockRecommendation.auEnd} · ${zh ? '到店' : 'arrival'} ${p.data.stockRecommendation.arrival}`} /> : <span className="pl-quiet">—</span> } as ColDef<Row>] : []),
       ...(group === 'locked' && !searching ? [{ colId: 'plan', headerName: zh ? 'Longtree 排产计划' : 'Longtree plan', width: 168, valueGetter: (p: any) => p.data?.planOrder ? `#${p.data.planOrder}` : '',
         cellRenderer: (p: any) => p.data && (p.data.planOrder ? <Two strong top={`#${p.data.planOrder} · ${p.data.planRef.replace(/2026-(\d+)#/g, (_: string, m: string) => `${Number(m)}${zh ? '月' : '/'}#`)}`} sub={[p.data.planWeld && `${zh ? '钣焊' : 'Weld'} ${p.data.planWeld}`, p.data.planAssembly && `${zh ? '总装' : 'Assy'} ${p.data.planAssembly}`].filter(Boolean).join(' · ')} /> : <span className="pl-missing">{zh ? '不在计划' : 'Not in plan'}</span>) }] : []),
       { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
@@ -192,7 +194,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         comparator: (a: string, b: string) => (a || '~').localeCompare(b || '~') },
       { field: 'model', headerName: 'Model / Range', width: 118, cellRenderer: (p: any) => p.data && <Two strong top={p.data.model || (zh ? '未提供车型' : 'No model')} sub={p.data.range} /> },
       { colId: 'orderType', headerName: zh ? '订单类型' : 'Order type', width: 100,
-        valueGetter: p => !p.data || p.data.empty ? '' : p.data.group === 'dealership'
+        valueGetter: p => !p.data || p.data.empty && !p.data.planningRequest ? '' : p.data.group === 'dealership'
           ? (({ stock: 'New stock', customer: 'Customer', second: zh ? '二手' : '2nd hand' } as Record<string, string>)[p.data.dealerSite?.category || ''] || '')
           : isStockCustomer(p.data.customer) ? 'Stock' : 'Customer' },
       { colId: 'prodStatus', headerName: zh ? '生产状态' : 'Production status', width: 170, valueGetter: p => p.data ? (p.data.production?.status || p.data.production?.stage || (p.data.empty ? (zh ? '待补订单' : 'Awaiting order') : p.data.status)) : '',
@@ -281,7 +283,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       {card(['transport', 'au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', `Transport ${counts.transport ?? 0} · ${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'transport')}
       {card(['locked', 'rolling'], CalendarDays, zh ? '02 · 滚动 60 天' : '02 · Rolling 60 days', `${zh ? '锁定' : 'Locked'} ${counts.locked ?? 0} · ${zh ? '滚动' : 'Rolling'} ${counts.rolling ?? 0}${dl ? ` / ${dl.size}` : ''}`, 'locked')}
       {card(['customers', 'processing'], Layers, zh ? '03 · 订单处理' : '03 · Orders', `${zh ? '库存订单池' : 'Stock order pool'} ${counts.customers ?? 0} · ${zh ? '处理中订单' : 'Orders in progress'} ${counts.processing ?? 0}`, 'customers')}
-      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{rows.filter(r => !r.build).length.toLocaleString()} {zh ? '条未发运车辆' : 'open vehicles'}{data?.crmDone?.length ? <span title={data.crmDone.join(', ')}> · {zh ? `CRM 已完工移出 ${data.crmDone.length}` : `CRM finished removed ${data.crmDone.length}`}</span> : null}</p></div></div>
+      <div className="pl-band static"><div><span>{zh ? '已排除已发运' : 'Dispatched (excluded)'}</span><strong>{(data?.completed ?? 0).toLocaleString()}</strong><p>{rows.filter(r => !r.build && !r.planningRequest).length.toLocaleString()} {zh ? '条未发运车辆' : 'open vehicles'}{data?.crmDone?.length ? <span title={data.crmDone.join(', ')}> · {zh ? `CRM 已完工移出 ${data.crmDone.length}` : `CRM finished removed ${data.crmDone.length}`}</span> : null}</p></div></div>
     </div>
     <div className="pl-tabs" role="tablist">
       {groups.map(x => { const on = group === x.id && !searching;
@@ -295,7 +297,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       <button aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'} className={busy || data?.refreshing ? 'icon-button spinning' : 'icon-button'} disabled={busy} onClick={() => void load(true)}><RefreshCw size={14} /></button>
     </div>
     {group === 'dealership' && !searching && dl && <p className="pl-dealer-note">{zh ? `五家店里 new stock ${dl.dealers.reduce((n, d) => n + d.yard.stock, 0)} 台、在途 ${dl.dealers.reduce((n, d) => n + d.transit.total - (d.transit.transportStock || 0) - (d.transit.transportCustomer || 0), 0)} 台；交付、目标库存、还缺多少见左侧「Dealer 分析」页。` : 'Handovers, targets and stock needs: see the Dealer analysis page.'}</p>}
-    {(group === 'rolling' || group === 'customers') && !searching && <p className="pl-dealer-note">{zh ? `已签字Towable客户车优先；Stock须按已保存库存意见推荐并确认，已确认 ${data?.stockRolling?.admitted.length || 0} 台。` : `Signed Towable customer orders have priority. Stock needs a saved opinion and explicit confirmation; ${data?.stockRolling?.admitted.length || 0} confirmed.`} <a href="#stock-forecast">{zh ? '核对补货建议' : 'Review stock recommendations'}</a>{data?.stockRolling?.status === 'stale' && <b className="pl-delay"> · {zh ? '来源已变化，请重新保存意见' : 'Inputs changed; save a new opinion'}</b>}</p>}
+    {(group === 'rolling' || group === 'customers') && !searching && <p className="pl-dealer-note">{zh ? `按已保存库存意见组合Customer与Stock，下方可输入本期总数量；已选Stock ${data?.stockRolling?.admitted.length || 0} 台。` : `Signed Towable customer orders have priority. Stock needs a saved opinion and explicit confirmation; ${data?.stockRolling?.admitted.length || 0} confirmed.`} <a href="#stock-forecast">{zh ? '核对补货建议' : 'Review stock recommendations'}</a>{data?.stockRolling?.status === 'stale' && <b className="pl-delay"> · {zh ? '来源已变化，请重新保存意见' : 'Inputs changed; save a new opinion'}</b>}</p>}
+    {group === 'rolling' && !searching && data?.balanced && <BalancedRollingPanel data={data.balanced} zh={zh} disabled={busy} reload={() => load()} />}
     <div className="schedule-toolbar pl-toolbar">
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
       {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}

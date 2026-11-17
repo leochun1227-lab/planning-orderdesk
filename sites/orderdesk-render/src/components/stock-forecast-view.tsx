@@ -4,12 +4,13 @@ import { DealerCard, type DealerCardData } from './dealer-analysis-view';
 import { actionLabel, reasonLabel } from '@/lib/stock-forecast.mjs';
 import StockRollingPanel, { type StockRolling } from './stock-rolling-panel';
 import StockModelEditor from './stock-model-editor';
+import IndependentDealerSettings from './independent-dealer-settings';
 
 type Summary = { cnDelayed: number; cnCompletionDelayed: number; canceled: number; lockedCanceled: number; rollingCanceled: number; delayed: number; poolNotBuilt: number; reallocated: number; pending: number; changes: number };
 type Action = { chassis: string; model: string; range: string; phase: string; group: string; from: string; to: string; originalDealer: string; proposedDealer: string; originalAu: string; plannedAu: string; originalArrival: string; plannedArrival: string; depart: string; delayDays: number | null; arrivalDelayDays: number | null; action: string; reason: string; policy: string; delayed: boolean; reallocated: boolean };
-type ForecastDealer = DealerCardData & { stats: Summary; cap: number; overCapMonths: number; shortageMonths: number };
+type ForecastDealer = DealerCardData & { stats: Summary; cap: number | null; settingsNeeded?: boolean; travelDays: number | null; overCapMonths: number; shortageMonths: number };
 type Section = { dealers: ForecastDealer[]; summary: Summary; actions: Action[] };
-type Report = { displayModels: string[]; notOnYardModels: string[]; today: string; multiplier: number; months: number; own: Section; jv: Section; totals: Summary; sources: Record<string, { at?: string; error?: string; configured?: boolean }>; warnings: { code: string; chassis: string }[]; refreshing?: boolean;
+type Report = { dealerSettingsToken: string; displayModels: string[]; notOnYardModels: string[]; today: string; multiplier: number; months: number; own: Section; jv: Section; independent: Section; totals: Summary; sources: Record<string, { at?: string; error?: string; configured?: boolean }>; warnings: { code: string; chassis: string }[]; refreshing?: boolean;
   previewToken: string; expectedPlanId: string | null; canSave: boolean; rolling: StockRolling };
 type Config = { multiplier: number; months: number };
 type Filter = 'cancel' | 'delay' | 'pool' | 'reallocate' | 'pending';
@@ -25,7 +26,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
   const [data, setData] = useState<Report | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [mutating, setMutating] = useState(false), mutation = useRef(false);
   const [chartMode, setChartMode] = useState<'adjustments' | 'confirmed' | 'recommended'>('adjustments');
-  const [exporting, setExporting] = useState(''), [scope, setScope] = useState<'own' | 'jv'>('own'), [filter, setFilter] = useState<Filter>('cancel'), [search, setSearch] = useState(''), [page, setPage] = useState(0);
+  const [exporting, setExporting] = useState(''), [scope, setScope] = useState<'own' | 'jv' | 'independent'>('own'), [filter, setFilter] = useState<Filter>('cancel'), [search, setSearch] = useState(''), [page, setPage] = useState(0);
   const request = useRef<AbortController | null>(null), sequence = useRef(0);
   const load = useCallback(async (next: Config, refresh = false) => {
     const id = ++sequence.current; request.current?.abort(); const controller = new AbortController(); request.current = controller;
@@ -46,7 +47,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
     if (!draft.trim() || !Number.isFinite(multiplier) || multiplier <= 0 || multiplier > 10) { setError(zh ? '请输入大于0且不超过10的库存倍数。' : 'Enter a stock multiplier greater than 0 and at most 10.'); return; }
     void load({ multiplier, months });
   }
-  async function download(which: 'own' | 'jv' | 'all') {
+  async function download(which: 'own' | 'jv' | 'independent' | 'all') {
     if (!data) return;
     setExporting(which);
     try {
@@ -63,14 +64,14 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
   const canCompare = data?.rolling.status === 'ready' && data.multiplier === data.rolling.multiplier && data.months === data.rolling.months;
   const shownMode = canCompare ? chartMode : 'adjustments';
   function chartDealer(d: ForecastDealer): ForecastDealer {
-    if (!data || shownMode === 'adjustments') return d;
+    if (!data || d.settingsNeeded || shownMode === 'adjustments') return d;
     const comparison = data.rolling.monthly.find(x => x.slug === d.slug);
     const monthly = d.monthly.map(m => {
       const p = comparison?.months.find(x => x.month === m.month); if (!p) return m;
       return { ...m, baselineEndStock: p.before ?? undefined, endStock: shownMode === 'confirmed' ? p.confirmed : p.after,
         stockIn: (m.stockIn || 0) + (shownMode === 'confirmed' ? p.confirmedIn : p.stockIn), stockOut: shownMode === 'confirmed' ? p.confirmedSold : p.sold, unmet: shownMode === 'confirmed' ? p.confirmedUnmet : p.unmet };
     });
-    return { ...d, monthly, need: Math.max(0, Math.ceil(d.target - (monthly.at(-1)?.endStock || 0))), overCapMonths: monthly.filter(m => (m.endStock || 0) > d.cap).length, shortageMonths: monthly.filter(m => (m.unmet || 0) > 0).length };
+    return { ...d, monthly, need: Math.max(0, Math.ceil((d.target || 0) - (monthly.at(-1)?.endStock || 0))), overCapMonths: monthly.filter(m => (m.endStock || 0) > (d.cap ?? Infinity)).length, shortageMonths: monthly.filter(m => (m.unmet || 0) > 0).length };
   }
   // Detail columns; a date / day column that is empty for every listed vehicle (e.g. cancellations) is left out.
   const allColumns: { key: string; head: string; text?: boolean; always?: boolean; value?: (a: Action) => unknown; cell: (a: Action) => React.ReactNode }[] = [
@@ -123,16 +124,18 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
             <span>{label}</span><strong>{value}</strong><small>{note}</small></button>)}
       </div>
       <p className="da-note">{zh ? '上限 = floor(Ideal × 倍数)。国内/锁定/滚动车辆最多延期1个自然月，同时检查AU完工和到店日期；原已在途及下游车辆可能仍导致超限。调整台数按原Dealer统计，到货图按接收Dealer。库存不足时按可用库存交付，缺货量单列。' : 'Ceiling = floor(Ideal × multiplier). Delay ≤ one calendar month for both AU completion and delivery. Existing downstream supply may still exceed the ceiling. Adjustment counts use the original dealer; arrival charts use the receiving dealer. Handovers are capped to available stock; unmet sales are shown separately.'}</p>
-      {canCompare && <div className="sf-rolling-toolbar"><b>{zh ? '到货与库存图：' : 'Arrivals and inventory:'}</b>{(['adjustments', 'confirmed', 'recommended'] as const).map(mode => <button className={`pl-export ${shownMode === mode ? 'active' : ''}`} aria-pressed={shownMode === mode} key={mode} onClick={() => setChartMode(mode)}>{mode === 'adjustments' ? (zh ? '取消延期后' : 'After adjustments') : mode === 'confirmed' ? (zh ? '加已确认补货' : 'With confirmed stock') : (zh ? '加全部推荐补货' : 'With all recommended stock')}</button>)}<span>{zh ? '补货图以取消、延期和调拨意见已落实为前提；灰线为补货前库存。' : 'Replenishment assumes saved adjustments are implemented; grey shows stock before replenishment.'}</span></div>}
-      {(['own', 'jv'] as const).map(which => { const group = data[which]; return <section key={which} aria-label={which === 'own' ? 'Self-owned forecast' : 'JV forecast'}>
-        <div className="da-subhead"><h3 className="da-sub sf-step"><i>{which === 'own' ? 2 : 3}</i>{which === 'own' ? (zh ? '五家直营店 · 调整后预测' : 'Five self-owned dealers · after changes') : (zh ? 'JV Dealers · 不做Reallocation' : 'JV Dealers · no reallocation')}</h3><button className="pl-export" disabled={busy || Boolean(dirty) || Boolean(exporting)} onClick={() => void download(which)}><ArrowDownToLine size={13} />{zh ? `下载${which === 'own' ? '直营' : 'JV'}清单` : `Download ${which === 'own' ? 'self-owned' : 'JV'} lists`}</button></div>
+      {canCompare && <div className="sf-rolling-toolbar"><b>{zh ? '到货与库存图：' : 'Arrivals and inventory:'}</b>{(['adjustments', 'confirmed', 'recommended'] as const).map(mode => <button className={`pl-export ${shownMode === mode ? 'active' : ''}`} aria-pressed={shownMode === mode} key={mode} onClick={() => setChartMode(mode)}>{mode === 'adjustments' ? (zh ? '取消延期后' : 'After adjustments') : mode === 'confirmed' ? (zh ? '加已确认补货' : 'With confirmed stock') : (zh ? '加全部推荐补货' : 'With all recommended stock')}</button>)}<span>{zh ? '补货图以取消、延期和调拨意见已落实为前提；全部推荐含待新建Stock订单，灰线为补货前库存。' : 'Replenishment assumes saved adjustments are implemented; grey shows stock before replenishment.'}</span></div>}
+      {(['own', 'jv', 'independent'] as const).map(which => { const group = data[which]; return <section key={which} aria-label={which === 'own' ? 'Self-owned forecast' : which === 'jv' ? 'JV forecast' : 'Independent forecast'}>
+        <div className="da-subhead"><h3 className="da-sub sf-step"><i>{which === 'own' ? 2 : which === 'jv' ? 3 : 4}</i>{which === 'own' ? (zh ? '五家直营店 · 调整后预测' : 'Five self-owned dealers · after changes') : which === 'jv' ? (zh ? 'JV Dealers · 不做Reallocation' : 'JV Dealers · no reallocation') : 'Independent Dealers'}</h3><button className="pl-export" disabled={busy || Boolean(dirty) || Boolean(exporting)} onClick={() => void download(which)}><ArrowDownToLine size={13} />{zh ? `下载${which === 'own' ? '直营' : which === 'jv' ? 'JV' : 'Independent'}清单` : `Download ${which === 'own' ? 'self-owned' : which === 'jv' ? 'JV' : 'independent'} lists`}</button></div>
+        {which === 'independent' && <IndependentDealerSettings zh={zh} dealers={group.dealers} token={data.dealerSettingsToken} disabled={busy || mutating} reload={() => load(config.current)} onBusy={value => { mutation.current = value; setMutating(value); }} />}
+        {group.dealers.some(d => d.settingsNeeded) && <p className="da-note">{zh ? `${group.dealers.filter(d => d.settingsNeeded).length}家参数待补；相关到货与库存暂不估算。` : 'Some dealer settings are incomplete; arrivals and inventory remain pending.'}</p>}
         <div className="da-table sf-totals"><table><thead><tr><th>Dealer</th><th>Ideal</th><th>{zh ? '上限' : 'Ceiling'}</th><th>{zh ? '国内生产延期' : 'China-stage delayed'}</th><th>{zh ? '延期合计' : 'All delayed'}</th><th>{zh ? '取消' : 'Cancel'}</th><th>{zh ? '库存池不生产' : 'Pool not built'}</th>{which === 'own' && <th>Reallocation</th>}<th>{zh ? '待分流/核对' : 'Review'}</th></tr></thead><tbody>
-          {group.dealers.map(d => <tr key={d.slug}><td><b>{d.name}</b>{d.stopReceiving ? <small className="sf-tag muted">{zh ? '停止收车' : 'Not receiving'}</small> : null}</td><td>{d.target}</td><td>{d.cap}</td><td><Num v={d.stats.cnDelayed} tone="delay" /></td><td><Num v={d.stats.delayed} tone="delay" /></td><td><Num v={d.stats.canceled} tone="cancel" /></td><td><Num v={d.stats.poolNotBuilt} tone="pool" /></td>{which === 'own' && <td><Num v={d.stats.reallocated} tone="reallocate" /></td>}<td><Num v={d.stats.pending} tone="pending" /></td></tr>)}
-          <tr className="total"><td>{zh ? '合计' : 'Total'}</td><td>{group.dealers.reduce((n, d) => n + d.target, 0)}</td><td>{group.dealers.reduce((n, d) => n + d.cap, 0)}</td><td>{group.summary.cnDelayed}</td><td>{group.summary.delayed}</td><td>{group.summary.canceled}</td><td>{group.summary.poolNotBuilt}</td>{which === 'own' && <td>{group.summary.reallocated}</td>}<td>{group.summary.pending}</td></tr>
+          {group.dealers.map(d => <tr key={d.slug}><td><b>{d.name}</b>{d.stopReceiving ? <small className="sf-tag muted">{zh ? '停止收车' : 'Not receiving'}</small> : null}</td><td>{d.target ?? '—'}</td><td>{d.cap ?? '—'}</td><td><Num v={d.stats.cnDelayed} tone="delay" /></td><td><Num v={d.stats.delayed} tone="delay" /></td><td><Num v={d.stats.canceled} tone="cancel" /></td><td><Num v={d.stats.poolNotBuilt} tone="pool" /></td>{which === 'own' && <td><Num v={d.stats.reallocated} tone="reallocate" /></td>}<td><Num v={d.stats.pending} tone="pending" /></td></tr>)}
+          <tr className="total"><td>{zh ? '合计' : 'Total'}</td><td>{group.dealers.reduce((n, d) => n + (d.target || 0), 0)}</td><td>{group.dealers.reduce((n, d) => n + (d.cap || 0), 0)}</td><td>{group.summary.cnDelayed}</td><td>{group.summary.delayed}</td><td>{group.summary.canceled}</td><td>{group.summary.poolNotBuilt}</td>{which === 'own' && <td>{group.summary.reallocated}</td>}<td>{group.summary.pending}</td></tr>
         </tbody></table></div>
         <div className={`da-cards sf-cards ${data.months > 8 ? 'sf-long' : ''}`}>{group.dealers.map(d => <DealerCard key={d.slug} d={chartDealer(d)} zh={zh} />)}</div>
       </section>; })}
-      <section className="sf-actions" id="sf-details"><div className="da-subhead"><h3 className="da-sub sf-step"><i>4</i>{zh ? '车架号调整明细' : 'Vehicle adjustment details'}</h3><div className="sf-scope">{(['own', 'jv'] as const).map(s => <button aria-pressed={s === scope} key={s} className={scope === s ? 'active' : ''} onClick={() => { setScope(s); if (s === 'jv' && filter === 'reallocate') setFilter('cancel'); setPage(0); }}>{s === 'own' ? (zh ? '直营店' : 'Self-owned') : 'JV Dealers'}</button>)}</div></div>
+      <section className="sf-actions" id="sf-details"><div className="da-subhead"><h3 className="da-sub sf-step"><i>5</i>{zh ? '车架号调整明细' : 'Vehicle adjustment details'}</h3><div className="sf-scope">{(['own', 'jv', 'independent'] as const).map(s => <button aria-pressed={s === scope} key={s} className={scope === s ? 'active' : ''} onClick={() => { setScope(s); if (s !== 'own' && filter === 'reallocate') setFilter('cancel'); setPage(0); }}>{s === 'own' ? (zh ? '直营店' : 'Self-owned') : s === 'jv' ? 'JV Dealers' : 'Independent'}</button>)}</div></div>
         <div className="sf-list-controls"><div className="sf-filters">{filters.map(([k, label, count]) => <button key={k} aria-pressed={filter === k} className={filter === k ? 'active' : ''} onClick={() => { setFilter(k); setPage(0); }}>{label} <b>{selected?.summary[count as keyof Summary]}</b></button>)}</div><label className="sf-search"><Search size={13} /><input aria-label={zh ? '搜索调整清单' : 'Search adjustment list'} value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} placeholder="Chassis / Model / Dealer" /></label></div>
         <div className="da-table sf-detail"><table><thead><tr>{columns.map(c => <th key={c.key} className={c.text ? 'txt' : ''}>{c.head}</th>)}</tr></thead><tbody>
           {listed.slice(page * 50, (page + 1) * 50).map(a => <tr key={`${a.group}-${a.chassis}`}>{columns.map(c => <td key={c.key} className={c.text ? 'txt' : ''}>{c.cell(a)}</td>)}</tr>)}
@@ -140,7 +143,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
         </tbody></table></div>
         <div className="sf-pager"><span>{zh ? `共${listed.length}台` : `${listed.length} vehicles`}</span><button disabled={page === 0} onClick={() => setPage(p => p - 1)}>{zh ? '上一页' : 'Previous'}</button><span>{page + 1} / {Math.max(1, Math.ceil(listed.length / 50))}</span><button disabled={(page + 1) * 50 >= listed.length} onClick={() => setPage(p => p + 1)}>{zh ? '下一页' : 'Next'}</button></div>
       </section>
-      <div id="sf-rolling" className="sf-step-wrap"><h3 className="da-sub sf-step"><i>5</i>{zh ? '保存意见 → 库存池补货 → 确认入线' : 'Save opinion → recommend stock → confirm admission'}</h3>
+      <div id="sf-rolling" className="sf-step-wrap"><h3 className="da-sub sf-step"><i>6</i>{zh ? '保存意见 → 库存池补货 → 确认入线' : 'Save opinion → recommend stock → confirm admission'}</h3>
         <StockRollingPanel zh={zh} report={data} disabled={busy || mutating || Boolean(dirty)} reload={() => load(config.current)} onBusy={value => { mutation.current = value; setMutating(value); }} />
       </div>
       <details className="sf-rules"><summary>{zh ? '推荐车型与测算规则' : 'Recommended models and scenario rules'}</summary><p>{zh ? '常态Towable展车：' : 'Routine Towable display models: '}{data.displayModels.join(', ')}</p><p>{zh ? '不推荐车型 · Not on yard：' : 'Not recommended · Not on yard: '}{data.notOnYardModels.join(', ') || '—'}</p><p>{zh ? 'MY2027删除车型：SRT18、SRP18F 2 Bunks。未准确匹配的型号先核对。按国内→锁定→滚动顺序安排，考虑各店总量及同款缓冲。现货跨店运输为暂估，调拨候选须核实未售。不是全局最优或产能承诺。' : 'Deleted MY2027: SRT18, SRP18F 2 Bunks. Unknown models require review. Sequence: started China supply, locked, rolling, considering dealer and model limits. Yard-transfer transit is an allowance; verify unsold vehicles. This is a planning scenario, not a global optimum or a capacity commitment.'}</p>{data.warnings.length > 0 && <p>{zh ? `已按车架号去重${data.warnings.length}条重复来源记录。` : `${data.warnings.length} duplicate source rows deduplicated by chassis.`}</p>}</details>

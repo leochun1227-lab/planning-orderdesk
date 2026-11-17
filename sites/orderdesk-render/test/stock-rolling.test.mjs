@@ -149,7 +149,7 @@ test('API save → recommend → confirm → refresh survives persistence, exclu
 
 test('API rejects stale sources, changed opinions, forged IDs, unsigned/SRV/SRM/Traralgon admissions and preserves history', async () => {
   const f = await apiFixture(), preview = await f.get(); await f.save(preview);
-  assert.equal((await f.post('save', { ...preview, expectedPlanId: null })).status, 409);
+  assert.equal((await f.post('save', { multiplier: preview.multiplier, months: preview.months, previewToken: preview.previewToken, expectedPlanId: null })).status, 409);
   let saved = await f.get();
   for (const id of ['SRM270001', 'SRV270001', 'SRC_UNKNOWN']) assert.equal((await f.post('admissions', { mode: 'add', planId: saved.rolling.planId, token: saved.rolling.token, chassis: [id] })).status, 409);
   f.sources.board.rows[1].signedAt = '';

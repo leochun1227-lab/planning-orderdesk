@@ -10,7 +10,7 @@ import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, isStockCustomer, isRollingCustomer, isMotorhomeOrder, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, dealerSlug, isStockCustomer, isRollingCustomer, isMotorhomeOrder, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, modelPolicy } from './stock-forecast.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
@@ -145,10 +145,10 @@ export const BOARD_GROUPS = [
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '有「集装箱 · 船 · ETA」（Shipment）记录但没有车辆 SAP GR 的，一律算海运，包括生产系统显示在澳洲的；其他已发运且没有 GR 的也算海运。有 GR 后归入澳洲生产 / Transport。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: 'Longtree 11 / 12 月计划里还没上线的车都在这里（已在国内生产 / 海运 / 澳洲的保持原位），按计划文件顺序；不再看 Portal 的 Schedule Confirmed。' },
-  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '已签字的Towable Customer按排产表顺序优先入线。Stock需先保存库存调整意见、核对推荐清单并确认入线，保留Stock标识。新安排排除SRV/SRM；未签字订单进入处理中。AU完工按可用产能安排，新Stock同时满足国内、海运及AU周期。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '保存库存调整意见后可按输入数量自动组合已签字Towable客户车和Stock，目标每周客户30%–40%。保留前序锁定产能，Stock符合库存及到店窗口；SRV/SRM不入新滚动安排。补单建议显示Dealer和车型，未建单且未占实际产能。' },
   { id: 'customers', band: 'preschedule', zh: '库存订单池', en: 'Stock order pool', note: '已签字、未进入锁定线或产线的Stock。保存库存调整意见后标记可加入滚动线的补货车辆，勾选核对并确认后入线；意见过期需重新保存。Towable客户车优先，SRV/SRM不加入新滚动安排。' },
   { id: 'processing', band: 'preschedule', zh: '处理中订单', en: 'Orders in progress', note: '尚未收到签字图纸的Customer及Stock，不分配滚动产能。只显示Customer name非空的记录。收到签字日期后重新按客户/库存规则处理。' },
-  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '未进入Towable滚动排产线的SRV/SRM客户订单及客户名待补订单，保留源计划信息，不占用滚动线产能。已签字Stock留在库存订单池，未签字订单进入「处理中订单」。' },
+  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '未被本期滚动排产选中的客户订单、SRV/SRM客户单及客户名待补订单，保留源计划信息，不占用本期滚动产能。已签字Stock留在库存订单池，未签字订单进入「处理中订单」。' },
 ];
 
 // ---- Orderdesk rules on top of the Portal board ------------------------------------------------
@@ -279,7 +279,7 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
   return out;
 }
 
-export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE, rollingAdmissions = [], displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD }) {
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE, rollingAdmissions = [], rollingSchedule = null, displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD }) {
   const activePlan = plan && (!plan.activeUntil || today <= plan.activeUntil) ? plan : null;
   const seen = new Map();
   for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
@@ -356,13 +356,30 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
   }
   const pick = pickRolling(rows);
+  if (Array.isArray(rollingSchedule)) {
+    pick.picked = []; pick.customers = 0;
+    const selected = new Set();
+    for (const a of rollingSchedule) {
+      const matching = rows.filter(r => normalizeChassis(r.chassis) === normalizeChassis(a.chassis)), r = matching.length === 1 ? matching[0] : null;
+      if (!r || selected.has(r.chassis) || !['customers', 'later'].includes(r.group) || !signedPlansDate([r.signedAt], today) || isMotorhomeOrder(r)
+        || !a.auEnd || a.auEnd < today || r.model !== a.model || dealerSlug(dealersAll || dealers || [], r.dealer) !== dealerSlug(dealersAll || dealers || [], a.dealer)) continue;
+      const stock = isStockCustomer(r.customer);
+      if (stock && (modelPolicy(r.model, r.modelYear, displayModels, notOnYardModels) !== 'display' || slugify(r.dealer) === 'traralgon' || r.regentRank < 6)) continue;
+      if (!stock && !isRollingCustomer(r)) continue;
+      selected.add(r.chassis); r.rollingNotBefore = a.auEnd;
+      if (stock) { r.rollingApproval = { planId: a.planId, arrival: a.arrival, auEnd: a.auEnd }; pick.stockPicked[dealerSlug(dealersAll || dealers || [], r.dealer)] = (pick.stockPicked[dealerSlug(dealersAll || dealers || [], r.dealer)] || 0) + 1; }
+      else pick.customers++;
+      pick.picked.push({ r, kind: stock ? 'stock' : 'customer' });
+    }
+    for (const r of rows) if (['customers', 'later'].includes(r.group) && isRollingCustomer(r) && !selected.has(r.chassis)) { r.group = 'later'; r.waitingRolling = true; }
+  }
   const admitted = new Set();
-  for (const a of [...rollingAdmissions].sort((a, b) => a.auEnd.localeCompare(b.auEnd) || a.chassis.localeCompare(b.chassis))) {
+  for (const a of (rollingSchedule ? [] : [...rollingAdmissions]).sort((a, b) => a.auEnd.localeCompare(b.auEnd) || a.chassis.localeCompare(b.chassis))) {
     const matching = rows.filter(r => normalizeChassis(r.chassis) === normalizeChassis(a.chassis));
     const r = matching.length === 1 ? matching[0] : null;
     if (!r || admitted.has(r.chassis) || !['customers', 'later'].includes(r.group) || isMotorhomeOrder(r) || !isStockCustomer(r.customer)
       || !signedPlansDate([r.signedAt], today) || r.regentRank < 6 || modelPolicy(r.model, r.modelYear, displayModels, notOnYardModels) !== 'display' || slugify(r.dealer) === 'traralgon'
-      || r.model !== a.model || slugify(r.dealer) !== a.slug || !a.planId || !/^\d{4}-\d{2}-\d{2}$/.test(a.auEnd) || a.auEnd < today) continue;
+      || r.model !== a.model || dealerSlug(dealersAll || dealers || [], r.dealer) !== a.slug || !a.planId || !/^\d{4}-\d{2}-\d{2}$/.test(a.auEnd) || a.auEnd < today) continue;
     admitted.add(r.chassis); r.rollingApproval = { planId: a.planId, arrival: a.arrival, auEnd: a.auEnd };
     r.rollingNotBefore = a.auEnd;
     pick.picked.push({ r, kind: 'stock' });
@@ -370,7 +387,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   }
   pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); });
   for (const r of rows) {
-    if (r.group === 'later') r.group = 'customers';
+    if (r.group === 'later' && !r.waitingRolling) r.group = 'customers';
     if (r.group === 'customers' && !isStockCustomer(r.customer) && !isRollingCustomer(r)) r.group = 'later';
   }
   if (shown) {
@@ -434,7 +451,7 @@ export function forecastAuFinish(rows, capacity, today) {
   const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0 };
   for (const [order, r] of queue.entries()) {
     const kind = capacityKind(r.model);
-    if (r.group === 'rolling' && r.rollingKind === 'stock' && r.rollingNotBefore) {
+    if (r.group === 'rolling' && r.rollingNotBefore) {
       while (slots[kind][used[kind]] && slots[kind][used[kind]][0] < r.rollingNotBefore) used[kind]++;
     }
     const slot = slots[kind][used[kind]];
