@@ -6,13 +6,13 @@ import { RefreshCw, AlertTriangle, Store, ArrowDownToLine } from 'lucide-react';
 import DealerLogisticsFlow, { type DealerLogistics } from './dealer-logistics-flow';
 
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
-type MonthRow = { month: string; stockIn: number; customerIn: number; stockOut: number; endStock: number };
+type MonthRow = { month: string; stockIn: number | null; customerIn: number | null; stockOut: number; endStock: number | null };
 export type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
-  travelDays: number | null; lead: number | null; paused?: boolean; arriving: number; transitArriving: number; sold: number; projected: number | null; need: number; stockPicked: number; stockAvailable: number; customerPicked: number; monthly: MonthRow[] };
-export type DealerNow = { slug: string; name: string; own: boolean; target: number | null; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; total: number; pgiStock?: number; transportStock?: number };
+  travelDays: number | null; lead: number | null; paused?: boolean; arriving: number | null; transitArriving: number | null; sold: number | null; projected: number | null; need: number | null; stockPicked: number; stockAvailable: number; customerPicked: number; monthly: MonthRow[] };
+export type DealerNow = { slug: string; name: string; own: boolean; jv?: boolean; target: number | null; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number }; line: Record<string, number>; lineStock: number; lineCustomer: number; inSight: number; ordersOpen: { stock: number; customer: number }; monthsCover: number | null; yardVsTarget: number | null };
-export type Dealership = { lockedLast: string; rollingEnd: string; size: number; picked: number; customers: number; dispatchDays: number; months: number; targetSource: string; dealers: DealerSummary[]; all?: DealerNow[] };
+export type Dealership = { lockedLast: string; rollingEnd: string; size: number; picked: number; customers: number; dispatchDays: number; months: number; targetSource: string; dealers: DealerSummary[]; jvDealers?: DealerSummary[]; all?: DealerNow[] };
 type Payload = { today: string; dealership: Dealership | null; logistics?: DealerLogistics | null; sources: Record<string, { at: string; error: string; count: number } | undefined>; refreshing?: boolean; error?: string };
 
 const POLL_MS = 30 * 60 * 1000;
@@ -41,7 +41,7 @@ export function DealerTable({ dl, zh }: { dl: Dealership; zh: boolean }) {
         <td>{d.deliveredBy}</td><td>{d.arriving}</td>
         <td title={`${d.yard.stock} + ${d.transitArriving} + ${d.arriving} − ${d.sold} (${d.handover.avgStock} × ${d.months})`} className={(d.projected ?? 0) < d.target ? 'short' : 'over'}>{d.projected}</td>
         <td className={d.need ? 'short' : ''}><b>{d.need}</b></td></>}
-      <td>{d.stockPicked}{!d.paused && d.need > d.stockPicked ? <small className="short"> {zh ? `stock 订单只有 ${d.stockAvailable} 台，还差 ${d.need - d.stockPicked}` : `only ${d.stockAvailable} stock orders, ${d.need - d.stockPicked} short`}</small> : null}</td>
+      <td>{d.stockPicked}{!d.paused && d.need != null && d.need > d.stockPicked ? <small className="short"> {zh ? `stock 订单只有 ${d.stockAvailable} 台，还差 ${d.need - d.stockPicked}` : `only ${d.stockAvailable} stock orders, ${d.need - d.stockPicked} short`}</small> : null}</td>
     </tr>)}</tbody>
   </table></div>;
 }
@@ -50,24 +50,25 @@ function DealerCard({ d, zh }: { d: DealerSummary; zh: boolean }) {
   if (d.paused || !d.monthly.length) return <article className="da-card"><header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock}` : `Target ${d.target} · yard ${d.yard.stock}`}</span></div><b className="paused">{zh ? '暂不计算' : 'Paused'}</b></header>
     <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
       <tbody>{([['stock', zh ? 'Stock 交付' : 'Stock handovers', d.handover.avgStock]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table></article>;
-  const max = Math.max(1, ...d.monthly.map(x => x.stockIn), ...d.monthly.map(x => x.endStock), d.target), H = 90, h = (n: number) => `${Math.max(0, Math.min(1, n / max)) * H}px`;
+  const pending = d.lead == null;
+  const max = Math.max(1, ...d.monthly.map(x => x.stockIn ?? 0), ...d.monthly.map(x => x.endStock ?? 0), d.target), H = 90, h = (n: number) => `${Math.max(0, Math.min(1, n / max)) * H}px`;
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const label = (k: string, i: number) => { const [y, mm] = k.split('-'); return <>{MON[Number(mm) - 1]}{i === 0 || mm === '01' ? <small> {y}</small> : null}</>; };
-  return <article className="da-card">
-    <header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock} · 下线 + ${(d.lead ?? 0)} 天到店` : `Target ${d.target} · yard ${d.yard.stock} · transit stock ${d.transit.stock} · AU finish + ${d.lead} days`}</span></div>
-      <b className={d.need ? 'short' : 'ok'}>{d.need ? (zh ? `还缺 ${d.need}` : `Need ${d.need}`) : (zh ? '不缺' : 'OK')}</b></header>
+  return <article className="da-card" data-dealer={d.slug}>
+    <header><div><strong>{d.name}</strong><span>{zh ? `目标 ${d.target} · 店里 new stock ${d.yard.stock} · 在途 stock ${d.transit.stock} · ${pending ? '运输天数待补' : `下线 + ${d.lead} 天到店`}` : `Target ${d.target} · yard ${d.yard.stock} · transit stock ${d.transit.stock} · ${pending ? 'Travel days needed' : `AU finish + ${d.lead} days`}`}</span></div>
+      <b className={pending ? 'paused' : d.need ? 'short' : 'ok'}>{pending ? (zh ? '运输天数待补' : 'Travel days needed') : d.need ? (zh ? `还缺 ${d.need}` : `Need ${d.need}`) : (zh ? '不缺' : 'OK')}</b></header>
     <table className="da-fc">
       <tbody>
         <tr className="bars"><th>{zh ? <><span className="lg"><i className="stock" />到店 stock</span><span className="lg"><i className="line" />月底 stock</span><span className="lg"><i className="dash" />目标</span></> : <><span className="lg"><i className="stock" />Stock in</span><span className="lg"><i className="line" />Month-end stock</span><span className="lg"><i className="dash" />Target</span></>}</th>
           {d.monthly.map(x => <td key={x.month}><div className="da-col" style={{ height: H }}>
             <div className="da-tgt" style={{ bottom: h(d.target) }} />
-            <i className="stock" style={{ height: h(x.stockIn) }} />
-            <em style={{ bottom: h(x.endStock) }} className={x.endStock < d.target ? 'low' : ''} />
+            {x.stockIn != null && <i className="stock" style={{ height: h(x.stockIn) }} />}
+            {x.endStock != null && <em style={{ bottom: h(x.endStock) }} className={x.endStock < d.target ? 'low' : ''} />}
           </div></td>)}</tr>
         <tr className="months"><th>{zh ? '月份' : 'Month'}</th>{d.monthly.map((x, i) => <td key={x.month}>{label(x.month, i)}</td>)}</tr>
-        <tr><th>{zh ? '到店 stock' : 'Stock in'}</th>{d.monthly.map(x => <td key={x.month}>{x.stockIn}</td>)}</tr>
+        <tr><th>{zh ? '到店 stock' : 'Stock in'}</th>{d.monthly.map(x => <td key={x.month}>{x.stockIn ?? '—'}</td>)}</tr>
         <tr><th title={zh ? '按近三个月的月均 stock 交付；本月只算剩下的天数' : ''}>{zh ? '卖出 stock' : 'Stock sold'}</th>{d.monthly.map(x => <td key={x.month}>{Math.round(x.stockOut)}</td>)}</tr>
-        <tr className="end"><th>{zh ? '月底 stock' : 'Stock at month end'}</th>{d.monthly.map(x => <td key={x.month} className={x.endStock < d.target ? 'short' : ''}>{x.endStock}</td>)}</tr>
+        <tr className="end"><th>{zh ? '月底 stock' : 'Stock at month end'}</th>{d.monthly.map(x => <td key={x.month} className={x.endStock != null && x.endStock < d.target ? 'short' : ''}>{x.endStock ?? '—'}</td>)}</tr>
       </tbody>
     </table>
     <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
@@ -116,7 +117,7 @@ function AllDealers({ list, zh, today }: { list: DealerNow[]; zh: boolean; today
         <th title={zh ? '澳洲生产 / 海运 / 国内生产 / 排产锁定线' : ''}>{zh ? '线上 stock（澳洲 / 海运 / 国内 / 锁定）' : 'Stock on the line (AU / sea / CN / locked)'}</th><th>{zh ? '看得见的 stock' : 'Stock in sight'}</th>
         <th>{zh ? `stock 交付（${m.join(' / ')} 月）` : `Stock handovers (${m.join(' / ')})`}</th><th>{zh ? '月均 stock 交付' : 'Avg / month'}</th><th title={zh ? '看得见的 stock ÷ 月均 stock 交付' : ''}>{zh ? '够卖几个月' : 'Months of cover'}</th><th>{zh ? '未排产 stock / customer 订单' : 'Unscheduled stock / customer orders'}</th></tr></thead>
       <tbody>{list.map(d => <tr key={d.slug} className={d.own ? 'own' : ''}>
-        <td><b>{d.name}</b>{d.own ? <small> · {zh ? '直营' : 'own'}</small> : null}</td><td>{d.target ?? '—'}</td><td><b>{d.yard.stock}</b></td>
+        <td><b>{d.name}</b>{d.own ? <small> · {zh ? '直营' : 'own'}</small> : d.jv ? <small> · JV Dealers</small> : null}</td><td>{d.target ?? '—'}</td><td><b>{d.yard.stock}</b></td>
         <td className={d.yardVsTarget == null ? '' : d.yardVsTarget >= 0 ? 'over' : 'short'}>{d.yardVsTarget == null ? '—' : `${d.yardVsTarget > 0 ? '+' : ''}${d.yardVsTarget}`}</td>
         <td title={zh ? `已 PGI ${d.transit.pgiStock ?? 0} + Transport ${d.transit.transportStock ?? 0}` : ''}>{d.transit.stock}</td>
         <td>{d.lineStock}<small> · {d.line.au || 0} / {d.line.sea || 0} / {d.line.cn || 0} / {d.line.locked || 0}</small></td><td><b>{d.inSight}</b></td>
@@ -158,13 +159,18 @@ export default function DealerAnalysisView({ zh }: { zh: boolean }) {
         <div><span>{zh ? '店里 new stock / 目标合计' : 'Yard new stock / targets'}</span><strong>{sum(d => d.yard.stock)} <small>/ {sum(d => d.target)}</small></strong></div>
         <div><span>{zh ? '在途 stock' : 'Stock in transit'}</span><strong>{sum(d => d.transit.stock)}</strong></div>
         <div><span>{zh ? `月均 stock 交付（近 ${dl.months} 个月）` : `Avg stock handovers / month`}</span><strong>{sum(d => d.handover.avgStock).toFixed(0)}</strong></div>
-        <div><span>{zh ? '还缺 stock' : 'Stock needed'}</span><strong className={sum(d => d.need) ? 'short' : ''}>{sum(d => d.need)}</strong></div>
+        <div><span>{zh ? '还缺 stock' : 'Stock needed'}</span><strong className={sum(d => d.need ?? 0) ? 'short' : ''}>{sum(d => d.need ?? 0)}</strong></div>
         <div><span>{zh ? '滚动排产线' : 'Rolling line'}</span><strong>{dl.picked} <small>/ {dl.size} · customer {dl.customers} · stock {sum(d => d.stockPicked)}</small></strong></div>
       </div>
       <DealerTable dl={dl} zh={zh} />
       <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途 = 已 PGI 在路上的 + 在 Transport 的：已 PGI 的按 PGI 日期 + 路上天数，Transport 的按今天 + 3 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），按目标 ${dl.size} 台与全部已签字 Customer 数量中较大者计算，到 ${dl.rollingEnd} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线纳入所有经销商已签字的 Customer 订单（不受目标台数限制），再用剩余目标位置补直营店还缺的已签字 Stock；未签字订单在「处理中订单」。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd}.`}</p>
       <h3 className="da-sub">{zh ? '每月 stock：月底 stock = 上月底 + 到店 stock（含在途）− 卖出 stock；customer 车不算库存，这页只看 stock' : 'Stock per month: month end = previous + stock in (incl. transit) − stock sold; customer vans are not stock'}</h3>
       <div className="da-cards">{dl.dealers.map(d => <DealerCard key={d.slug} d={d} zh={zh} />)}</div>
+      {!!dl.jvDealers?.length && <section aria-label="JV Dealers">
+        <h3 className="da-sub">JV Dealers</h3>
+        <div className="da-cards">{dl.jvDealers.map(d => <DealerCard key={d.slug} d={d} zh={zh} />)}</div>
+        {dl.jvDealers.some(d => d.lead == null) && <p className="da-note">{zh ? '运输天数待补的门店：到店 stock、月底 stock 和缺口暂显示 —；卖出 stock 仍按近三个月月均交付估算。' : 'Where travel days are missing, stock arrivals, month-end stock and shortages are pending; stock sales use the last three full months’ average.'}</p>}
+      </section>}
       {dl.all?.length ? <AllDealers list={dl.all} zh={zh} today={data?.today || ''} /> : null}
     </>}
   </section>;
