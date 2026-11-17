@@ -8,7 +8,7 @@ type Summary = { cnDelayed: number; cnCompletionDelayed: number; canceled: numbe
 type Action = { chassis: string; model: string; range: string; phase: string; group: string; from: string; to: string; originalDealer: string; proposedDealer: string; originalAu: string; plannedAu: string; originalArrival: string; plannedArrival: string; depart: string; delayDays: number | null; arrivalDelayDays: number | null; action: string; reason: string; policy: string; delayed: boolean; reallocated: boolean };
 type ForecastDealer = DealerCardData & { stats: Summary; cap: number; overCapMonths: number; shortageMonths: number };
 type Section = { dealers: ForecastDealer[]; summary: Summary; actions: Action[] };
-type Report = { today: string; multiplier: number; months: number; own: Section; jv: Section; totals: Summary; sources: Record<string, { at?: string; error?: string; configured?: boolean }>; warnings: { code: string; chassis: string }[]; refreshing?: boolean;
+type Report = { displayModels: string[]; today: string; multiplier: number; months: number; own: Section; jv: Section; totals: Summary; sources: Record<string, { at?: string; error?: string; configured?: boolean }>; warnings: { code: string; chassis: string }[]; refreshing?: boolean;
   previewToken: string; expectedPlanId: string | null; canSave: boolean; rolling: StockRolling };
 type Config = { multiplier: number; months: number };
 type Filter = 'cancel' | 'delay' | 'pool' | 'reallocate' | 'pending';
@@ -20,6 +20,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
   const config = useRef(initial()), [draft, setDraft] = useState(String(config.current.multiplier)), [months, setMonths] = useState(config.current.months);
   const [data, setData] = useState<Report | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [mutating, setMutating] = useState(false), mutation = useRef(false);
+  const [modelsText, setModelsText] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<'adjustments' | 'confirmed' | 'recommended'>('adjustments');
   const [exporting, setExporting] = useState(''), [scope, setScope] = useState<'own' | 'jv'>('own'), [filter, setFilter] = useState<Filter>('cancel'), [search, setSearch] = useState(''), [page, setPage] = useState(0);
   const request = useRef<AbortController | null>(null), sequence = useRef(0);
@@ -83,6 +84,12 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
     {!data && !error && <div className="pl-loading">{zh ? '正在读取库存和产线…首次可能需要30–40秒' : 'Loading stock and production… first load may take 30–40 seconds'}</div>}
     {sourceErrors.length > 0 && <div className="message compact-msg sf-warning"><AlertTriangle size={15} />{zh ? '部分来源暂未更新，按现有副本测算：' : 'Some sources could not refresh; results use the available copy: '}{sourceErrors.map(([k, s]) => `${k}: ${s.error}`).join(' · ')}</div>}
     {data && <>
+      <details className="sf-rules" style={{marginBottom: 10}}><summary>{zh ? `推荐车型（${data.displayModels.length}款）· 编辑` : 'Recommended models · edit'}</summary>
+        <textarea aria-label="推荐车型" rows={3} style={{width: '100%', maxWidth: 700, resize: 'vertical', fontSize: 12, padding: 8}} value={modelsText ?? data.displayModels.join('\n')} onChange={e => setModelsText(e.target.value)} />
+        <p className="da-note">{zh ? '每行一款，可直接增删修改；保存后重新计算预测及补货建议。' : 'One model per line. Save to recalculate forecasts and replenishment.'}</p>
+        <button className="sf-calculate" disabled={busy || mutating || modelsText === null} onClick={async () => { setMutating(true); try { const r = await fetch('/api/stock-forecast/models', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({models:(modelsText || '').split('\n').map(s => s.trim()).filter(Boolean), previous:data.displayModels})}); const b = await r.json(); if(!r.ok) throw new Error(b.error); setModelsText(null); await load(config.current); } catch(e) { setError(e instanceof Error ? e.message : String(e)); } finally { setMutating(false); } }}>{zh ? '保存车型' : 'Save models'}</button>
+        <button className="pl-export" onClick={() => setModelsText(null)}>{zh ? '放弃修改' : 'Discard'}</button>
+      </details>
       <StockRollingPanel zh={zh} report={data} disabled={busy || Boolean(dirty)} reload={() => load(config.current)} onBusy={value => { mutation.current = value; setMutating(value); }} />
       <div className="da-kpis sf-kpis">
         <div><span>{zh ? '国内生产车辆延期' : 'China-stage vehicles delayed'}</span><strong>{data.totals.cnDelayed}</strong><small>{zh ? `其中AU完工后移 ${data.totals.cnCompletionDelayed} 台` : `${data.totals.cnCompletionDelayed} with AU completion postponed`}</small></div>
@@ -109,7 +116,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
         </tbody></table></div>
         <div className="sf-pager"><span>{zh ? `共${listed.length}台` : `${listed.length} vehicles`}</span><button disabled={page === 0} onClick={() => setPage(p => p - 1)}>{zh ? '上一页' : 'Previous'}</button><span>{page + 1} / {Math.max(1, Math.ceil(listed.length / 50))}</span><button disabled={(page + 1) * 50 >= listed.length} onClick={() => setPage(p => p + 1)}>{zh ? '下一页' : 'Next'}</button></div>
       </section>
-      <details className="sf-rules"><summary>{zh ? '推荐车型与测算规则' : 'Recommended models and scenario rules'}</summary><p>{zh ? '25款常态Towable展车：' : '25 routine Towable display models: '}{DISPLAY_MODELS.join(', ')}</p><p>Not on yard: {NOT_ON_YARD.join(', ')}</p><p>{zh ? 'MY2027删除车型：SRT18、SRP18F 2 Bunks。未准确匹配的型号先核对。按国内→锁定→滚动顺序安排，考虑各店总量及同款缓冲。现货跨店运输为暂估，调拨候选须核实未售。不是全局最优或产能承诺。' : 'Deleted MY2027: SRT18, SRP18F 2 Bunks. Unknown models require review. Sequence: started China supply, locked, rolling, considering dealer and model limits. Yard-transfer transit is an allowance; verify unsold vehicles. This is a planning scenario, not a global optimum or a capacity commitment.'}</p>{data.warnings.length > 0 && <p>{zh ? `已按车架号去重${data.warnings.length}条重复来源记录。` : `${data.warnings.length} duplicate source rows deduplicated by chassis.`}</p>}</details>
+      <details className="sf-rules"><summary>{zh ? '推荐车型与测算规则' : 'Recommended models and scenario rules'}</summary><p>{zh ? '常态Towable展车：' : '25 routine Towable display models: '}{data.displayModels.join(', ')}</p><p>Not on yard: {NOT_ON_YARD.join(', ')}</p><p>{zh ? 'MY2027删除车型：SRT18、SRP18F 2 Bunks。未准确匹配的型号先核对。按国内→锁定→滚动顺序安排，考虑各店总量及同款缓冲。现货跨店运输为暂估，调拨候选须核实未售。不是全局最优或产能承诺。' : 'Deleted MY2027: SRT18, SRP18F 2 Bunks. Unknown models require review. Sequence: started China supply, locked, rolling, considering dealer and model limits. Yard-transfer transit is an allowance; verify unsold vehicles. This is a planning scenario, not a global optimum or a capacity commitment.'}</p>{data.warnings.length > 0 && <p>{zh ? `已按车架号去重${data.warnings.length}条重复来源记录。` : `${data.warnings.length} duplicate source rows deduplicated by chassis.`}</p>}</details>
     </>}
   </section>;
 }

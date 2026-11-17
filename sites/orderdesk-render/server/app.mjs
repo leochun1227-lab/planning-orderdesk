@@ -14,7 +14,7 @@ import { forecastResolver } from '../lib/schedule.mjs';
 import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { createProductionLineSource, buildProductionLine, loadRollingPlan, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { buildDealerLogistics } from '../lib/dealer-logistics.mjs';
-import { buildStockForecast, forecastMultiplier } from '../lib/stock-forecast.mjs';
+import { buildStockForecast, forecastMultiplier, DISPLAY_MODELS, validateDisplayModels } from '../lib/stock-forecast.mjs';
 import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay } from '../lib/stock-rolling.mjs';
 import { reviewStockWithAI } from '../lib/stock-rolling-ai.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
@@ -124,10 +124,11 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     const today = dayInSydney(new Date());
     const [sources, { state, etag }] = await Promise.all([productionLine.current({ force, today }), store.readState()]);
     const args = { orders: state?.orders || {}, ...sources, today, plan: rollingPlan };
+    args.displayModels = state?.stockDisplayModels ?? DISPLAY_MODELS;
     const baseLine = buildProductionLine(args);
-    const fingerprint = stockInputFingerprint({ line: baseLine, dealers: sources.forecastDealers, capacity: sources.auCapacity, settings: sources.settings, orders: args.orders });
+    const fingerprint = stockInputFingerprint({ line: baseLine, dealers: sources.forecastDealers, capacity: sources.auCapacity, settings: { ...sources.settings, displayModels: args.displayModels }, orders: args.orders });
     const rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
-      capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
+      capacity: sources.auCapacity, settings: { ...sources.settings, displayModels: args.displayModels }, orders: args.orders, blockers: sourceBlockers(sources) });
     const line = rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
     const recommendations = new Map(rolling.items.map(a => [a.chassis, a]));
     for (const row of line.rows) { const a = recommendations.get(String(row.chassis).replace(/[-\s]/g, '').toUpperCase()); if (a) row.stockRecommendation = a; }
@@ -157,11 +158,23 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     try {
       const { sources, baseLine, fingerprint, rolling, state } = await currentLine(c.req.query('refresh') === '1');
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
-      return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months }),
+      return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS }),
         previewToken: forecastPreviewToken(fingerprint, multiplier, months), expectedPlanId: state?.stockForecastPlan?.id || null,
         canSave: !sourceBlockers(sources).length && Boolean(sources.auCapacity?.size), rolling: { ...rolling, aiConfigured: Boolean(env.OPENAI_API?.trim()) },
         sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '库存预测暂时无法计算 / Stock forecast is unavailable') }, 502); }
+  });
+
+  app.post('/api/stock-forecast/models', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const text = await c.req.text(); if (text.length > 12000) throw new Error('清单过大');
+      const body = JSON.parse(text), models = validateDisplayModels(body.models);
+      const { state, etag } = await store.readState(); if (!state) throw new Error('订单尚未准备');
+      if (JSON.stringify(body.previous) !== JSON.stringify(state.stockDisplayModels ?? DISPLAY_MODELS)) return json({ error: '清单已变化，请刷新后重试' }, 409);
+      state.stockDisplayModels = models; await store.writeState(state, etag);
+      return json({ ok: true });
+    } catch (e) { return json({ error: message(e, '保存失败') }, 400); }
   });
 
   async function planningBody(c) {
@@ -178,7 +191,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (!ctx.state || !ctx.sources.forecastDealers || !ctx.sources.auCapacity?.size || sourceBlockers(ctx.sources).length) throw new Error('请等待库存、产线和产能数据更新成功后再保存意见。');
       const previous = ctx.state.stockForecastPlan;
       if (body.expectedPlanId !== (previous?.id || null) || body.previewToken !== forecastPreviewToken(ctx.fingerprint, multiplier, months)) throw conflict('数据或保存意见已变化，请重新计算后保存。');
-      const report = buildStockForecast({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, multiplier, months });
+      const report = buildStockForecast({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, multiplier, months, displayModels: ctx.state.stockDisplayModels ?? DISPLAY_MODELS });
       const next = saveStockOpinion({ previous, report, fingerprint: ctx.fingerprint, actor: auth.user(c.req.raw)?.name });
       // Previously admitted vehicles are explicitly rechecked when saving a new opinion.
       next.admitted = previous?.admitted || [];

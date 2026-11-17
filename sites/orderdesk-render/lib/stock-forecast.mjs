@@ -23,10 +23,10 @@ export function forecastMultiplier(v = 1.3) {
 }
 const r1 = v => Math.round((v + Number.EPSILON) * 10) / 10;
 const phase = { cn: '国内生产', locked: '排产锁定线', rolling: '滚动排产线', customers: '库存订单池', processing: '处理中订单', later: '日期待补', au: '澳洲生产', sea: '海运', transport: 'Transport', pgi: 'PGI在途', yard: '现货调拨' };
-export function modelPolicy(model, year) {
+export function modelPolicy(model, year, models = DISPLAY_MODELS) {
   const m = key(model);
   if (String(year) === '2027' && ['SRT18', 'SRP18F 2 BUNKS'].includes(m)) return 'deleted';
-  return display.has(m) ? 'display' : noYard.has(m) ? 'notOnYard' : 'check';
+  return new Set(models.map(key)).has(m) ? 'display' : noYard.has(m) ? 'notOnYard' : 'check';
 }
 const priority = { transport: 0, au: 1, sea: 2, cn: 3, locked: 4, rolling: 5, customers: 6, processing: 7, later: 8 };
 const ACTIONS = { keep: ['保持原计划', 'Keep'], cancel: ['建议取消', 'Cancel'], delay: ['延期', 'Delay'], reallocate: ['转配', 'Reallocate'], pool: ['暂不生产', 'Do not build yet'], pending: ['待分流/核对', 'Review'], blocked: ['拦截待改送', 'Redirect before delivery'] };
@@ -49,7 +49,7 @@ export const actionLabel = (a, zh = true) => ACTIONS[a]?.[zh ? 0 : 1] || a;
 export const reasonLabel = (a, zh = true) => REASONS[a]?.[zh ? 0 : 1] || a;
 const suffix = a => { let max = -Infinity; const out = new Float64Array(a.length); for (let i = a.length - 1; i >= 0; i--) { max = Math.max(max, a[i]); out[i] = max; } return out; };
 
-export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3, months = 8 }) {
+export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3, months = 8, displayModels = DISPLAY_MODELS }) {
   multiplier = forecastMultiplier(multiplier);
   if (!valid(today)) throw new Error('Invalid forecast date');
   if (![8, 14].includes(Number(months))) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
@@ -97,7 +97,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
   function record(r, group = r.group) {
     const u = units.get(r.slug), originalAu = valid(r.auEnd);
     const originalArrival = group === 'pgi' ? valid(r.arrive) : group === 'transport' && u.lead != null ? plus(today, u.lead) : originalAu && u.lead != null ? plus(originalAu, u.lead) : '';
-    const policy = modelPolicy(r.model, r.modelYear);
+    const policy = modelPolicy(r.model, r.modelYear, displayModels);
     const a = { chassis: r.chassis, model: r.model || '', range: r.range || (String(r.model || '').match(/^[A-Za-z]+/) || [''])[0], modelYear: r.modelYear || '',
       group, phase: phase[group] || group, from: r.slug, originalDealer: u.d.name, to: '', proposedDealer: '', originalAu, plannedAu: '', originalArrival,
       forecast: valid(r.forecast), plannedArrival: '', depart: '', delayDays: null, arrivalDelayDays: null, action: 'keep', reason: '', policy, receive: false, delayed: false, reallocated: false };
@@ -168,7 +168,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
       if (a.originalArrival && addCalendarMonth(a.originalArrival) < deadline) deadline = addCalendarMonth(a.originalArrival);
       const latest = Math.min(N - 1, at(deadline));
       for (let t = ready; t <= latest; t++) {
-        if (dest.max[t] > dest.cap - 1 + 1e-8 || modelCurve(dest, a.model).max[t] > Math.max(2, Math.ceil(dest.d.target / DISPLAY_MODELS.length)) - 1 + 1e-8) continue;
+        if (dest.max[t] > dest.cap - 1 + 1e-8 || modelCurve(dest, a.model).max[t] > Math.max(2, Math.ceil(dest.d.target / Math.max(1, displayModels.length))) - 1 + 1e-8) continue;
         const delay = Math.max(0, t - at(a.originalAu) - dest.lead);
         choices.push({ dest, t, delay, score: delay + (dest === original ? 0 : 7) }); break;
       }
@@ -214,6 +214,11 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
         need: Math.max(0, Math.ceil(u.d.target - m.at(-1).endStock)), stats: summary(list.filter(a => a.from === u.d.slug)),
         overCapMonths: m.filter(m => m.endStock > u.cap).length, shortageMonths: m.filter(m => m.unmet > 0).length }; }) };
   }
-  const result = { today, multiplier, months, planningEnd: end, maxDelayMonths: 1, own: section(false), jv: section(true), totals: summary(actions), warnings };
+  const result = { today, multiplier, months, planningEnd: end, maxDelayMonths: 1, displayModels, own: section(false), jv: section(true), totals: summary(actions), warnings };
   return result;
+}
+
+export function validateDisplayModels(value) {
+  if (!Array.isArray(value) || value.length > 100 || value.some(v => typeof v !== "string" || !v.trim() || v.length > 80 || /[\r\n]/.test(v))) throw new Error("车型清单无效，最多100款，每款最多80字");
+  return [...new Set(value.map(key))];
 }

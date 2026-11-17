@@ -89,7 +89,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
     const id = chassisKey(r.chassis), u = units.get(slugify(r.dealer));
     const reason = !id || counts.get(id) !== 1 || physical.has(id) ? 'duplicate' : cancelled.has(id) ? 'cancelled' : r.regentRank < 6 ? 'progress' : isMotorhomeOrder(r) ? 'motorhome'
       : !signedPlansDate([r.signedAt], today) ? 'unsigned' : !u ? 'dealer' : u.d.slug === 'traralgon' || u.d.paused || u.lead == null ? 'receiving'
-      : modelPolicy(r.model, r.modelYear) !== 'display' ? 'model' : unresolved.has(u.d.slug) ? 'unresolved' : '';
+      : modelPolicy(r.model, r.modelYear, plan.report.displayModels ?? DISPLAY_MODELS) !== 'display' ? 'model' : unresolved.has(u.d.slug) ? 'unresolved' : '';
     if (reason) { hold(reason); continue; }
     pool.push({ r, u, id });
   }
@@ -106,7 +106,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
       if (p.selected) continue;
       if (p.r.forecast && /^\d{4}-\d{2}-\d{2}$/.test(p.r.forecast) && auEnd < plus(p.r.forecast, duration('auDays', 40))) continue;
       const arrival = plus(auEnd, p.u.lead), t = at(arrival); if (t < 0 || t >= N) continue;
-      const m = modelCurve(p.u, p.r.model), buffer = Math.max(2, Math.ceil(p.u.d.target / DISPLAY_MODELS.length));
+      const m = modelCurve(p.u, p.r.model), buffer = Math.max(2, Math.ceil(p.u.d.target / Math.max(1, (plan.report.displayModels ?? DISPLAY_MODELS).length)));
       if (p.u.balance[t] >= p.u.d.target - 1e-8 || p.u.max[t] > p.u.cap - 1 + 1e-8 || m.max[t] > buffer - 1 + 1e-8) continue;
       choices.push({ p, arrival, t, modelStock: m.balance[t], score: p.u.balance[t] / p.u.d.target + (m.balance[t] < 1 ? -2 : 0) });
     }

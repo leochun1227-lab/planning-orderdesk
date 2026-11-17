@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
 import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, isStockCustomer, isRollingCustomer, isMotorhomeOrder, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
-import { modelPolicy } from './stock-forecast.mjs';
+import { DISPLAY_MODELS, modelPolicy } from './stock-forecast.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -279,7 +279,7 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
   return out;
 }
 
-export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE, rollingAdmissions = [] }) {
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE, rollingAdmissions = [], displayModels = DISPLAY_MODELS }) {
   const activePlan = plan && (!plan.activeUntil || today <= plan.activeUntil) ? plan : null;
   const seen = new Map();
   for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
@@ -358,7 +358,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     const matching = rows.filter(r => normalizeChassis(r.chassis) === normalizeChassis(a.chassis));
     const r = matching.length === 1 ? matching[0] : null;
     if (!r || admitted.has(r.chassis) || !['customers', 'later'].includes(r.group) || isMotorhomeOrder(r) || !isStockCustomer(r.customer)
-      || !signedPlansDate([r.signedAt], today) || r.regentRank < 6 || modelPolicy(r.model, r.modelYear) !== 'display' || slugify(r.dealer) === 'traralgon'
+      || !signedPlansDate([r.signedAt], today) || r.regentRank < 6 || modelPolicy(r.model, r.modelYear, displayModels) !== 'display' || slugify(r.dealer) === 'traralgon'
       || r.model !== a.model || slugify(r.dealer) !== a.slug || !a.planId || !/^\d{4}-\d{2}-\d{2}$/.test(a.auEnd) || a.auEnd < today) continue;
     admitted.add(r.chassis); r.rollingApproval = { planId: a.planId, arrival: a.arrival, auEnd: a.auEnd };
     r.rollingNotBefore = a.auEnd;
