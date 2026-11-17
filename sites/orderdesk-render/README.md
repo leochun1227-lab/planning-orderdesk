@@ -76,6 +76,10 @@ node --env-file=.env scripts/import-state.mjs backup.json --force
 
 ## 本地开发
 
+### 产线列：Request Delivery Date
+
+产线每个分组在 Model year 后面单独一列 Request Delivery Date，取 Portal schedule（即上传的排产表）里的值：日期、文字（如 Urgent）和空白都照排产表显示，空白 = 没有要求日期。不在排产表里的 SRM / SRV 用 Orderdesk 订单的日期（ASAP 显示为空）。可排序，CSV 导出也带这一列。
+
 ### 滚动排产线
 
 所有经销商已签字、客户名非空且不以Stock结尾的Towable Customer按排产表顺序优先入线。Stock须先保存库存调整意见，再从符合条件的补货建议中勾选并确认；保持Stock类型，标记意见版本和预计完工/到店日期，可撤回。SRV/SRM不进入新滚动安排，Traralgon不接收Stock。未签字订单在处理中，客户名为空的处理记录不显示，也不计入列表数量或CSV。原已锁定和实际生产/运输阶段保留。

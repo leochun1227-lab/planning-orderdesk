@@ -18,7 +18,7 @@ type Row = {
   liveStageName?: string; liveTone?: string; v?: View;
   id: string; chassis: string; empty: boolean; line: string; source: string; group: string; portalGroup: string; status: string;
   planOrder: number | null; planRef: string; planWeld: string; planAssembly: string;
-  regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; modelYear?: string; range: string; customer: string; orderId: string;
+  regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; modelYear?: string; requestDate?: string; range: string; customer: string; orderId: string;
   production: null | { status: string; stage: string; location: string };
   cnActual: string; cnStart: string; cnPlanStart: string; cnPlanEnd: string; cnPlanMonth?: string; auActual: string; auStart: string; auPlanStart: string; auPlanEnd: string;
   today?: string; signedAt?: string; orderRow: number | null; forecast: string;
@@ -188,6 +188,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
       { field: 'customer', headerName: 'Customer name', width: 190 },
       { field: 'modelYear', headerName: 'Model year', width: 90 },
+      { field: 'requestDate', headerName: 'Request Delivery Date', headerTooltip: zh ? '排产表的 Request Delivery Date（空 = 没有要求日期）；SRM / SRV 用 Orderdesk 订单的日期' : 'Orderlist Request Delivery Date (blank = none); SRM / SRV from the Orderdesk order', width: 118,
+        comparator: (a: string, b: string) => (a || '~').localeCompare(b || '~') },
       { field: 'model', headerName: 'Model / Range', width: 118, cellRenderer: (p: any) => p.data && <Two strong top={p.data.model || (zh ? '未提供车型' : 'No model')} sub={p.data.range} /> },
       { colId: 'orderType', headerName: zh ? '订单类型' : 'Order type', width: 100,
         valueGetter: p => !p.data || p.data.empty ? '' : p.data.group === 'dealership'

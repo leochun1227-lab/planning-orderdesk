@@ -5,7 +5,7 @@
 //   SAP           GR / GI per chassis, pushed by an in-network computer (sap-grgi.mjs)
 // Vehicle SAP GR takes precedence. A displayed Shipment record without vehicle GR means shipping.
 // Otherwise retain the Portal stage rules and AU production API facts; missing GR remains flagged.
-import { normalizeChassis } from './order-engine.mjs';
+import { normalizeChassis, toDay } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
@@ -327,7 +327,10 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         ...((seen.get(chassis) || []).length > 1 ? [{ code: 'duplicate', level: 'error', zh: `车架号在产线出现 ${seen.get(chassis).length} 次（${seen.get(chassis).map(x => BOARD_GROUPS.find(gr => gr.id === x)?.zh || x).join('、')}）`, en: `Chassis appears ${seen.get(chassis).length} times on the line (${seen.get(chassis).join(', ')})` }] : []),
         ...(notInPlan ? [{ code: 'notInPlan', level: 'warn', zh: `不在 Longtree 11 / 12 月排产计划里（Portal 国内计划上线 ${raw.cnPlanStart || '—'}，原在${raw.group === 'locked' ? '排产锁定线' : '滚动排产线'}）`, en: `Not in the Longtree Nov / Dec plan (Portal CN plan start ${raw.cnPlanStart || '—'}, was ${raw.group})` }] : []),
         ...issuesFor({ b, group, lt, au, sap: p, regent, today })],
-      dealer: b.dealer || '', customer, signedAt, modelYear: String(order?.modelYear || b.modelYear || '').trim(), model: b.model || '', range: b.range || '', orderId: order ? chassis : '',
+      dealer: b.dealer || '', customer, signedAt, modelYear: String(order?.modelYear || b.modelYear || '').trim(),
+      // Orderlist "Request Delivery Date" as the Portal schedule (the uploaded Orderlist) has it, blank included; vans not in
+      // that list (SRM / SRV) take the Orderdesk order's date. Blank = no requested date (Orderdesk 'ASAP').
+      requestDate: raw.inSchedule ? raw.requestDate || '' : requestDateOf(order?.requestDate), model: b.model || '', range: b.range || '', orderId: order ? chassis : '',
       production: b.production ? { status: b.production.status || '', stage: b.production.stage || '', location: b.production.location || '' } : null,
       cnActual: b.cnActual, cnStart: b.cnStart, cnPlanStart: b.cnPlanStart, cnPlanEnd: cnPlan.date, cnPlanMonth: cnPlan.date ? '' : cnPlan.month, auActual: b.auActual, auStart: b.auStart, auPlanStart: b.auPlanStart, auPlanEnd: b.auPlanEnd,
       ...finishDates(b, lt, p, today),
@@ -527,16 +530,23 @@ async function prodReportRows(env, fetcher) {
 }
 /** Cached sources; each keeps its last good copy when a refresh fails. Portal comes from the shared copy. */
 export const SOURCE_TTL_MS = { longtree: 30 * 60 * 1000, prod: 15 * 60 * 1000 };
-// The bundled Portal board drops model year and sign-off. Carry explicit values from the same cached records.
+const requestDateOf = v => { const d = toDay(v); return /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : ''; };
+// Orderlist cell → date (dd/mm/yyyy or ISO), or the text as typed ("Urgent", "(fixed in August)"); 1900 / ASAP → blank.
+const requestCell = v => { const d = toDay(v); return d === 'ASAP' ? '' : d || String(v ?? '').trim(); };
+// The bundled Portal board drops model year, sign-off and request delivery date. Carry explicit values from the same cached records.
 function portalOrderDetails(raw, today) {
   const details = new Map();
   const list = v => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);
+  const scheduled = new Set(list(raw.schedule));
   for (const records of [raw.campers, raw.schedule, raw.motorhome?.orders]) for (const r of list(records)) {
     if (!r || typeof r !== 'object') continue;
     const chassis = normalizeChassis(r.chassisNumber || r.Chassis || r.chassis);
     const year = [r.modelYear, r.ModelYear, r['Model Year']].map(v => String(v ?? '').trim()).find(Boolean);
     const signedAt = signedPlansDate([r.signedAt, r['Signed Plans Received'], r.signedOrderReceived, r.signedOffDate], today);
-    if (chassis && (year || signedAt)) details.set(chassis, { modelYear: year || details.get(chassis)?.modelYear || '', signedAt: signedAt || details.get(chassis)?.signedAt || '' });
+    const inSchedule = scheduled.has(r), requestDate = inSchedule ? requestCell(r['Request Delivery Date']) : '';
+    const was = details.get(chassis);
+    if (chassis && (year || signedAt || inSchedule)) details.set(chassis, { modelYear: year || was?.modelYear || '', signedAt: signedAt || was?.signedAt || '',
+      inSchedule: inSchedule || Boolean(was?.inSchedule), requestDate: inSchedule ? requestDate : was?.requestDate || '' });
   }
   return details;
 }
@@ -566,7 +576,7 @@ export function createProductionLineSource(env = {}, { fetcher = fetch, ttlMs = 
     const built = mod.buildProductionBoard(mod.boardVehiclesFromSources(raw, today), mod.DEFAULT_BOARD_SETTINGS, today);
     const details = portalOrderDetails(raw, today);
     const rows = built.rows.map(r => { const d = details.get(normalizeChassis(r.chassis));
-      return { ...r, modelYear: d?.modelYear || r.modelYear || '', signedAt: signedPlansDate([r.signedAt, d?.signedAt], today) }; });
+      return { ...r, modelYear: d?.modelYear || r.modelYear || '', signedAt: signedPlansDate([r.signedAt, d?.signedAt], today), inSchedule: Boolean(d?.inSchedule), requestDate: d?.requestDate || '' }; });
     let dealers = null, forecastDealers = null, dealersError = '';
     try { dealers = raw.yard ? dealerSnapshot(raw, today, { all: true }) : null; forecastDealers = raw.yard ? dealerSnapshot(raw, today, { all: true, towableOnly: true }) : null; if (!dealers) dealersError = 'no data'; } catch (e) { dealersError = e instanceof Error ? e.message : String(e); }
     boardCache = { at: copy.at, today, board: { ...built, rows: mod.sortBoardRows(rows, 'status') }, settings: mod.DEFAULT_BOARD_SETTINGS, tms: parseTms(raw.tms), tmsAt: raw.tms?.meta?.updatedAtUTC || '', dealers, forecastDealers, dealersError,
