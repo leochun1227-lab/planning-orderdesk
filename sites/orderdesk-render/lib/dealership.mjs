@@ -1,8 +1,8 @@
 // Our five dealerships (the Dealer Portal's "Self-owned" dealers): new stock in the yard, vans in transit and handovers,
 // replicating the Dealer Portal admin page (src/pages/Admin.tsx: yard categories, transit rule) and the dealer comparison
 // dashboard (src/pages/ModernDealerComparisonDashboard.tsx: YTD Handover, stock / customer by the Orderlist customer name).
-// From these: how many stock vans each dealership still needs. Rolling is signed Towable Customer orders only;
-// stock needs are informational and never automatically fill rolling places. Read-only; no Portal writes.
+// From these: how many stock vans each dealership still needs. Rolling accepts signed Towable customers and
+// stock validated against the saved inventory opinion. Read-only; no Portal writes.
 import { signedPlansDate } from './order-signoff.mjs';
 
 // Days from AU finish (下线) to the van being at the dealer: 3 days to dispatch + the road / sea trip. Only used to count
@@ -34,7 +34,7 @@ export function arrivalAtDealer(r, d, today) {
 }
 export const IDEAL_STOCK_SOURCE = 'Andrew Crank, 2026-10-27: Ideal Stock Qty per dealer';
 // Ideal stock per dealer from the same email (Vanari (S) / (N) and Sydney have no active dealer in the Portal).
-export const IDEAL_STOCK = { abco: 15, bundaberg: 40, 'destiny-rv': 35, 'forest-glen': 70, frankston: 50, geelong: 40, heatherbrae: 40, launceston: 25, 'slacks-creek': 40, 'st-james': 60, toowoomba: 35, townsville: 30, traralgon: 25, wangaratta: 25 };
+export const IDEAL_STOCK = { abco: 15, bundaberg: 40, 'destiny-rv': 35, 'forest-glen': 70, frankston: 50, geelong: 40, heatherbrae: 40, launceston: 25, 'slacks-creek': 40, 'st-james': 60, toowoomba: 35, townsville: 30, traralgon: 25, wangaratta: 25, 'vanari-s': 25, 'vanari-n': 25, sydney: 25 };
 // JV dealers: 7 road days plus the shared 3 dispatch days = 10 days from AU finish.
 export const JV_DEALERS = [
   { slug: 'bundaberg', name: 'Bundaberg', travelDays: 7 },
@@ -96,14 +96,48 @@ const monthsBefore = (today, n) => { const [y, m] = today.split('-').map(Number)
 /** Self-owned first, then the four JV dealers, then the other active Portal dealers (not groups). */
 export function dealerList(raw) {
   const own = DEALERSHIPS.map(d => ({ ...d, own: true }));
-  const configs = Object.entries(raw?.dealerConfigs || {}).filter(([, c]) => c && c.isGroup !== true && c.isActive !== false);
-  const others = configs.map(([slug, c]) => ({ slug: slugify(slug), name: String(c.name || slug), target: IDEAL_STOCK[slugify(slug)] ?? null, travelDays: null, own: false }))
-    .filter(d => !SELF_OWNED.has(d.slug) && !JV_SLUGS.has(d.slug)).sort((a, z) => a.name.localeCompare(z.name));
+  const candidates = new Map(), excluded = new Set(), aliases = new Map();
+  for (const [slug, c] of Object.entries(raw?.dealerConfigs || {})) {
+    if (!c) continue;
+    if (c.isGroup === true || c.isActive === false) { excluded.add(slugify(slug)); excluded.add(slugify(c.name)); continue; }
+    candidates.set(slugify(slug), String(c.name || slug));
+    if (c.name) aliases.set(slugify(c.name), slugify(slug));
+  }
+  for (const name of [...Object.keys(raw?.yard || {}), ...listOf(raw?.schedule).map(r => r?.Dealer || r?.dealer || r?.Dealership), ...listOf(raw?.pgi).map(r => r?.dealer)]) {
+    const slug = aliases.get(slugify(name)) || slugify(name); if (slug && !candidates.has(slug)) candidates.set(slug, String(name));
+  }
+  const others = [...candidates].filter(([slug]) => slug && !excluded.has(slug) && !SELF_OWNED.has(slug) && !JV_SLUGS.has(slug))
+    .map(([slug, name]) => ({ slug, name, target: IDEAL_STOCK[slug] ?? null, travelDays: null, own: false, independent: true }))
+    .sort((a, z) => a.name.localeCompare(z.name));
   return [...own, ...JV_DEALERS.map(d => ({ ...d })), ...others];
+}
+
+export const dealerGroup = d => d.own !== false ? 'own' : d.jv ? 'jv' : 'independent';
+export const dealerSlug = (dealers, value) => { const slug = slugify(value); return dealers.find(d => d.slug === slug)?.slug || dealers.find(d => slugify(d.name) === slug)?.slug || slug; };
+
+export function configureDealers(dealers, overrides = {}, today) {
+  return dealers?.map(d => {
+    const setting = overrides[d.slug] || {}, configured = { ...d, ...setting };
+    return { ...configured, vehicles: (d.vehicles || []).map(v => v.where === 'transit' && v.via !== 'transport'
+      ? { ...v, arrive: transitArrival(v.since, configured, today) } : v) };
+  }) ?? null;
+}
+
+export function validateDealerSettings(entries, known) {
+  if (!Array.isArray(entries) || entries.length > 300) throw new Error('Dealer设置无效');
+  const slugs = new Set(known.filter(d => dealerGroup(d) === 'independent').map(d => d.slug)), seen = new Set();
+  return Object.fromEntries(entries.map(e => {
+    if (!e || !slugs.has(e.slug) || seen.has(e.slug)) throw new Error('Dealer设置已变化，请刷新');
+    seen.add(e.slug);
+    if (e.target !== null && (!Number.isInteger(e.target) || e.target < 1 || e.target > 10000)) throw new Error('Ideal须为1–10000的整数，或留空待核对');
+    if (e.travelDays !== null && (!Number.isInteger(e.travelDays) || e.travelDays < 0 || e.travelDays > 365)) throw new Error('运输天数须为0–365的整数，或留空待核对');
+    return [e.slug, { target: e.target, travelDays: e.travelDays }];
+  }));
 }
 
 /** Our dealers (or every dealer with all = true) as the Dealer Portal shows them today. */
 export function dealerSnapshot(raw, today, { all = false, towableOnly = false } = {}) {
+  const known = dealerList(raw), resolveDealer = value => dealerSlug(known, value);
   const yards = raw?.yard || {}, pgi = raw?.pgi || {}, assignments = raw?.deliveryTo || {};
   const customerType = new Map(); // Orderlist customer name: "... Stock" = stock, else customer (handover classification)
   const modelByChassis = new Map();
@@ -114,14 +148,14 @@ export function dealerSnapshot(raw, today, { all = false, towableOnly = false } 
   for (const stock of Object.values(yards)) for (const c of Object.keys(stock || {})) if (c !== 'dealer-chassis') inAnyYard.add(c.trim().toUpperCase());
   const delivery = new Map(Object.entries(assignments).map(([c, a]) => [c.trim().toUpperCase(), a || {}]));
   const effectiveDealer = (chassis, rec) => {
-    const a = delivery.get(chassis) || {}, src = slugify(a.sourceDealerSlug), own = slugify(rec.dealer);
+    const a = delivery.get(chassis) || {}, src = resolveDealer(a.sourceDealerSlug), own = resolveDealer(rec.dealer);
     if (src && own && own !== src) return own;
-    return slugify(a.deliveryTo) || (own === 'green-show' ? 'forest-glen' : own);
+    return resolveDealer(a.deliveryTo) || (own === 'green-show' ? 'forest-glen' : own);
   };
   const months = monthsBefore(today, HANDOVER_MONTHS), thisMonth = today.slice(0, 7);
   const transitBy = new Map(); // effective dealer → active PGI records
   for (const [c, r] of Object.entries(pgi)) { if (!r || r.history) continue; const chassis = c.trim().toUpperCase(); if (!chassis) continue; const slug = effectiveDealer(chassis, r); transitBy.set(slug, [...(transitBy.get(slug) || []), [c, r]]); }
-  return (all ? dealerList(raw) : DEALERSHIPS.map(d => ({ ...d, own: true }))).map(d => {
+  return (all ? known : DEALERSHIPS.map(d => ({ ...d, own: true }))).map(d => {
     const useBillTo = SELF_OWNED.has(d.slug); // Admin.tsx: self-owned / price-enabled dealers go by the bill-to name
     const yardRows = Object.entries(yards[d.slug] || {}).filter(([c, r]) => c !== 'dealer-chassis' && r && !r.history && included(c, r))
       .map(([c, r]) => { const since = dayOf(r.receivedAt ?? r.createdAt ?? r.movementDate); return { chassis: String(r.chassis || r.Chassis || c).trim(), where: 'yard', category: yardCategory(r, useBillTo), model: String(r.model || ''), customer: String(r.customer || ''), since, days: daysBetween(since, today) }; });

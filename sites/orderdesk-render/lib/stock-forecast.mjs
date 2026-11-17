@@ -1,5 +1,5 @@
 // Read-only stock scenarios. No order, Portal, production-slot or transport writes.
-import { DEALERSHIPS, JV_DEALERS, leadDays, isStockCustomer, slugify } from './dealership.mjs';
+import { dealerGroup, dealerSlug, leadDays, isStockCustomer } from './dealership.mjs';
 
 export const DISPLAY_MODELS = ['SRC22S', 'SRC19', 'SRC18', 'SRC21', 'SRC21S', 'SRC17', 'SRC22', 'SRC24', 'SRC14', 'SRC16',
   'SRC22F 3 Bunks', 'SRC21C', 'SRH16', 'SRH16F 1 Bunk', 'SRH14', 'SRH15', 'SRH15F 2 Bunks', 'SRP19', 'SRP19F 2 Bunks',
@@ -38,6 +38,7 @@ const REASONS = {
   capacity: ['1个自然月内无同时满足库存上限及车型缓冲的接收窗口。', 'No receiving window within one calendar month meets both stock and model limits.'],
   started: ['已开工，不能按未生产订单取消；接收用途仍需落实。', 'Production has started; do not treat as an unbuilt cancellation. Receiving demand is unresolved.'],
   date: ['缺少有效AU完工或运输日期，未虚构到货日期。', 'A valid AU finish or transit date is missing; no arrival date is fabricated.'],
+  settings: ['Ideal库存或运输天数待补，暂不自动取消或补货。', 'Ideal stock or transit days are missing; review before cancellation or replenishment.'],
   horizon: ['日期超出未来36个月的规划范围，单列核对，不自动取消。', 'Date is outside the next 36 months; review separately rather than cancel automatically.'],
   stopped: ['Traralgon停止收车，原下游车辆待确认改送，未假定实际拦截已执行。', 'Traralgon is not receiving. Confirm a new destination; interception has not been executed.'],
   fixed: ['已在下游，沿用原到店计划；不能靠取消未开工单消除这些库存。', 'Downstream supply retains its arrival plan; cancelling unstarted orders does not remove it.'],
@@ -54,15 +55,14 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
   if (![8, 14].includes(Number(months))) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
   months = Number(months);
   if (!Array.isArray(dealers)) throw new Error('Dealer stock data is unavailable');
-  const wanted = new Set([...DEALERSHIPS, ...JV_DEALERS].map(d => d.slug));
-  const inputs = dealers.filter(d => wanted.has(d.slug));
+  const inputs = dealers.filter(d => d.slug);
   const index = new Map(inputs.map(d => [d.slug, d]));
   const warnings = [];
   const seen = new Set(), orders = [];
   // Physical yard / PGI records take precedence over a still-open production row of the same chassis.
   for (const d of inputs) for (const v of d.vehicles || []) if (norm(v.chassis) && isTowable(v)) seen.add(norm(v.chassis));
   for (const r of [...rows].sort((a, b) => (priority[a.group] ?? 99) - (priority[b.group] ?? 99))) {
-    const chassis = norm(r.chassis), slug = slugify(r.dealer);
+    const chassis = norm(r.chassis), slug = dealerSlug(inputs, r.dealer);
     if (!chassis || r.empty || r.group === 'dealership' || !(r.group in priority) || !index.has(slug) || !isTowable(r) || !isStockCustomer(r.customer)) continue;
     if (seen.has(chassis)) { warnings.push({ code: 'duplicate', chassis }); continue; }
     seen.add(chassis); orders.push({ ...r, chassis, slug });
@@ -74,7 +74,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
   const N = Math.round((stamp(end) - stamp(today)) / MS) + 1, at = day => Math.round((stamp(day) - stamp(today)) / MS);
   const dates = Array.from({ length: N }, (_, i) => plus(today, i));
   const fractions = dates.map(day => { const d = new Date(stamp(day)); return 1 / new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); });
-  const units = new Map(inputs.map(d => [d.slug, { d, lead: leadDays(d), stop: d.slug === 'traralgon' || Boolean(d.paused), cap: Math.floor(d.target * multiplier), events: new Float64Array(N), models: new Map(), modelCache: new Map(), initialModels: {}, avg: Math.max(0, Number(d.handover?.avgStock) || 0) }]));
+  const units = new Map(inputs.map(d => [d.slug, { d, lead: leadDays(d), stop: d.slug === 'traralgon' || Boolean(d.paused), cap: Number.isFinite(d.target) && d.target > 0 ? Math.floor(d.target * multiplier) : null, events: new Float64Array(N), models: new Map(), modelCache: new Map(), initialModels: {}, avg: Math.max(0, Number(d.handover?.avgStock) || 0) }]));
   for (const u of units.values()) for (const v of u.d.vehicles || []) if (v.where === 'yard' && v.category === 'stock' && isTowable(v)) u.initialModels[key(v.model)] = (u.initialModels[key(v.model)] || 0) + 1;
   function curve(initial, events, avg) {
     let stock = initial; const balance = new Float64Array(N), sold = new Float64Array(N), missed = new Float64Array(N);
@@ -127,7 +127,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
   const moved = new Set();
   function redistribute(until) {
     for (let t = 0; t < Math.min(N, until); t += 7) {
-      const donors = [...units.values()].filter(u => u.d.own !== false && !u.stop && u.lead != null && u.balance[t] > u.cap + 1);
+      const donors = [...units.values()].filter(u => u.d.own !== false && !u.stop && u.lead != null && u.cap != null && u.balance[t] > u.cap + 1);
       donors.sort((a, b) => b.balance[t] - a.balance[t] || a.d.slug.localeCompare(b.d.slug));
       for (const u of donors) {
         const vans = (u.d.vehicles || []).filter(v => v.where === 'yard' && v.category === 'stock' && isTowable(v) && modelPolicy(v.model, v.modelYear, displayModels, notOnYardModels) === 'display').sort((a, b) => (b.days || 0) - (a.days || 0) || a.chassis.localeCompare(b.chassis));
@@ -136,7 +136,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
           for (const v of vans) {
             if (moved.has(norm(v.chassis)) || modelCurve(u, v.model).balance[t] < 2) continue;
             for (const dest of units.values()) {
-              if (dest === u || dest.stop || dest.d.own === false || dest.lead == null) continue;
+              if (dest === u || dest.stop || dest.d.own === false || dest.lead == null || dest.cap == null) continue;
               const receiveAt = t + u.lead + dest.lead; if (receiveAt >= N) continue;
               if (dest.balance[receiveAt] >= dest.d.target || dest.max[receiveAt] > dest.cap - 1 + 1e-8 || modelCurve(dest, v.model).balance[receiveAt] > 1) continue;
               const score = dest.balance[receiveAt] + receiveAt / N;
@@ -157,11 +157,12 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
   function allocate(a) {
     const original = units.get(a.from), started = a.group === 'cn';
     if (a.policy !== 'display') { a.action = started || a.policy === 'check' ? 'pending' : 'cancel'; a.reason = a.policy; return; }
+    if (original.cap == null || original.lead == null && !original.stop) { a.action = 'pending'; a.reason = 'settings'; return; }
     if (!a.originalAu) { a.action = 'pending'; a.reason = 'date'; return; }
     if (a.originalAu > maxEnd) { a.action = 'pending'; a.reason = 'horizon'; return; }
     const choices = [];
     for (const dest of units.values()) {
-      if (dest.stop || dest.lead == null || (original.d.own === false ? dest !== original : dest.d.own === false)) continue;
+      if (dest.stop || dest.lead == null || dest.cap == null || (original.d.own === false ? dest !== original : dest.d.own === false)) continue;
       const ready = Math.max(0, at(plus(a.originalAu, dest.lead)));
       let deadline = plus(addCalendarMonth(a.originalAu), dest.lead);
       if (a.originalArrival && addCalendarMonth(a.originalArrival) < deadline) deadline = addCalendarMonth(a.originalArrival);
@@ -205,15 +206,15 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
       poolNotBuilt: list.filter(a => a.action === 'pool').length, reallocated: list.filter(a => a.reallocated).length,
       pending: list.filter(a => ['pending', 'blocked'].includes(a.action)).length, changes: list.filter(a => a.action !== 'keep').length };
   }
-  function section(jv) {
-    const all = [...units.values()].filter(u => Boolean(u.d.jv) === jv);
+  function section(group) {
+    const all = [...units.values()].filter(u => dealerGroup(u.d) === group);
     const slugs = new Set(all.map(u => u.d.slug)), list = actions.filter(a => slugs.has(a.from));
     return { summary: summary(list), actions: list,
-      dealers: all.map(u => { const { vehicles, ...rest } = u.d, m = monthly(u); return { ...rest, paused: false, stopReceiving: u.stop, lead: u.lead, cap: u.cap, monthly: m,
-        need: Math.max(0, Math.ceil(u.d.target - m.at(-1).endStock)), stats: summary(list.filter(a => a.from === u.d.slug)),
+      dealers: all.map(u => { const { vehicles, ...rest } = u.d, needed = u.cap == null || u.lead == null && !u.stop, m = monthly(u).map(m => needed ? { ...m, stockIn: null, stockOut: null, unmet: null, endStock: null, baselineEndStock: null, baselineIn: null } : m); return { ...rest, paused: false, settingsNeeded: needed, stopReceiving: u.stop, lead: u.lead, cap: u.cap, monthly: m,
+        need: needed ? null : Math.max(0, Math.ceil(u.d.target - m.at(-1).endStock)), stats: summary(list.filter(a => a.from === u.d.slug)),
         overCapMonths: m.filter(m => m.endStock > u.cap).length, shortageMonths: m.filter(m => m.unmet > 0).length }; }) };
   }
-  const result = { today, multiplier, months, planningEnd: end, maxDelayMonths: 1, displayModels, notOnYardModels, own: section(false), jv: section(true), totals: summary(actions), warnings };
+  const result = { today, multiplier, months, planningEnd: end, maxDelayMonths: 1, displayModels, notOnYardModels, own: section('own'), jv: section('jv'), independent: section('independent'), totals: summary(actions), warnings };
   return result;
 }
 
