@@ -31,7 +31,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers, capacit
   const counts = new Map(); for (const r of line.rows) counts.set(norm(r.chassis), (counts.get(norm(r.chassis)) || 0) + 1);
   const duePriority = r => /urgent|紧急/i.test(r.requestDate || '') ? '0000' : /^\d{4}-\d{2}-\d{2}$/.test(r.requestDate || '') ? r.requestDate : r.forecast || '9999';
   const customers = line.rows.filter(r => ['customers', 'later', 'rolling'].includes(r.group) && !r.empty && counts.get(norm(r.chassis)) === 1
-    && !inactive.has(norm(r.chassis)) && r.regentRank >= 6 && isRollingCustomer(r) && signedPlansDate([r.signedAt], today))
+    && !inactive.has(norm(r.chassis)) && isRollingCustomer(r) && signedPlansDate([r.signedAt], today))
     .map(r => ({ r, ready: r.forecast && /^\d{4}-\d{2}-\d{2}$/.test(r.forecast) ? [earliest, plus(r.forecast, duration('auDays', 40))].sort().at(-1) : earliest }))
     .sort((a, b) => duePriority(a.r).localeCompare(duePriority(b.r)) || (a.r.orderRow ?? 1e9) - (b.r.orderRow ?? 1e9) || a.r.chassis.localeCompare(b.r.chassis));
   const probeInput = { plan, fingerprint, line, dealers, capacity, settings, orders, candidateSlots: available };

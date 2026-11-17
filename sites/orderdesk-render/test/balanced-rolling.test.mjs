@@ -206,3 +206,10 @@ test('background generation returns immediately and exposes the saved result thr
   assert.equal(job.status, 'done', job.error);
   assert.equal((await f.get('/api/production-line')).balanced.proposal.quantity, 20);
 });
+
+ test('signed named customers remain eligible when CRM progress is below stock admission rank', () => {
+  const f = fixture();
+  for (const r of f.input.line.rows) if (r.customer.startsWith('Customer ')) r.regentRank = 0;
+  const p = buildBalancedRolling({ ...f.input, quantity: 20 });
+  assert.equal(p.customerCount, 7);
+});
