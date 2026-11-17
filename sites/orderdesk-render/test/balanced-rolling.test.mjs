@@ -122,7 +122,8 @@ test('independent dealer discovery, missing settings and forecasts preserve all 
   const snapshot = dealerSnapshot(raw, today, { all: true, towableOnly: true });
   const rows = [row('SRC970001', { group: 'locked', dealer: 'ABCO Caravans', auEnd: plus(today, 110) }), row('SRC970002', { group: 'locked', dealer: 'other', auEnd: plus(today, 110) })];
   const pending = buildStockForecast({ dealers: snapshot, rows, today });
-  assert.equal(pending.independent.summary.canceled, 0); assert.equal(pending.independent.summary.pending, 2);
+  assert.equal(pending.independent.summary.canceled, 0); assert.equal(pending.independent.summary.pending, 1);
+  assert.ok(!pending.independent.dealers.some(d => d.slug === 'other'));
   assert.ok(pending.independent.dealers.filter(d => ['abco', 'other'].includes(d.slug)).every(d => d.settingsNeeded && d.monthly.every(m => m.endStock == null)));
   assert.throws(() => validateDealerSettings([{ slug: 'abco', target: 0, travelDays: 7 }], snapshot));
   const settings = validateDealerSettings([{ slug: 'abco', target: 15, travelDays: 7 }, { slug: 'other', target: 10, travelDays: 0 }], snapshot);
@@ -175,11 +176,11 @@ test('a generation job leaves liveness responsive and rejects overlapping genera
 test('independent settings persist and invalidate stale opinions and rolling schedules without cancelling missing-data orders', async () => {
   const f = await apiFixture(); await f.save(await f.get());
   let report = await f.get();
-  const payload = { dealers: [{ slug: 'unknown', target: 12, travelDays: 7 }], previous: report.dealerSettingsToken };
+  const payload = { dealers: [{ slug: 'abco', target: 12, travelDays: 7 }], previous: report.dealerSettingsToken };
   assert.equal((await f.post('/api/stock-forecast/dealers', payload)).status, 200);
   report = await f.get(); assert.equal(report.rolling.status, 'stale');
-  assert.equal(report.independent.dealers.find(d => d.slug === 'unknown').cap, 15);
-  assert.deepEqual((await createStore(f.firebase).readState()).state.stockDealerSettings.unknown, { target: 12, travelDays: 7 });
+  assert.equal(report.independent.dealers.find(d => d.slug === 'abco').cap, 15);
+  assert.deepEqual((await createStore(f.firebase).readState()).state.stockDealerSettings.abco, { target: 12, travelDays: 7 });
   assert.equal((await f.post('/api/stock-forecast/dealers', payload)).status, 409);
   assert.equal((await f.post('/api/stock-forecast/dealers', { dealers: [{ slug: 'frankston', target: 10, travelDays: 7 }], previous: report.dealerSettingsToken })).status, 400);
   await f.save(report);
