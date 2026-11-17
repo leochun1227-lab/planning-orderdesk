@@ -10,7 +10,7 @@ import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, isStockCustomer, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, isStockCustomer, isRollingCustomer, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -144,10 +144,10 @@ export const BOARD_GROUPS = [
   { id: 'sea', band: 'execution', zh: '海运', en: 'Shipping', note: '有「集装箱 · 船 · ETA」（Shipment）记录但没有车辆 SAP GR 的，一律算海运，包括生产系统显示在澳洲的；其他已发运且没有 GR 的也算海运。有 GR 后归入澳洲生产 / Transport。', phase: 'sea' },
   { id: 'cn', band: 'execution', zh: '国内生产', en: 'China production', note: '国内已上线车辆（飞书有家具 / 钣焊 / 总装 / 入库日期就算，Portal 还在滚动排产的也移过来）· 从底盘焊接、总装到国内完工。', phase: 'cn' },
   { id: 'locked', band: 'scheduling', zh: '排产锁定线', en: 'Locked', note: 'Longtree 11 / 12 月计划里还没上线的车都在这里（已在国内生产 / 海运 / 澳洲的保持原位），按计划文件顺序；不再看 Portal 的 Schedule Confirmed。' },
-  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '所有经销商已签字的 Customer 订单进入（按排产表顺序，不受 180 台目标限制）；有剩余目标位置时，再补直营店已签字的 Stock。未签字订单进入「处理中订单」。澳洲预计下线接在排产锁定线后面。' },
-  { id: 'customers', band: 'preschedule', zh: '库存订单池', en: 'Stock order pool', note: '已签字、未进入锁定线、产线或滚动线的 Stock 订单，按排产表顺序。已签字 Customer 订单进入滚动排产线，未签字订单进入「处理中订单」。' },
+  { id: 'rolling', band: 'scheduling', zh: '滚动排产线', en: 'Rolling', note: '仅纳入所有经销商已签字的 Towable Customer 订单，按排产表顺序，不受台数上限限制。不纳入SRV、SRM、Stock或空客户名，不再按剩余产能自动补Stock。未签字订单进入「处理中订单」。澳洲预计下线接在排产锁定线后面。' },
+  { id: 'customers', band: 'preschedule', zh: '库存订单池', en: 'Stock order pool', note: '已签字、未进入锁定线或产线的 Stock 订单，按排产表顺序，不自动补入滚动线。已签字Towable Customer进入滚动排产线；SRV/SRM客户订单在后续排产，未签字订单在「处理中订单」。' },
   { id: 'processing', band: 'preschedule', zh: '处理中订单', en: 'Orders in progress', note: '原滚动排产线及订单池中尚未收到签字图纸的订单，包含 Customer 和 Stock，不分配滚动线产能。收到签字日期后，重新按 Customer / Stock 规则进入滚动排产线或库存订单池。' },
-  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '暂时为空：已签字 Customer 进入滚动排产线，已签字 Stock 留在库存订单池，未签字订单进入「处理中订单」。' },
+  { id: 'later', band: 'later', zh: '后续排产 / 日期待补', en: 'Later / dates missing', note: '未进入Towable滚动排产线的SRV/SRM客户订单及客户名待补订单，保留源计划信息，不占用滚动线产能。已签字Stock留在库存订单池，未签字订单进入「处理中订单」。' },
 ];
 
 // ---- Orderdesk rules on top of the Portal board ------------------------------------------------
@@ -339,34 +339,37 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
       },
     });
   }
-  // Rebuild the rolling queue after physical grouping / the locked plan. Signed customer orders are admitted even if
-  // the dealer snapshot is unavailable. Dealer stock top-up still depends on the snapshot and target capacity.
+  // Rebuild after physical/locked grouping: signed Towable Customer only, independent of dealer stock needs.
   for (const r of rows) if (r.group === 'rolling') r.group = 'customers';
-  let dealership = null, dealersAll = null, shown = null, needs = [], lockedLast = today, rollingEnd = today;
+  let dealership = null, dealersAll = null, shown = null, lockedLast = today, rollingEnd = today;
   if (dealers) {
     dealersAll = dealers; shown = dealers.filter(d => d.own !== false); // Dealership tab: self-owned yard + transit
     dealers = withTransport(shown, rows, today); // analysis still combines Transport and transit
     if (auCapacity) forecastAuFinish(rows, auCapacity, today);
     // The rolling line takes the Towable places after the last Towable van ahead of it; its last place is `rollingEnd`.
     lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
-    const customerCount = pickRolling(rows, [], rollingSize).customers;
-    rollingEnd = auCapacity ? placeAfter(auCapacity, lockedLast, Math.max(rollingSize, customerCount)) : lockedLast;
-    needs = dealerNeeds(dealers, rows, today, rollingEnd);
   }
-  const pick = pickRolling(rows, needs, rollingSize);
+  const pick = pickRolling(rows);
   pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); });
-  for (const r of rows) if (r.group === 'later') r.group = 'customers';
+  for (const r of rows) {
+    if (r.group === 'later') r.group = 'customers';
+    if (r.group === 'customers' && !isStockCustomer(r.customer) && !isRollingCustomer(r)) r.group = 'later';
+  }
   if (shown) {
     const names = new Map(); for (const r of rows) if (r.dealer && !names.has(slugify(r.dealer))) names.set(slugify(r.dealer), r.dealer);
     for (const d of shown) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
     dealership = { lockedLast, rollingEnd, size: rollingSize, picked: pick.picked.length, customers: pick.customers, dispatchDays: DISPATCH_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
-      dealers: dealers.map((d, i) => { const { vehicles, ...rest } = d; return { ...rest, ...needs[i], monthly: [], stockPicked: pick.stockPicked[d.slug], stockAvailable: pick.stockAvailable[d.slug], customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length }; }) };
+      dealers: dealers.map(d => { const { vehicles, ...rest } = d; return { ...rest, monthly: [], stockPicked: pick.stockPicked[d.slug], stockAvailable: pick.stockAvailable[d.slug], customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length }; }) };
   }
   for (const id of Object.keys(counts)) counts[id] = rows.filter(r => r.group === id).length;
   if (dealership) counts.dealership = dealership.dealers.reduce((n, d) => n + d.yard.stock, 0);
   const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
   if (dealership) {
-    dealership.dealers.forEach((x, i) => { x.monthly = dealerMonthly(dealers[i], rows, today); });
+    const rolling = rows.filter(r => r.group === 'rolling');
+    rollingEnd = rolling.some(r => !r.auEnd || r.auForecast?.note === 'overflow') ? '' : rolling.reduce((last, r) => r.auEnd > last ? r.auEnd : last, lockedLast);
+    dealership.rollingEnd = rollingEnd;
+    const needs = dealerNeeds(dealers, rows, today, rollingEnd);
+    dealership.dealers.forEach((x, i) => { Object.assign(x, needs[i]); x.monthly = dealerMonthly(dealers[i], rows, today); });
     const jv = withTransport(dealersAll.filter(d => d.jv), rows, today);
     const jvNeeds = dealerNeeds(jv, rows, today, rollingEnd);
     dealership.jvDealers = jv.map((d, i) => {
@@ -380,12 +383,6 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
-}
-/** The day of the n-th Towable place after `after` (the rolling line's last place if it were full). */
-function placeAfter(capacity, after, n) {
-  let left = n, last = after;
-  for (const d of [...capacity.keys()].filter(d => d > after).sort()) { const c = capacity.get(d).towable || 0; if (!c) continue; last = d; left -= c; if (left <= 0) break; }
-  return last;
 }
 /** A vehicle at (or on its way to) one of our dealerships, shaped like a production-line row. */
 function dealerRow(d, v, dealerName, today) {
