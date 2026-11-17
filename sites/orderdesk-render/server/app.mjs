@@ -14,6 +14,7 @@ import { forecastResolver } from '../lib/schedule.mjs';
 import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { createProductionLineSource, buildProductionLine, loadRollingPlan, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { buildDealerLogistics } from '../lib/dealer-logistics.mjs';
+import { buildStockForecast, forecastMultiplier } from '../lib/stock-forecast.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
 import { createSapSource, SAP_MAX_BYTES } from '../lib/sap-grgi.mjs';
 import { agentAuthorized } from '../lib/planning-agent.mjs';
@@ -125,6 +126,20 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
       const { sources, line } = await currentLine(c.req.query('refresh') === '1');
       return json({ today: line.today, dealership: line.dealership, logistics: line.dealership ? buildDealerLogistics(line.rows, { dealers: sources.dealers, today: line.today }) : null, counts: line.counts, sources: { portal: sources.status.portal, dealers: sources.status.dealers, plan: sources.status.plan, longtree: sources.status.longtree, prod: sources.status.prod }, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, 'Dealer 分析暂时读取不到') }, 502); }
+  });
+
+  app.get('/api/stock-forecast', async c => {
+    let multiplier, months;
+    try {
+      multiplier = forecastMultiplier(c.req.query('multiplier') ?? 1.3);
+      months = Number(c.req.query('months') ?? 8);
+      if (![8, 14].includes(months)) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
+    } catch (e) { return json({ error: message(e, 'Invalid forecast settings') }, 400); }
+    try {
+      const { sources, line } = await currentLine(c.req.query('refresh') === '1');
+      if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
+      return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: line.rows, today: line.today, multiplier, months }), sources: sources.status, refreshing: sources.refreshing });
+    } catch (e) { return json({ error: message(e, '库存预测暂时无法计算 / Stock forecast is unavailable') }, 502); }
   });
 
   app.get('/api/orders', async c => {

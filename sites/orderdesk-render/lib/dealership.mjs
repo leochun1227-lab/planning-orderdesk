@@ -103,10 +103,13 @@ export function dealerList(raw) {
 }
 
 /** Our dealers (or every dealer with all = true) as the Dealer Portal shows them today. */
-export function dealerSnapshot(raw, today, { all = false } = {}) {
+export function dealerSnapshot(raw, today, { all = false, towableOnly = false } = {}) {
   const yards = raw?.yard || {}, pgi = raw?.pgi || {}, assignments = raw?.deliveryTo || {};
   const customerType = new Map(); // Orderlist customer name: "... Stock" = stock, else customer (handover classification)
-  for (const r of listOf(raw?.schedule)) { const c = norm(r?.Chassis), cu = String(r?.Customer ?? '').trim(); if (c && cu) customerType.set(c, isStockCustomer(cu) ? 'stock' : 'customer'); }
+  const modelByChassis = new Map();
+  for (const r of listOf(raw?.schedule)) { const c = norm(r?.Chassis), cu = String(r?.Customer ?? '').trim(); if (c && cu) customerType.set(c, isStockCustomer(cu) ? 'stock' : 'customer'); if (c) modelByChassis.set(c, String(r.Model || r.model || r['Model / Range'] || '')); }
+  const modelOf = (c, r) => String(r.model || r.materialCode || r.material || modelByChassis.get(norm(c)) || '');
+  const included = (c, r) => !towableOnly || !/^SR[MV]/i.test(norm(c)) && !/^SR[MV]/i.test(modelOf(c, r));
   const inAnyYard = new Set();
   for (const stock of Object.values(yards)) for (const c of Object.keys(stock || {})) if (c !== 'dealer-chassis') inAnyYard.add(c.trim().toUpperCase());
   const delivery = new Map(Object.entries(assignments).map(([c, a]) => [c.trim().toUpperCase(), a || {}]));
@@ -120,20 +123,25 @@ export function dealerSnapshot(raw, today, { all = false } = {}) {
   for (const [c, r] of Object.entries(pgi)) { if (!r || r.history) continue; const chassis = c.trim().toUpperCase(); if (!chassis) continue; const slug = effectiveDealer(chassis, r); transitBy.set(slug, [...(transitBy.get(slug) || []), [c, r]]); }
   return (all ? dealerList(raw) : DEALERSHIPS.map(d => ({ ...d, own: true }))).map(d => {
     const useBillTo = SELF_OWNED.has(d.slug); // Admin.tsx: self-owned / price-enabled dealers go by the bill-to name
-    const yardRows = Object.entries(yards[d.slug] || {}).filter(([c, r]) => c !== 'dealer-chassis' && r && !r.history)
+    const yardRows = Object.entries(yards[d.slug] || {}).filter(([c, r]) => c !== 'dealer-chassis' && r && !r.history && included(c, r))
       .map(([c, r]) => { const since = dayOf(r.receivedAt ?? r.createdAt ?? r.movementDate); return { chassis: String(r.chassis || r.Chassis || c).trim(), where: 'yard', category: yardCategory(r, useBillTo), model: String(r.model || ''), customer: String(r.customer || ''), since, days: daysBetween(since, today) }; });
     const handovers = Object.entries(raw?.handover?.[d.slug] || raw?.[`handover_${d.slug}`] || {}).map(([c, r]) => ({ chassis: c, ...(r || {}) }));
     const handedOver = new Set(handovers.map(h => h.chassis.trim().toUpperCase()));
     const transit = (transitBy.get(d.slug) || []).flatMap(([c, r]) => {
       const chassis = c.trim().toUpperCase(), day = dayOf(r.pgidate), days = daysBetween(day, today) ?? 0;
-      if (days > TRANSIT_MAX_DAYS || inAnyYard.has(chassis) || handedOver.has(chassis)) return [];
+      if (days > TRANSIT_MAX_DAYS || inAnyYard.has(chassis) || handedOver.has(chassis) || !included(c, r)) return [];
       return [{ chassis: c.trim(), where: 'transit', category: yardCategory(r, Boolean(String(r.wholesaleBillToName ?? r.WholesaleBillToName ?? '').trim())), model: String(r.model || r.materialCode || ''), customer: String(r.customer || ''), since: day, days, arrive: transitArrival(day, d, today) }];
     });
-    const monthly = new Map();
+    const monthly = new Map(), stockByModel = {};
     for (const h of handovers) {
+      if (!included(h.chassis, h)) continue;
       const m = dayOf(h.handoverAt ?? h.createdAt).slice(0, 7); if (!m) continue;
       const x = monthly.get(m) || { month: m, stock: 0, customer: 0, second: 0 };
-      if (secondHandHandover(h)) x.second++; else x[customerType.get(norm(h.chassis)) || 'stock']++;
+      if (secondHandHandover(h)) x.second++; else {
+        const category = customerType.get(norm(h.chassis)) || 'stock'; x[category]++;
+        const model = modelOf(h.chassis, h).trim().toUpperCase().replace(/\s+/g, ' ');
+        if (towableOnly && category === 'stock' && model && months.includes(m)) stockByModel[model] = (stockByModel[model] || 0) + 1 / HANDOVER_MONTHS;
+      }
       monthly.set(m, x);
     }
     const last = months.map(m => monthly.get(m) || { month: m, stock: 0, customer: 0, second: 0 });
@@ -141,7 +149,7 @@ export function dealerSnapshot(raw, today, { all = false } = {}) {
     const count = (list, cat) => list.filter(r => r.category === cat).length;
     return { ...d, yard: { stock: count(yardRows, 'stock'), customer: count(yardRows, 'customer'), second: count(yardRows, 'second'), total: yardRows.length },
       transit: { stock: count(transit, 'stock'), customer: count(transit, 'customer'), second: count(transit, 'second'), total: transit.length },
-      handover: { months: last, thisMonth: monthly.get(thisMonth) || { month: thisMonth, stock: 0, customer: 0, second: 0 }, avgStock: avg('stock'), avgCustomer: avg('customer'), avgSecond: avg('second') },
+      handover: { months: last, thisMonth: monthly.get(thisMonth) || { month: thisMonth, stock: 0, customer: 0, second: 0 }, avgStock: avg('stock'), avgCustomer: avg('customer'), avgSecond: avg('second'), ...(towableOnly ? { stockByModel } : {}) },
       vehicles: [...yardRows, ...transit] };
   });
 }
