@@ -10,7 +10,7 @@ import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, isStockCustomer, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
 // One-off Longtree plan snapshot (Nov + Dec 2026 sheets): the rolling 60 days follow its order
@@ -367,6 +367,14 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
   if (dealership) {
     dealership.dealers.forEach((x, i) => { x.monthly = dealerMonthly(dealers[i], rows, today); });
+    const jv = withTransport(dealersAll.filter(d => d.jv), rows, today);
+    const jvNeeds = dealerNeeds(jv, rows, today, rollingEnd);
+    dealership.jvDealers = jv.map((d, i) => {
+      const { vehicles, ...rest } = d;
+      return { ...rest, ...jvNeeds[i], monthly: dealerMonthly(d, rows, today), stockPicked: 0,
+        stockAvailable: rows.filter(r => r.group === 'customers' && slugify(r.dealer) === d.slug && isStockCustomer(r.customer)).length,
+        customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length };
+    });
     dealership.all = dealerOverview(dealersAll, rows, today);
   }
   return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,

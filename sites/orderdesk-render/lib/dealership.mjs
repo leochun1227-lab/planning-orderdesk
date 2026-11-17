@@ -35,7 +35,15 @@ export function arrivalAtDealer(r, d, today) {
 export const IDEAL_STOCK_SOURCE = 'Andrew Crank, 2026-10-27: Ideal Stock Qty per dealer';
 // Ideal stock per dealer from the same email (Vanari (S) / (N) and Sydney have no active dealer in the Portal).
 export const IDEAL_STOCK = { abco: 15, bundaberg: 40, 'destiny-rv': 35, 'forest-glen': 70, frankston: 50, geelong: 40, heatherbrae: 40, launceston: 25, 'slacks-creek': 40, 'st-james': 60, toowoomba: 35, townsville: 30, traralgon: 25, wangaratta: 25 };
+// JV is a separate analysis group. Road days have not been supplied for these dealers yet.
+export const JV_DEALERS = [
+  { slug: 'bundaberg', name: 'Bundaberg', travelDays: null },
+  { slug: 'heatherbrae', name: 'Heatherbrae', travelDays: null },
+  { slug: 'toowoomba', name: 'Toowoomba', travelDays: null },
+  { slug: 'wangaratta', name: 'Wangaratta', travelDays: null },
+].map(d => ({ ...d, target: IDEAL_STOCK[d.slug], own: false, jv: true }));
 const SELF_OWNED = new Set(DEALERSHIPS.map(d => d.slug));
+const JV_SLUGS = new Set(JV_DEALERS.map(d => d.slug));
 export const ROLLING_SIZE = 180;
 export const HANDOVER_MONTHS = 3; // average over the last 3 completed months
 const TRANSIT_MAX_DAYS = 100; // Portal: a PGI older than 100 days no longer counts as in transit
@@ -43,7 +51,7 @@ const TRANSIT_MAX_DAYS = 100; // Portal: a PGI older than 100 days no longer cou
 const PIPELINE_GROUPS = ['au', 'sea', 'cn', 'locked'];
 
 /** Extra Portal nodes (2-hourly with the Portal copy): all yards (a van in any yard is not in transit), the delivery-to
- *  overrides, and the handovers of the five dealerships only. pgirecord and schedule are already in the copy. */
+ *  overrides, and dealer handovers. pgirecord and schedule are already in the copy. */
 export const PORTAL_DEALER_SOURCES = [['yard', 'yardstock'], ['deliveryTo', 'deliveryToAssignments'], ['handover', 'handover'], ['dealerConfigs', 'dealerConfigs']];
 
 export const slugify = v => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -85,13 +93,13 @@ const secondHandHandover = r => {
 const listOf = v => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);
 const monthsBefore = (today, n) => { const [y, m] = today.split('-').map(Number); return Array.from({ length: n }, (_, i) => { const d = new Date(Date.UTC(y, m - 1 - n + i, 1)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`; }); };
 
-/** Every active dealer in the Portal (not groups), our five first; without dealerConfigs, just our five. */
+/** Self-owned first, then the four JV dealers, then the other active Portal dealers (not groups). */
 export function dealerList(raw) {
   const own = DEALERSHIPS.map(d => ({ ...d, own: true }));
   const configs = Object.entries(raw?.dealerConfigs || {}).filter(([, c]) => c && c.isGroup !== true && c.isActive !== false);
   const others = configs.map(([slug, c]) => ({ slug: slugify(slug), name: String(c.name || slug), target: IDEAL_STOCK[slugify(slug)] ?? null, travelDays: null, own: false }))
-    .filter(d => !SELF_OWNED.has(d.slug)).sort((a, z) => a.name.localeCompare(z.name));
-  return [...own, ...others];
+    .filter(d => !SELF_OWNED.has(d.slug) && !JV_SLUGS.has(d.slug)).sort((a, z) => a.name.localeCompare(z.name));
+  return [...own, ...JV_DEALERS.map(d => ({ ...d })), ...others];
 }
 
 /** Our dealers (or every dealer with all = true) as the Dealer Portal shows them today. */
@@ -163,6 +171,7 @@ export function dealerNeeds(snapshot, rows, today, rollingEnd) {
     const pipelineCustomer = mine.filter(r => !isStockCustomer(r.customer) && r.customer).length;
     const base = { slug: d.slug, lead: leadDays(d), pipeline, pipelineStock, pipelineCustomer };
     if (d.paused) return { ...base, paused: true, deliveredBy: '', months: 0, arriving: 0, transitArriving: 0, sold: 0, projected: null, need: 0 };
+    if (base.lead == null) return { ...base, deliveredBy: '', months: 0, arriving: null, transitArriving: null, sold: null, projected: null, need: null };
     const deliveredBy = plusDays(rollingEnd, leadDays(d));
     const months = Math.max(0, (Date.parse(deliveredBy) - Date.parse(today)) / 86400000 / (365.25 / 12));
     const arriving = mine.filter(r => isStockCustomer(r.customer) && (a => a && a <= deliveredBy)(arrivalAtDealer(r, d, today))).length;
@@ -196,7 +205,12 @@ export function dealerMonthly(d, rows, today, count = 8) {
   const keys = Array.from({ length: count }, (_, i) => { const x = new Date(Date.UTC(y, m - 1 + i, 1)); return `${x.getUTCFullYear()}-${pad(x.getUTCMonth() + 1)}`; });
   const months = keys.map(month => ({ month, stockIn: 0, customerIn: 0, stockOut: 0, endStock: 0 }));
   const at = key => months.find(x => x.month === key);
-  if (d.paused || leadDays(d) == null) return [];
+  if (d.paused) return [];
+  const dim = (yy, mm) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const left = (dim(y, m) - Number(today.slice(8, 10)) + 1) / dim(y, m);
+  months.forEach((x, i) => { x.stockOut = Math.round(d.handover.avgStock * (i ? 1 : left) * 10) / 10; });
+  // Keep the full monthly view and sales estimate, without presenting missing transport dates as zero arrivals.
+  if (leadDays(d) == null) return months.map(x => ({ ...x, stockIn: null, customerIn: null, endStock: null }));
   for (const v of d.vehicles || []) { const x = v.where === 'transit' && v.category !== 'second' && v.arrive && at(v.arrive.slice(0, 7)); if (x) x[v.category === 'stock' ? 'stockIn' : 'customerIn']++; }
   for (const r of rows) {
     if (slugify(r.dealer) !== d.slug || r.group === 'dealership' || r.group === 'transport' || r.empty) continue; // Transport: in d.vehicles as transit
@@ -204,10 +218,8 @@ export function dealerMonthly(d, rows, today, count = 8) {
     const x = day && at(day.slice(0, 7)); if (!x) continue;
     if (isStockCustomer(r.customer)) x.stockIn++; else if (r.customer) x.customerIn++;
   }
-  const dim = (yy, mm) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-  const left = (dim(y, m) - Number(today.slice(8, 10)) + 1) / dim(y, m);
   let stock = d.yard.stock;
-  months.forEach((x, i) => { x.stockOut = Math.round(d.handover.avgStock * (i ? 1 : left) * 10) / 10; stock += x.stockIn - x.stockOut; x.endStock = Math.round(stock); });
+  months.forEach(x => { stock += x.stockIn - x.stockOut; x.endStock = Math.round(stock); });
   return months;
 }
 
