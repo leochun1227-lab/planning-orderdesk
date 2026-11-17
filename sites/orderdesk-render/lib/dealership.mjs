@@ -35,12 +35,12 @@ export function arrivalAtDealer(r, d, today) {
 export const IDEAL_STOCK_SOURCE = 'Andrew Crank, 2026-10-27: Ideal Stock Qty per dealer';
 // Ideal stock per dealer from the same email (Vanari (S) / (N) and Sydney have no active dealer in the Portal).
 export const IDEAL_STOCK = { abco: 15, bundaberg: 40, 'destiny-rv': 35, 'forest-glen': 70, frankston: 50, geelong: 40, heatherbrae: 40, launceston: 25, 'slacks-creek': 40, 'st-james': 60, toowoomba: 35, townsville: 30, traralgon: 25, wangaratta: 25 };
-// JV is a separate analysis group. Road days have not been supplied for these dealers yet.
+// JV dealers: 7 road days plus the shared 3 dispatch days = 10 days from AU finish.
 export const JV_DEALERS = [
-  { slug: 'bundaberg', name: 'Bundaberg', travelDays: null },
-  { slug: 'heatherbrae', name: 'Heatherbrae', travelDays: null },
-  { slug: 'toowoomba', name: 'Toowoomba', travelDays: null },
-  { slug: 'wangaratta', name: 'Wangaratta', travelDays: null },
+  { slug: 'bundaberg', name: 'Bundaberg', travelDays: 7 },
+  { slug: 'heatherbrae', name: 'Heatherbrae', travelDays: 7 },
+  { slug: 'toowoomba', name: 'Toowoomba', travelDays: 7 },
+  { slug: 'wangaratta', name: 'Wangaratta', travelDays: 7 },
 ].map(d => ({ ...d, target: IDEAL_STOCK[d.slug], own: false, jv: true }));
 const SELF_OWNED = new Set(DEALERSHIPS.map(d => d.slug));
 const JV_SLUGS = new Set(JV_DEALERS.map(d => d.slug));
