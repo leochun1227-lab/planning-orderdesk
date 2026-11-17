@@ -15,6 +15,8 @@ import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { createProductionLineSource, buildProductionLine, loadRollingPlan, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { buildDealerLogistics } from '../lib/dealer-logistics.mjs';
 import { buildStockForecast, forecastMultiplier } from '../lib/stock-forecast.mjs';
+import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay } from '../lib/stock-rolling.mjs';
+import { reviewStockWithAI } from '../lib/stock-rolling-ai.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
 import { createSapSource, SAP_MAX_BYTES } from '../lib/sap-grgi.mjs';
 import { agentAuthorized } from '../lib/planning-agent.mjs';
@@ -29,7 +31,7 @@ const noStore = { 'Cache-Control': 'private, no-store' };
 const json = (body, status = 200, headers = noStore) => Response.json(body, { status, headers });
 const message = (e, fallback) => (e instanceof Error ? e.message : fallback);
 
-export function createApp({ store, auth, env = process.env, firebase = null }) {
+export function createApp({ store, auth, env = process.env, firebase = null, productionSource = null }) {
   const app = new Hono();
   const secureCookie = env.NODE_ENV === 'production';
   const sameOrigin = c => { const origin = c.req.header('origin'); return !!origin && origin === new URL(c.req.url).origin; };
@@ -110,7 +112,7 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
   });
 
   // Production line (产线): Longtree + AU production API + Portal GR/GI, read-only, cached 15 minutes.
-  const productionLine = createProductionLineSource(env, { portal, sap });
+  const productionLine = productionSource || createProductionLineSource(env, { portal, sap });
   const rollingPlan = loadRollingPlan();
   if (env.NODE_ENV === 'production') {
     productionLine.current({ today: dayInSydney(new Date()) }).catch(() => {}); // warm up at start
@@ -120,14 +122,21 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
   }
   async function currentLine(force = false) {
     const today = dayInSydney(new Date());
-    const sources = await productionLine.current({ force, today });
-    const { state } = await store.readState();
-    return { sources, line: buildProductionLine({ orders: state?.orders || {}, ...sources, today, plan: rollingPlan }) };
+    const [sources, { state, etag }] = await Promise.all([productionLine.current({ force, today }), store.readState()]);
+    const args = { orders: state?.orders || {}, ...sources, today, plan: rollingPlan };
+    const baseLine = buildProductionLine(args);
+    const fingerprint = stockInputFingerprint({ line: baseLine, dealers: sources.forecastDealers, capacity: sources.auCapacity, settings: sources.settings, orders: args.orders });
+    const rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
+      capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
+    const line = rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
+    const recommendations = new Map(rolling.items.map(a => [a.chassis, a]));
+    for (const row of line.rows) { const a = recommendations.get(String(row.chassis).replace(/[-\s]/g, '').toUpperCase()); if (a) row.stockRecommendation = a; }
+    return { sources, line, baseLine, state, etag, fingerprint, rolling };
   }
   app.get('/api/production-line', async c => {
     try {
-      const { sources, line } = await currentLine(c.req.query('refresh') === '1');
-      return json({ ...line, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
+      const { sources, line, rolling } = await currentLine(c.req.query('refresh') === '1');
+      return json({ ...productionLineDisplay(line), stockRolling: { ...rolling, items: undefined, monthly: undefined }, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
   });
   // Dealer analysis (our five dealerships): the same computation, only the dealership part.
@@ -146,10 +155,69 @@ export function createApp({ store, auth, env = process.env, firebase = null }) {
       if (![8, 14].includes(months)) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
     } catch (e) { return json({ error: message(e, 'Invalid forecast settings') }, 400); }
     try {
-      const { sources, line } = await currentLine(c.req.query('refresh') === '1');
+      const { sources, baseLine, fingerprint, rolling, state } = await currentLine(c.req.query('refresh') === '1');
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
-      return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: line.rows, today: line.today, multiplier, months }), sources: sources.status, refreshing: sources.refreshing });
+      return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months }),
+        previewToken: forecastPreviewToken(fingerprint, multiplier, months), expectedPlanId: state?.stockForecastPlan?.id || null,
+        canSave: !sourceBlockers(sources).length && Boolean(sources.auCapacity?.size), rolling: { ...rolling, aiConfigured: Boolean(env.OPENAI_API?.trim()) },
+        sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '库存预测暂时无法计算 / Stock forecast is unavailable') }, 502); }
+  });
+
+  async function planningBody(c) {
+    const text = await c.req.text(); if (text.length > 20000) throw new Error('请求过大 / Request too large');
+    return JSON.parse(text);
+  }
+  const conflict = text => Object.assign(new Error(text), { status: 409 });
+  app.post('/api/stock-forecast/save', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c), multiplier = forecastMultiplier(body.multiplier), months = Number(body.months);
+      if (![8, 14].includes(months)) throw new Error('预测月份须为8或14');
+      const ctx = await currentLine();
+      if (!ctx.state || !ctx.sources.forecastDealers || !ctx.sources.auCapacity?.size || sourceBlockers(ctx.sources).length) throw new Error('请等待库存、产线和产能数据更新成功后再保存意见。');
+      const previous = ctx.state.stockForecastPlan;
+      if (body.expectedPlanId !== (previous?.id || null) || body.previewToken !== forecastPreviewToken(ctx.fingerprint, multiplier, months)) throw conflict('数据或保存意见已变化，请重新计算后保存。');
+      const report = buildStockForecast({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, multiplier, months });
+      const next = saveStockOpinion({ previous, report, fingerprint: ctx.fingerprint, actor: auth.user(c.req.raw)?.name });
+      // Previously admitted vehicles are explicitly rechecked when saving a new opinion.
+      next.admitted = previous?.admitted || [];
+      const checked = recommendPoolStock({ plan: next, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers,
+        capacity: ctx.sources.auCapacity, settings: ctx.sources.settings, orders: ctx.state.orders });
+      next.admitted = checked.admitted;
+      ctx.state.stockForecastHistory = [...(ctx.state.stockForecastHistory || []), ...(previous ? [previous] : [])].slice(-5);
+      ctx.state.stockForecastPlan = next;
+      await store.writeState(ctx.state, ctx.etag);
+      return json({ ok: true, planId: next.id, retained: next.admitted.length, released: (previous?.admitted?.length || 0) - next.admitted.length });
+    } catch (e) { return json({ error: message(e, '保存意见失败') }, e.status || 400); }
+  });
+
+  app.post('/api/stock-forecast/admissions', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c);
+      if (!['add', 'remove'].includes(body.mode) || !Array.isArray(body.chassis) || !body.chassis.length || body.chassis.length > 500 || body.chassis.some(id => typeof id !== 'string') || new Set(body.chassis).size !== body.chassis.length) throw new Error('请选择有效且不重复的车架号。');
+      const ctx = await currentLine(), plan = ctx.state?.stockForecastPlan;
+      if (!plan || body.planId !== plan.id) throw conflict('保存意见已变化，请刷新。');
+      const eligible = new Set(ctx.rolling.items.filter(a => !a.admitted).map(a => a.chassis));
+      if (body.mode === 'add' && (ctx.rolling.status !== 'ready' || body.token !== ctx.rolling.token || body.chassis.some(id => !eligible.has(id)))) throw conflict('推荐已过期或车辆已不满足入线条件，请重新保存意见并核对。');
+      if (body.mode === 'remove' && body.chassis.some(id => !plan.admitted.includes(id))) throw conflict('入线列表已变化，请刷新。');
+      plan.admitted = body.mode === 'add' ? [...new Set([...plan.admitted, ...body.chassis])] : plan.admitted.filter(id => !body.chassis.includes(id));
+      plan.events = [...plan.events, { type: body.mode, chassis: body.chassis, at: new Date().toISOString(), by: auth.user(c.req.raw)?.name || 'Planning' }].slice(-1000);
+      await store.writeState(ctx.state, ctx.etag);
+      return json({ ok: true, changed: body.chassis.length });
+    } catch (e) { return json({ error: message(e, '滚动排产线更新失败') }, e.status || 400); }
+  });
+
+  app.post('/api/stock-forecast/ai-review', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c), ctx = await currentLine(), plan = ctx.state?.stockForecastPlan;
+      if (!plan || body.planId !== plan.id || ctx.rolling.status !== 'ready' || body.token !== ctx.rolling.token) throw conflict('请先保存当前意见，再进行AI分析。');
+      plan.ai = { ...(await reviewStockWithAI({ env, rolling: ctx.rolling, report: plan.report })), token: ctx.rolling.token, at: new Date().toISOString() };
+      await store.writeState(ctx.state, ctx.etag);
+      return json({ ok: true });
+    } catch (e) { return json({ error: message(e, 'AI分析未完成') }, e.status || 400); }
   });
 
   app.get('/api/orders', async c => {

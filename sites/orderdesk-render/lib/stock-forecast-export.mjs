@@ -23,6 +23,13 @@ export function forecastExportSheets(report, scope = 'all', zh = true) {
     sheets.push({ name: `${prefix}-${title(zh, '月度预测', 'Monthly')}`, headers: zh ? ['Dealer', '月份', '原预计到货', '调整后到货', '调出', '原月末库存', '调整后月末库存', '库存上限', '预测销量', '可供交付', '未满足销量'] : ['Dealer', 'Month', 'Original arrivals', 'Adjusted arrivals', 'Transfers out', 'Original closing stock', 'Adjusted closing stock', 'Stock ceiling', 'Expected sales', 'Available handovers', 'Unmet sales'],
       rows: report[group].dealers.flatMap(d => d.monthly.map(m => [d.name, m.month, m.baselineIn, m.stockIn, m.transferOut, m.baselineEndStock, m.endStock, d.cap, m.plannedSales, m.stockOut, m.unmet])) });
   }
+  if (report.rolling?.status === 'ready') {
+    const rolling = report.rolling, list = rolling.items.filter(a => scope === 'all' || (scope === 'jv' ? a.jv : !a.jv));
+    sheets.push({ name: title(zh, '库存池补货建议', 'Pool replenishment'), headers: zh ? ['Chassis', 'Model', 'Dealer', '入线状态', '建议国内上线', '预计AU完工', '预计到店', '入库前库存', '入库后库存', 'Ideal', '上限', '依据', '意见保存时间', '已保存库存倍数'] : ['Chassis', 'Model', 'Dealer', 'Admission status', 'Proposed CN start', 'Expected AU finish', 'Expected arrival', 'Stock before', 'Stock after', 'Ideal', 'Ceiling', 'Reason', 'Opinion saved at', 'Saved multiplier'],
+      rows: list.map(a => [a.chassis, a.model, a.dealer, a.admitted ? title(zh, '已确认入线', 'Admitted') : title(zh, '推荐待确认', 'Recommended'), date(a.cnStart), date(a.auEnd), date(a.arrival), a.stockBefore, a.stockAfter, a.target, a.cap, a.reason === 'displayGap' ? title(zh, '补齐展车型号', 'Display gap') : title(zh, '补充预计消耗', 'Replenishment'), rolling.savedAt, rolling.multiplier]), dateColumns: [5, 6, 7] });
+    sheets.push({ name: title(zh, '补货后月度预测', 'After replenishment'), headers: zh ? ['Dealer', '月份', '新增推荐到店', '新增已确认到店', '保存意见后库存', '加已确认补货后库存', '加全部推荐补货后库存', '库存上限'] : ['Dealer', 'Month', 'Additional recommended arrivals', 'Additional confirmed arrivals', 'Stock after saved adjustments', 'With confirmed replenishment', 'With all recommended replenishment', 'Ceiling'],
+      rows: rolling.monthly.filter(d => scope === 'all' || (scope === 'jv' ? d.jv : !d.jv)).flatMap(d => d.months.map(m => [d.name, m.month, m.stockIn, m.confirmedIn, m.before, m.confirmed, m.after, d.cap])) });
+  }
   return sheets;
 }
 
