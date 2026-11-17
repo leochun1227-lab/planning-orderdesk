@@ -51,11 +51,11 @@ test('unsigned orders consume no rolling capacity; signing re-admits the same or
   const before = build(rows, extras), b = byChassis(before);
   assert.equal(b.UC.group, 'processing'); assert.equal(b.US.group, 'processing');
   assert.equal(b.UC.auEnd, ''); assert.equal(b.US.auForecast, undefined);
-  assert.equal(b.SC.auEnd, today); assert.equal(b.SS.auEnd, '2026-11-18');
-  assert.equal(before.dealership.customers, 1); assert.equal(before.dealership.picked, 2);
+  assert.equal(b.SC.auEnd, today); assert.equal(b.SS.auEnd, '');
+  assert.equal(before.dealership.customers, 1); assert.equal(before.dealership.picked, 1);
   const f = before.dealership.dealers.find(d => d.slug === 'frankston');
-  assert.equal(f.stockAvailable, 1); assert.equal(f.stockPicked, 1);
-  assert.equal(f.monthly.reduce((n, m) => n + m.stockIn + m.customerIn, 0), 2);
+  assert.equal(f.stockAvailable, 1); assert.equal(f.stockPicked, 0);
+  assert.equal(f.monthly.reduce((n, m) => n + m.stockIn + m.customerIn, 0), 1);
   orders.UC.signedAt = today; orders.US.signedAt = today;
   const after = build(rows, extras), a = byChassis(after);
   assert.equal(after.counts.processing, 0); assert.equal(after.dealership.customers, 2);
@@ -93,11 +93,11 @@ test('Portal signature dates survive the board adapter for Towable, campers and 
   assert.deepEqual(sources.board.rows.map(r => r.signedAt), ['2026-11-16', '2026-11-15', '2026-11-14', '', '']);
   const orders = { CRM1: { chassis: 'CRM1', signedAt: today }, SRC1: { chassis: 'SRC1', signedAt: null } };
   const first = byChassis(buildProductionLine({ ...sources, orders, today }));
-  for (const c of ['SRC1', 'SRV1', 'SRM1', 'CRM1']) assert.equal(first[c].group, 'rolling');
-  assert.equal(first.SRM2.group, 'processing');
+  for (const c of ['SRC1', 'CRM1']) assert.equal(first[c].group, 'rolling');
+  assert.equal(first.SRM2.group, 'processing'); for (const c of ['SRV1', 'SRM1']) assert.equal(first[c].group, 'later');
   raw.motorhome.orders[1].signedOffDate = today; at = 'copy-2';
   const refreshed = await src.current({ today });
-  assert.equal(byChassis(buildProductionLine({ ...refreshed, orders, today })).SRM2.group, 'rolling');
+  assert.equal(byChassis(buildProductionLine({ ...refreshed, orders, today })).SRM2.group, 'later');
   assert.ok(rows.every(r => r.signedAt === undefined), 'adapter does not mutate the bundled board');
 });
 

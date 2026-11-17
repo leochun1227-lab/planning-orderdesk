@@ -30,7 +30,7 @@ export function DealerTable({ dl, zh }: { dl: Dealership; zh: boolean }) {
       <th title={zh ? '澳洲生产、海运、国内生产、排产锁定线里这家的 stock 订单（Transport 已算在途）' : 'Stock orders of this dealer from AU production to the locked line'}>{zh ? '线上 stock' : 'Stock on the line'}</th>
       <th title={zh ? '滚动排产线最后一台澳洲下线 + 到店天数' : ''}>{zh ? '滚动线到店' : 'Rolling line at dealer'}</th>
       <th title={zh ? '线上 stock 里那天之前能到店的' : ''}>{zh ? '那天前到店 stock' : 'Stock arriving by then'}</th>
-      <th title={zh ? '店里 + 那天前到店的在途 stock + 那天前到店的线上 stock − 月均 stock 交付 × 月数' : ''}>{zh ? '那天预计 stock' : 'Stock then'}</th><th>{zh ? '还缺' : 'Need'}</th><th>{zh ? '排进滚动 stock' : 'Stock on the rolling line'}</th>
+      <th title={zh ? '店里 + 那天前到店的在途 stock + 那天前到店的线上 stock − 月均 stock 交付 × 月数' : ''}>{zh ? '那天预计 stock' : 'Stock then'}</th><th>{zh ? '还缺' : 'Need'}</th><th>{zh ? '库存池 stock' : 'Stock pool'}</th>
     </tr></thead>
     <tbody>{dl.dealers.map(d => <tr key={d.slug} className={d.paused ? 'paused' : ''}>
       <td><b>{d.name}</b></td><td>{d.target}</td><td className={d.yard.stock > d.target ? 'over' : ''}><b>{d.yard.stock}</b></td><td title={zh ? `已 PGI ${d.transit.pgiStock ?? 0} + Transport ${d.transit.transportStock ?? 0}` : ''}>{d.transit.stock}</td>
@@ -38,10 +38,10 @@ export function DealerTable({ dl, zh }: { dl: Dealership; zh: boolean }) {
       {d.paused ? <><td colSpan={1}>—</td><td title={Object.entries(d.pipeline).map(([g, n]) => `${zh ? GROUP_ZH[g] || g : g} ${n}`).join(' · ')}>{d.pipelineStock}</td><td colSpan={4} className="paused-note">{zh ? '暂不计算' : 'Not calculated for now'}</td></> : <>
         <td>{dl.dispatchDays} + {d.travelDays}</td>
         <td title={Object.entries(d.pipeline).map(([g, n]) => `${zh ? GROUP_ZH[g] || g : g} ${n}`).join(' · ')}>{d.pipelineStock}</td>
-        <td>{d.deliveredBy}</td><td>{d.arriving}</td>
+        <td>{d.deliveredBy || '—'}</td><td>{d.arriving}</td>
         <td title={`${d.yard.stock} + ${d.transitArriving} + ${d.arriving} − ${d.sold} (${d.handover.avgStock} × ${d.months})`} className={(d.projected ?? 0) < d.target ? 'short' : 'over'}>{d.projected}</td>
         <td className={d.need ? 'short' : ''}><b>{d.need}</b></td></>}
-      <td>{d.stockPicked}{!d.paused && d.need != null && d.need > d.stockPicked ? <small className="short"> {zh ? `stock 订单只有 ${d.stockAvailable} 台，还差 ${d.need - d.stockPicked}` : `only ${d.stockAvailable} stock orders, ${d.need - d.stockPicked} short`}</small> : null}</td>
+      <td>{d.stockAvailable}</td>
     </tr>)}</tbody>
   </table></div>;
 }
@@ -167,10 +167,10 @@ export default function DealerAnalysisView({ zh }: { zh: boolean }) {
         <div><span>{zh ? '在途 stock' : 'Stock in transit'}</span><strong>{sum(d => d.transit.stock)}</strong></div>
         <div><span>{zh ? `月均 stock 交付（近 ${dl.months} 个月）` : `Avg stock handovers / month`}</span><strong>{sum(d => d.handover.avgStock).toFixed(0)}</strong></div>
         <div><span>{zh ? '还缺 stock' : 'Stock needed'}</span><strong className={sum(d => d.need ?? 0) ? 'short' : ''}>{sum(d => d.need ?? 0)}</strong></div>
-        <div><span>{zh ? '滚动排产线' : 'Rolling line'}</span><strong>{dl.picked} <small>/ {dl.size} · customer {dl.customers} · stock {sum(d => d.stockPicked)}</small></strong></div>
+        <div><span>{zh ? '滚动排产线' : 'Rolling line'}</span><strong>{dl.picked} <small>· Towable Customer</small></strong></div>
       </div>
       <DealerTable dl={dl} zh={zh} />
-      <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途 = 已 PGI 在路上的 + 在 Transport 的：已 PGI 的按 PGI 日期 + 路上天数，Transport 的按今天 + 3 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），按目标 ${dl.size} 台与全部已签字 Customer 数量中较大者计算，到 ${dl.rollingEnd} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线纳入所有经销商已签字的 Customer 订单（不受目标台数限制），再用剩余目标位置补直营店还缺的已签字 Stock；未签字订单在「处理中订单」。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd}.`}</p>
+      <p className="da-note">{zh ? `到店 = 澳洲预计下线（Transport 按今天）+ ${dl.dispatchDays} 天出车 + 路上天数（Frankston、Geelong 1 天，St James、Launceston 20 天）；在途 = 已 PGI 在路上的 + 在 Transport 的：已 PGI 的按 PGI 日期 + 路上天数，Transport 的按今天 + 3 + 路上天数（已过了还没进店的按今天），只用来算车什么时候到店，不改澳洲下线日期。滚动排产线排在锁定线后面（锁定线最后一台 Towable ${dl.lockedLast}），仅按实际已签字 Towable Customer 数量计算，到 ${dl.rollingEnd || '待排'} 下线；到那天各店的 stock = 店里 + 在途 + 那天前到店的 stock − 月均 stock 交付（近 ${dl.months} 个完整月）× 月数，还缺 = 目标 − 这个数。滚动排产线仅纳入所有经销商已签字的 Towable Customer 订单，不含SRV/SRM及Stock，不再自动补Stock；未签字订单在「处理中订单」。Traralgon 暂不计算。目标库存：Andrew Crank 2026-10-27 邮件（Ideal Stock Qty）。` : `At the dealer = AU finish (Transport: today) + ${dl.dispatchDays} + travel days. Rolling line after the locked line (last Towable ${dl.lockedLast}); its last place ${dl.rollingEnd || 'pending'}.`}</p>
       <h3 className="da-sub">{zh ? '每月 stock：月底 stock = 上月底 + 到店 stock（含在途）− 卖出 stock；customer 车不算库存，这页只看 stock' : 'Stock per month: month end = previous + stock in (incl. transit) − stock sold; customer vans are not stock'}</h3>
       <div className="da-cards">{dl.dealers.map(d => <DealerCard key={d.slug} d={d} zh={zh} />)}</div>
       {!!dl.jvDealers?.length && <section aria-label="JV Dealers">

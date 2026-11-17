@@ -1,8 +1,8 @@
 // Our five dealerships (the Dealer Portal's "Self-owned" dealers): new stock in the yard, vans in transit and handovers,
 // replicating the Dealer Portal admin page (src/pages/Admin.tsx: yard categories, transit rule) and the dealer comparison
 // dashboard (src/pages/ModernDealerComparisonDashboard.tsx: YTD Handover, stock / customer by the Orderlist customer name).
-// From these: how many stock vans each dealership still needs. The rolling line includes every dealer's customer
-// orders first, then these dealerships' stock within the remaining target places. Read-only; no Portal writes.
+// From these: how many stock vans each dealership still needs. Rolling is signed Towable Customer orders only;
+// stock needs are informational and never automatically fill rolling places. Read-only; no Portal writes.
 import { signedPlansDate } from './order-signoff.mjs';
 
 // Days from AU finish (下线) to the van being at the dealer: 3 days to dispatch + the road / sea trip. Only used to count
@@ -179,7 +179,7 @@ export function dealerNeeds(snapshot, rows, today, rollingEnd) {
     const pipelineCustomer = mine.filter(r => !isStockCustomer(r.customer) && r.customer).length;
     const base = { slug: d.slug, lead: leadDays(d), pipeline, pipelineStock, pipelineCustomer };
     if (d.paused) return { ...base, paused: true, deliveredBy: '', months: 0, arriving: 0, transitArriving: 0, sold: 0, projected: null, need: 0 };
-    if (base.lead == null) return { ...base, deliveredBy: '', months: 0, arriving: null, transitArriving: null, sold: null, projected: null, need: null };
+    if (base.lead == null || !rollingEnd) return { ...base, deliveredBy: '', months: 0, arriving: null, transitArriving: null, sold: null, projected: null, need: null };
     const deliveredBy = plusDays(rollingEnd, leadDays(d));
     const months = Math.max(0, (Date.parse(deliveredBy) - Date.parse(today)) / 86400000 / (365.25 / 12));
     const arriving = mine.filter(r => isStockCustomer(r.customer) && (a => a && a <= deliveredBy)(arrivalAtDealer(r, d, today))).length;
@@ -190,17 +190,17 @@ export function dealerNeeds(snapshot, rows, today, rollingEnd) {
   });
 }
 
-/** Rolling line: ALL signed customer orders (Orderlist order), without a dealer or size cutoff. Then fill the remaining
- *  target places with the self-owned dealerships' stock needs. `size` limits stock top-up, never customer orders. */
+export const isMotorhomeOrder = r => [r.chassis, r.model, r.line, r.range].some(v => /^SR[MV]/i.test(String(v || '').trim().replace(/[-\s]/g, '')));
+export const isRollingCustomer = r => !isMotorhomeOrder(r) && Boolean(String(r.customer || '').trim()) && !isStockCustomer(r.customer);
+
+/** Rolling: signed Towable Customer orders in Orderlist order, without a dealer/count cutoff.
+ *  Keep the old needs/size arguments for callers; they no longer permit Stock top-up. */
 export function pickRolling(rows, needs, size = ROLLING_SIZE) {
-  const slugs = new Set(DEALERSHIPS.map(d => d.slug));
-  const open = rows.filter(r => (r.group === 'later' || r.group === 'customers') && !r.empty && signedPlansDate([r.signedAt], r.today));
+  const open = rows.filter(r => (r.group === 'later' || r.group === 'customers') && !r.empty && !isMotorhomeOrder(r) && signedPlansDate([r.signedAt], r.today));
   const byOrder = (a, z) => (a.orderRow ?? 1e9) - (z.orderRow ?? 1e9) || (a.forecast || '9999').localeCompare(z.forecast || '9999') || a.chassis.localeCompare(z.chassis);
-  const customers = open.filter(r => !isStockCustomer(r.customer)).sort(byOrder).map(r => ({ r, kind: 'customer' }));
-  const stock = needs.filter(n => !n.paused && slugs.has(n.slug)).flatMap(n => open.filter(r => slugify(r.dealer) === n.slug && isStockCustomer(r.customer)).sort(byOrder).slice(0, n.need).map(r => ({ r, kind: 'stock' })))
-    .sort((a, z) => byOrder(a.r, z.r));
-  const picked = [...customers, ...stock.slice(0, Math.max(0, size - customers.length))];
-  const stockPicked = Object.fromEntries(DEALERSHIPS.map(d => [d.slug, picked.filter(p => p.kind === 'stock' && slugify(p.r.dealer) === d.slug).length]));
+  const customers = open.filter(isRollingCustomer).sort(byOrder).map(r => ({ r, kind: 'customer' }));
+  const picked = customers;
+  const stockPicked = Object.fromEntries(DEALERSHIPS.map(d => [d.slug, 0]));
   const stockAvailable = Object.fromEntries(DEALERSHIPS.map(d => [d.slug, open.filter(r => slugify(r.dealer) === d.slug && isStockCustomer(r.customer)).length]));
   return { picked, stockPicked, stockAvailable, customers: customers.length };
 }

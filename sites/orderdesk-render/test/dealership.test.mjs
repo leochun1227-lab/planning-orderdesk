@@ -65,11 +65,11 @@ test('need = target − (yard + transit + stock vans arriving by then (AU finish
   assert.equal(t.paused, true); assert.equal(t.need, 0, 'Traralgon is not calculated for now');
 });
 
-test('rolling line: all dealers’ customer orders first without a cutoff, then self-owned stock needs', () => {
+test('rolling line: all dealers’ named customer orders without stock top-up or a count cutoff', () => {
   const r = (chassis, dealer, customer, orderRow) => ({ chassis, dealer, customer, orderRow, group: 'later', signedAt: '2026-10-01', forecast: '' });
   const rows = [r('S1', 'Traralgon', 'Traralgon Stock', 5), r('C2', 'Frankston', 'Bob', 9), r('C1', 'ST James', 'Ann', 7), r('X1', 'Wangaratta', 'Zed', 1), r('S2', 'Traralgon', 'Traralgon Stock', 6), r('S3', 'Geelong', 'Geelong Stock', 2)];
   const out = pickRolling(rows, [{ slug: 'traralgon', need: 1 }, { slug: 'geelong', need: 0 }], 180);
-  assert.deepEqual(out.picked.map(p => p.r.chassis), ['X1', 'C1', 'C2', 'S1']);
+  assert.deepEqual(out.picked.map(p => p.r.chassis), ['X1', 'C1', 'C2']);
   assert.deepEqual(pickRolling(rows, [{ slug: 'traralgon', need: 5 }], 2).picked.map(p => p.r.chassis), ['X1', 'C1', 'C2'], 'all customers enter even beyond the target; no stock top-up');
 });
 
