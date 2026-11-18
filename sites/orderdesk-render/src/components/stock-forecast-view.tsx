@@ -1,3 +1,4 @@
+import { readApiResponse } from '../../lib/api-response.mjs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowDownToLine, AlertTriangle, RefreshCw, Search } from 'lucide-react';
 import { DealerCard, type DealerCardData } from './dealer-analysis-view';
@@ -33,7 +34,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
     config.current = next; setBusy(true); setError('');
     try {
       const q = new URLSearchParams({ multiplier: String(next.multiplier), months: String(next.months), ...(refresh ? { refresh: '1' } : {}) });
-      const r = await fetch(`/api/stock-forecast?${q}`, { cache: 'no-store', signal: controller.signal }), body = await r.json();
+      const r = await fetch(`/api/stock-forecast?${q}`, { cache: 'no-store', signal: controller.signal }), body = await readApiResponse(r);
       if (!r.ok) throw new Error(body.error || '无法读取预测 / Could not load forecast');
       if (id !== sequence.current) return;
       setData(body); setPage(0);

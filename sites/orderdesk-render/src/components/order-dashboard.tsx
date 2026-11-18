@@ -1,3 +1,4 @@
+import { readApiResponse } from '../../lib/api-response.mjs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from 'ag-grid-community';
@@ -54,11 +55,11 @@ export default function Dashboard() {
     const status = (o: Order, today: string) => o.status === 'cancelled' ? t("已取消") : o.status === 'completed' ? t("已完成") : isOverdue(o, today) ? t("签字逾期") : o.signedAt ? t("已签字") : o.specAt ? t("等待签字") : t("等待发图");
     const [session, setSession] = useState<any>(null);
     const [camperPlan, setCamperPlan] = useState<{ plan: Record<string, any>; portalUpdatedAt?: string; at?: string } | null>(null);
-    useEffect(() => { fetch('/api/campervan-plan', { cache: 'no-store' }).then(async r => { if (r.ok) setCamperPlan(await r.json()); }).catch(() => { }); }, []);
+    useEffect(() => { fetch('/api/campervan-plan', { cache: 'no-store' }).then(async r => { if (r.ok) setCamperPlan(await readApiResponse(r)); }).catch(() => { }); }, []);
     const isCamper = (o: Order) => o.group === 'campervan' || /^SR[VM]/.test(String(o.id || ''));
     const forecastOf = (o: Order) => isCamper(o) ? (camperPlan?.plan?.[o.id]?.forecastDate ?? o.forecastDate ?? null) : o.forecastDate;
     const [mail, setMail] = useState<MailStatus|null>(null);
-    useEffect(()=>{fetch('/api/mail-sync',{cache:'no-store'}).then(async r=>{if(r.ok)setMail(await r.json());}).catch(()=>{});},[]);
+    useEffect(()=>{fetch('/api/mail-sync',{cache:'no-store'}).then(async r=>{if(r.ok)setMail(await readApiResponse(r));}).catch(()=>{});},[]);
     const [data, setData] = useState<Data | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState<{
         duplicate: boolean;
         summary?: any;
@@ -74,7 +75,7 @@ export default function Dashboard() {
     const input = useRef<HTMLInputElement>(null), dialogRef = useRef<HTMLDialogElement>(null), drawerRef = useRef<HTMLDialogElement>(null), grid = useRef<AgGridReact>(null);
     const load = useCallback(async () => { setBusy(true); setError(''); try {
         const r = await fetch('/api/orders', { cache: 'no-cache' });
-        const d: any = await r.json();
+        const d: any = await readApiResponse(r);
         if (!r.ok)
             throw new Error(d.error || '无法读取订单');
         setData(d);
@@ -92,7 +93,7 @@ export default function Dashboard() {
     const revisionRef = useRef<number | undefined>(undefined);
     useEffect(() => { revisionRef.current = (data as any)?.revision; }, [data]);
     useEffect(() => {
-        const check = async () => { if (document.hidden || busy || importing) return; try { const r = await fetch('/api/revision', { cache: 'no-store' }); if (!r.ok) return; const { revision } = await r.json(); if (revisionRef.current !== undefined && revision !== revisionRef.current) void load(); } catch { } };
+        const check = async () => { if (document.hidden || busy || importing) return; try { const r = await fetch('/api/revision', { cache: 'no-store' }); if (!r.ok) return; const { revision } = await readApiResponse(r); if (revisionRef.current !== undefined && revision !== revisionRef.current) void load(); } catch { } };
         const timer = setInterval(check, 30000); window.addEventListener('focus', check);
         return () => { clearInterval(timer); window.removeEventListener('focus', check); };
     }, [load, busy, importing]);
@@ -210,7 +211,7 @@ export default function Dashboard() {
     async function confirmImport() { if (!pending || !pending.reportDate)
         return; setImporting(true); setError(''); try {
         const r = await fetch(pending.productionSources?'/api/production':'/api/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pending) });
-        const result: any = await r.json();
+        const result: any = await readApiResponse(r);
         if (!r.ok)
             throw new Error(result.error || '导入失败');
         setNotice({ duplicate: result.duplicate, summary: result.summary });
@@ -233,7 +234,7 @@ export default function Dashboard() {
                 const visible: Order[] = [];
                 grid.current?.api?.forEachNodeAfterFilterAndSort(n=>{if(n.data)visible.push(n.data);});
                 const response=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:(grid.current?.api?visible:rows).map(o=>o.id)})});
-                if(!response.ok){const result=await response.json() as {error?:string};throw new Error(result.error||'导出失败');}
+                if(!response.ok){const result=await readApiResponse(response) as {error?:string};throw new Error(result.error||'导出失败');}
                 const url=URL.createObjectURL(await response.blob());const a=document.createElement('a');a.href=url;a.download=`Planning-Orderlist-${date}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);return;
             }
             const ExcelJS = await import('exceljs');
