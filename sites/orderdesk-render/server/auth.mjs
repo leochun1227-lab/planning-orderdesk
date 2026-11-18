@@ -1,6 +1,7 @@
-// Team sign-in for Render (replaces the ChatGPT Sites sign-in).
-// APP_PASSWORD  shared team password (required in production)
-// SESSION_SECRET random string used to sign session cookies
+// Team sign-in. Off by default: anyone who opens the site is signed in as "Planning".
+// REQUIRE_PASSWORD=1 turns it back on, with
+// APP_PASSWORD  shared team password (at least 8 characters)
+// SESSION_SECRET random string used to sign session cookies (at least 32 characters)
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 
 const COOKIE = 'od_session';
@@ -8,9 +9,10 @@ const DAYS = 30;
 
 export function createAuth(env = process.env) {
   const production = env.NODE_ENV === 'production';
-  const password = env.APP_PASSWORD || '';
-  if (production && password.length < 8) throw new Error('APP_PASSWORD (at least 8 characters) is required in production');
-  if (production && (env.SESSION_SECRET || '').length < 32) throw new Error('SESSION_SECRET (at least 32 characters) is required in production');
+  const required = /^(1|true|yes)$/i.test(env.REQUIRE_PASSWORD || '');
+  const password = required ? env.APP_PASSWORD || '' : '';
+  if (required && password.length < 8) throw new Error('REQUIRE_PASSWORD is on: APP_PASSWORD (at least 8 characters) is required');
+  if (required && production && (env.SESSION_SECRET || '').length < 32) throw new Error('SESSION_SECRET (at least 32 characters) is required in production');
   const secret = env.SESSION_SECRET || randomBytes(32).toString('hex');
   const sign = payload => createHmac('sha256', secret).update(payload).digest('base64url');
   const same = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); };
@@ -21,7 +23,7 @@ export function createAuth(env = process.env) {
     return match ? decodeURIComponent(match.slice(COOKIE.length + 1)) : '';
   }
   function user(request) {
-    if (!password) return { name: 'Local' }; // local development without a password
+    if (!password) return { name: 'Planning' }; // sign-in off
     const [payload, mac] = readCookie(request).split('.');
     if (!payload || !mac || !same(sign(payload), mac)) return null;
     try {

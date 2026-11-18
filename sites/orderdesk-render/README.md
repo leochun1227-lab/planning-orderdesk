@@ -5,7 +5,7 @@
 | | 原版本（ChatGPT Sites） | 本版本（Render） |
 |---|---|---|
 | 运行 | Cloudflare Workers + vinext | Node 22（Hono）+ Vite 打包的 React 页面 |
-| 登录 | ChatGPT 账号 | 团队密码（`APP_PASSWORD`），会话 30 天 |
+| 登录 | ChatGPT 账号 | 默认不需要登录（打开网址即可用）；设 `REQUIRE_PASSWORD=1` + `APP_PASSWORD` 可恢复团队密码，会话 30 天 |
 | 数据库 | `neworderschedule` 一个节点存整块 AES 加密 blob | `planningorderdesk` 按订单 / 日志 / 导入记录分节点存 |
 | 每次保存 | 重新加密写回**全部**订单和日志 | 一次原子多路径 PATCH，**只写变化的节点** |
 | 每次打开 | 下载 + 解密 + 解压全部数据 | 服务端内存缓存 + ETag（数据没变返回 304）+ gzip |
@@ -36,9 +36,9 @@ Firebase 不保存 `null` 和空数组，所以这类值会被写成 `"%%null"`�
    > 目前这个库是公开读写的，任何人都能删数据，请尽快锁定。
 3. Render → **New → Blueprint**，选这个仓库，**Blueprint Path 填 `orderdesk-render/render.yaml`**（仓库根目录的 render.yaml 是另一个版本）。按提示填写：
    - `FIREBASE_SERVICE_ACCOUNT`：粘贴整个 JSON
-   - `APP_PASSWORD`：团队登录密码
+   - `APP_PASSWORD`：团队登录密码（只有设了 `REQUIRE_PASSWORD=1` 才生效；默认不需要登录）
    - `SESSION_SECRET`、`PLANNING_AGENT_TOKEN` 会自动生成
-4. 部署完成后打开 `https://<服务名>.onrender.com`，看到登录页就说明部署成功。
+4. 部署完成后打开 `https://<服务名>.onrender.com`，直接看到排程页就说明部署成功（默认不需要登录）。
 
 建议使用 **Starter** 套餐。免费实例空闲 15 分钟后会休眠，而 00:20 的电脑上传要求请求在扫描开始后 12 分钟内到达，冷启动有可能失败。
 
@@ -114,4 +114,4 @@ npm run dev:client                                                              
 npm test
 ```
 
-不设 `APP_PASSWORD` 时不需要登录（仅限本地）。
+默认不需要登录：任何人打开网址都以「Planning」身份使用（11-18 起）。要恢复密码，在 Render 环境变量里加 `REQUIRE_PASSWORD=1`，并保留 `APP_PASSWORD`（≥ 8 位）和 `SESSION_SECRET`（≥ 32 位）。Planning 电脑上传用的 `PLANNING_AGENT_TOKEN` 不受影响。

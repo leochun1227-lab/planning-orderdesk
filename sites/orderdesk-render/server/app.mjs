@@ -74,7 +74,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
 
 
   // ---- sign in ----
-  app.get('/login', c => c.html(loginPage({ returnTo: c.req.query('return_to') || '/' })));
+  app.get('/login', c => auth.enabled === false ? c.redirect('/') : c.html(loginPage({ returnTo: c.req.query('return_to') || '/' })));
   app.post('/login', async c => {
     const form = await c.req.parseBody();
     const returnTo = String(form.return_to || '/');
@@ -82,7 +82,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     if (!auth.checkPassword(form.password)) { await new Promise(r => setTimeout(r, 600)); return c.html(loginPage({ error: '密码不正确 / Incorrect password', returnTo: target }), 401); }
     return new Response(null, { status: 303, headers: { Location: target, 'Set-Cookie': auth.sessionCookie(form.name, secureCookie) } });
   });
-  app.all('/logout', () => new Response(null, { status: 303, headers: { Location: '/login', 'Set-Cookie': auth.clearCookie(secureCookie) } }));
+  app.all('/logout', () => new Response(null, { status: 303, headers: { Location: auth.enabled === false ? '/' : '/login', 'Set-Cookie': auth.clearCookie(secureCookie) } }));
 
   // ---- everything below requires a session ----
   app.use('/api/*', async (c, next) => {
@@ -91,7 +91,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
   });
   app.use('/api/*', compress());
 
-  app.get('/api/session', c => json({ user: auth.user(c.req.raw), store: store.info() }));
+  app.get('/api/session', c => json({ user: auth.user(c.req.raw), signIn: auth.enabled !== false, store: store.info() }));
   app.get('/api/readiness', async () => {
     let timer;
     try {

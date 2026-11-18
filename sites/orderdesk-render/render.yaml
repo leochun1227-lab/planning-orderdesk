@@ -22,7 +22,7 @@ services:
         value: orderdesk/v2
       - key: FIREBASE_SERVICE_ACCOUNT   # paste the service-account JSON (or its base64)
         sync: false
-      - key: APP_PASSWORD               # team sign-in password
+      - key: APP_PASSWORD               # team sign-in password; only used with REQUIRE_PASSWORD=1 (sign-in is off by default)
         sync: false
       - key: SESSION_SECRET
         generateValue: true
