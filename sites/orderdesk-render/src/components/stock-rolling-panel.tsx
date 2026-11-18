@@ -1,3 +1,4 @@
+import { readApiResponse } from '../../lib/api-response.mjs';
 import { useEffect, useMemo, useState } from 'react';
 import { Save, Sparkles, ArrowRight, Check, X } from 'lucide-react';
 
@@ -22,7 +23,7 @@ export default function StockRollingPanel({ zh, report, disabled, reload, onBusy
     try {
       const payload = action === 'save' ? { multiplier: report.multiplier, months: report.months, previewToken: report.previewToken, expectedPlanId: report.expectedPlanId }
         : action === 'admissions' ? { planId: p.planId, token: p.token, mode, chassis: ids } : { planId: p.planId, token: p.token };
-      const response = await fetch(`/api/stock-forecast/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }), body = await response.json();
+      const response = await fetch(`/api/stock-forecast/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }), body = await readApiResponse(response);
       if (!response.ok) throw new Error(body.error || 'Could not save');
       setReview(''); setSelected([]);
       setMessage(action === 'save' ? (zh ? `意见已保存。保留入线 ${body.retained} 台，本次重算撤回 ${body.released} 台。` : `Opinion saved. ${body.retained} admissions retained; ${body.released} released after rechecking.`)

@@ -28,7 +28,7 @@ function fixture(rows = [row('SRC270001'), row('SRC270002', { model: 'SRC19' }),
 test('saved opinions produce jointly feasible Towable recommendations, without automatically admitting any stock', () => {
   const f = fixture(), before = structuredClone(f.input), result = recommendPoolStock(f.input);
   assert.equal(result.status, 'ready'); assert.equal(result.items.length, 3); assert.equal(result.admitted.length, 0);
-  assert.equal(f.line.rows.filter(r => r.group === 'rolling').length, 1);
+  assert.equal(f.line.rows.filter(r => r.group === 'rolling').length, 0);
   assert.ok(result.items.every(a => a.auEnd >= plus(110) && a.cnStart >= today && a.cnStart <= plus(60) && a.stockAfter <= a.cap));
   assert.equal(result.items.find(a => a.jv).slug, 'bundaberg');
   assert.deepEqual(f.input, before);
@@ -45,15 +45,15 @@ test('confirmation preserves displayed dates, customer priority and Stock identi
   const confirmed = recommendPoolStock(f.input);
   assert.deepEqual(confirmed.items.map(a => [a.chassis, a.auEnd, a.arrival]), first.items.map(a => [a.chassis, a.auEnd, a.arrival]), 'confirmation must not reshuffle a reviewed schedule');
   const out = buildProductionLine({ ...f.sources, today, orders: {}, rollingAdmissions: confirmed.items.filter(a => a.admitted) });
-  assert.equal(out.counts.rolling, 2);
+  assert.equal(out.counts.rolling, 1);
   const added = out.rows.find(r => r.chassis === f.plan.admitted[0]);
   assert.equal(added.rollingKind, 'stock'); assert.equal(added.customer, 'Stock'); assert.equal(added.auEnd, chosen.auEnd);
   const monthly = confirmed.monthly.find(d => d.slug === chosen.slug).months;
   assert.equal(monthly.reduce((n, m) => n + m.confirmedIn, 0), 1);
   assert.ok(monthly.every(m => m.confirmed >= m.before && m.confirmed <= m.after));
-  assert.equal(out.rows.find(r => r.customer === 'Jane Customer').rollingOrder, 1);
+  assert.equal(out.rows.find(r => r.customer === 'Jane Customer').group, 'customers');
   assert.equal(out.dealership.jvDealers.find(d => d.slug === 'bundaberg').stockPicked, 1);
-  assert.equal(buildProductionLine({ ...f.sources, today, orders: {}, rollingAdmissions: [] }).counts.rolling, 1);
+  assert.equal(buildProductionLine({ ...f.sources, today, orders: {}, rollingAdmissions: [] }).counts.rolling, 0);
 });
 
 test('recommendations reject motorhome metadata, duplicates, physical stock, Traralgon, non-display models and cancelled orders', () => {
@@ -137,13 +137,13 @@ test('API save → recommend → confirm → refresh survives persistence, exclu
   assert.equal((await f.post('admissions', admission, 'https://wrong.example')).status, 403);
   assert.equal((await f.post('admissions', admission)).status, 200);
   const live = await (await f.app.request('/api/production-line')).json();
-  assert.equal(live.counts.rolling, 4); assert.equal(live.stockRolling.admitted.length, 3);
+  assert.equal(live.counts.rolling, 3); assert.equal(live.stockRolling.admitted.length, 3);
   assert.ok(live.rows.filter(r => r.rollingKind === 'stock').every(r => r.stockRecommendation.admitted));
   assert.ok(!live.rows.some(r => r.chassis === 'SRC270009')); assert.equal(live.counts.processing, 0);
   assert.deepEqual((await f.store.readState()).state.orders, before);
   assert.equal((await f.post('admissions', admission)).status, 409, 'replayed admission is rejected');
   assert.equal((await f.post('admissions', { mode: 'remove', planId: saved.rolling.planId, chassis: ids })).status, 200);
-  const removed = await (await f.app.request('/api/production-line')).json(); assert.equal(removed.counts.rolling, 1);
+  const removed = await (await f.app.request('/api/production-line')).json(); assert.equal(removed.counts.rolling, 0);
   const state = (await f.store.readState()).state; assert.equal(state.stockForecastPlan.events.length, 3); assert.ok(state.stockForecastPlan.report.own.actions.length);
 });
 
@@ -199,7 +199,7 @@ test('both model lists persist together; moving a model to not recommended inval
   assert.deepEqual((await f.store.readState()).state.stockForecastPlan.report.notOnYardModels, updated.notOnYardModels);
   const live = await (await f.app.request('/api/production-line')).json();
   assert.equal(live.rows.find(r => r.chassis === 'SRC270001').group, 'customers');
-  assert.equal(live.rows.find(r => r.customer === 'Jane Customer').group, 'rolling', 'customer demand still takes priority even for a nonrecommended stock model');
+  assert.equal(live.rows.find(r => r.customer === 'Jane Customer').group, 'customers', 'customers stay in the pool until explicitly selected, including nonrecommended stock models');
 });
 
 test('nonrecommended-only edits invalidate previews, reject stale or overlapping lists, and preserve explicit empty lists', async () => {

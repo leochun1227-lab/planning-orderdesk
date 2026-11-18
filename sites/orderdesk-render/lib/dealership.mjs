@@ -227,16 +227,16 @@ export function dealerNeeds(snapshot, rows, today, rollingEnd) {
 export const isMotorhomeOrder = r => [r.chassis, r.model, r.line, r.range].some(v => /^SR[MV]/i.test(String(v || '').trim().replace(/[-\s]/g, '')));
 export const isRollingCustomer = r => !isMotorhomeOrder(r) && Boolean(String(r.customer || '').trim()) && !isStockCustomer(r.customer);
 
-/** Rolling: signed Towable Customer orders in Orderlist order, without a dealer/count cutoff.
- *  Keep the old needs/size arguments for callers; they no longer permit Stock top-up. */
+/** Inventory pool metadata only. Selection into rolling requires a saved proposal.
+ * Keep the old needs/size arguments for compatibility; neither books capacity. */
 export function pickRolling(rows, needs, size = ROLLING_SIZE) {
   const open = rows.filter(r => (r.group === 'later' || r.group === 'customers') && !r.empty && !isMotorhomeOrder(r) && signedPlansDate([r.signedAt], r.today));
-  const byOrder = (a, z) => (a.orderRow ?? 1e9) - (z.orderRow ?? 1e9) || (a.forecast || '9999').localeCompare(z.forecast || '9999') || a.chassis.localeCompare(z.chassis);
+  const byOrder = (a, z) => (a.signedAt || '9999').localeCompare(z.signedAt || '9999') || (a.orderRow ?? 1e9) - (z.orderRow ?? 1e9) || (a.forecast || '9999').localeCompare(z.forecast || '9999') || a.chassis.localeCompare(z.chassis);
   const customers = open.filter(isRollingCustomer).sort(byOrder).map(r => ({ r, kind: 'customer' }));
-  const picked = customers;
+  const picked = [];
   const stockPicked = Object.fromEntries(DEALERSHIPS.map(d => [d.slug, 0]));
   const stockAvailable = Object.fromEntries(DEALERSHIPS.map(d => [d.slug, open.filter(r => slugify(r.dealer) === d.slug && isStockCustomer(r.customer)).length]));
-  return { picked, stockPicked, stockAvailable, customers: customers.length };
+  return { picked, stockPicked, stockAvailable, customers: 0, customerCandidates: customers };
 }
 
 /** Month by month for one dealership (this month + the next `count` − 1): vans expected to arrive (stock / customer),

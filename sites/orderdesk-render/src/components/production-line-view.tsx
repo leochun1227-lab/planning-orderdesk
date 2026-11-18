@@ -1,3 +1,4 @@
+import { readApiResponse } from '../../lib/api-response.mjs';
 // 产线: the Dealer Portal production board groups, with our own dates (Longtree CN finish, AU finish forecast from the
 // Portal Production & dispatch plan), plus live facts per vehicle: Longtree node dates, AU factory station, SAP GR/GI.
 // Data: /api/production-line (read-only).
@@ -122,7 +123,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     setBusy(true); setError('');
     try {
       const r = await fetch(`/api/production-line${refresh ? '?refresh=1' : ''}`, { cache: 'no-store' });
-      const body = await r.json();
+      const body = await readApiResponse(r);
       if (!r.ok) throw new Error(body.error || (zh ? '产线数据读取失败' : 'Could not load production data'));
       setData(body);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }

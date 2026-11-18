@@ -11,24 +11,7 @@ import { createStore } from '../server/store.mjs';
 import { createMemoryFirebase } from '../server/firebase.mjs';
 import { dayInSydney } from '../lib/order-engine.mjs';
 
-const today = dayInSydney(), plus = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-const row = (chassis, extra = {}) => ({ id: chassis, chassis, model: 'SRC21', modelYear: '2027', line: 'Towable', customer: 'Stock', dealer: 'Frankston', group: 'customers', signedAt: today, cnPlanStart: '', cnPlanEnd: '', auPlanStart: '', auPlanEnd: '', warnings: [], ...extra });
-function fixture({ customerCount = 40, stockCount = 60, overstock = false, weeks = 4, extraRows = [], orders = {} } = {}) {
-  const raw = { yard: {}, dealerConfigs: { abco: { name: 'ABCO', isActive: true }, unknown: { name: 'Unknown Independent', isActive: true } } };
-  const dealers = configureDealers(dealerSnapshot(raw, today, { all: true, towableOnly: true }), { abco: { target: 15, travelDays: 7 } }, today);
-  if (overstock) for (const d of dealers) if (d.target) d.yard.stock = 1000;
-  const rows = [...Array.from({ length: stockCount }, (_, i) => row(`SRC99${String(i).padStart(4, '0')}`, { model: DISPLAY_MODELS[i % DISPLAY_MODELS.length], dealer: ['Frankston', 'Geelong', 'Bundaberg', 'ABCO'][i % 4] })),
-    ...Array.from({ length: customerCount }, (_, i) => row(`SRC98${String(i).padStart(4, '0')}`, { customer: `Customer ${i}`, orderRow: i + 1 })), ...extraRows];
-  const lead = plus(today, 110), monday = weekOf(lead), first = monday < lead ? plus(monday, 7) : monday;
-  const capacity = new Map([[today, { towable: 4, srm: 1, srv: 1 }]]);
-  for (let week = 0; week < weeks; week++) for (let d = 0; d < 5; d++) capacity.set(plus(first, week * 7 + d), { towable: 4, srm: 1, srv: 1 });
-  const sources = { board: { rows, completed: 0, averages: {} }, longtree: new Map(), prod: new Map(), portal: new Map(), dealers, forecastDealers: dealers, auCapacity: capacity, settings: { cnDays: 20, seaDays: 50, auDays: 40 }, status: {} };
-  const line = buildProductionLine({ ...sources, today, orders });
-  const fingerprint = stockInputFingerprint({ line, dealers, capacity, settings: sources.settings, orders });
-  const report = buildStockForecast({ dealers, rows: line.rows, today });
-  const plan = saveStockOpinion({ report, fingerprint, actor: 'Test' });
-  return { sources, rows, dealers, capacity, line, fingerprint, report, plan, input: { plan, fingerprint, line, dealers, capacity, settings: sources.settings, orders, quantity: 40 } };
-}
+import { today, plus, row, fixture } from './helpers/rolling-fixture.mjs';
 
 test('balanced schedule fills the target with pool stock and customers at 30–40% each week without moving fixed capacity', () => {
   const f = fixture(), original = structuredClone(f.input), p = buildBalancedRolling(f.input);
@@ -40,19 +23,19 @@ test('balanced schedule fills the target with pool stock and customers at 30–4
   assert.equal(applied.counts.rolling, 40);
   for (const a of p.schedule) { assert.equal(selected.get(a.chassis).auEnd, a.auEnd); assert.equal(selected.get(a.chassis).rollingKind, a.kind); }
   for (const [day, c] of f.capacity) assert.ok([...selected.values()].filter(r => r.auEnd === day).length <= c.towable);
-  assert.equal(applied.rows.filter(r => r.waitingRolling).length, f.input.line.counts.rolling - p.customerCount);
+  assert.equal(applied.rows.filter(r => r.waitingRolling).length, 40 - p.customerCount);
   assert.ok(p.stockResult.monthly.every(d => d.months.every(m => m.after == null || d.cap == null || m.after <= Math.max(d.cap, m.before))));
   assert.deepEqual(f.input, original);
 });
 
 test('pool shortage produces named model/dealer requests with no chassis; overstock requests remain blocked instead of filling capacity', () => {
-  const short = fixture({ stockCount: 3 }), p = buildBalancedRolling({ ...short.input, quantity: 20 });
+  const short = fixture({ stockCount: 3, customerCount: 7 }), p = buildBalancedRolling({ ...short.input, quantity: 20 });
   assert.equal(p.stockCount, 3); assert.equal(p.customerCount, 7); assert.equal(p.newOrders, 10);
   assert.equal(p.scheduled + p.newOrders + p.inventoryBlocked + p.capacityGap, 20);
   assert.ok(p.requests.every(r => r.status === 'newOrder' && r.dealer && r.model && !r.chassis && r.auEnd && r.arrival));
   assert.ok(p.weeks.every(w => w.plannedCustomerShare >= .3 && w.plannedCustomerShare <= .4));
   assert.ok(p.weeks.some(w => !w.ratioMet), 'missing orders must not inflate the actual customer/stock ratio denominator');
-  const excess = fixture({ overstock: true }), blocked = buildBalancedRolling({ ...excess.input, quantity: 20 });
+  const excess = fixture({ overstock: true, customerCount: 7 }), blocked = buildBalancedRolling({ ...excess.input, quantity: 20 });
   assert.equal(blocked.stockCount + blocked.newOrders, 0); assert.equal(blocked.inventoryBlocked, 13);
   assert.ok(blocked.requests.every(r => r.dealer && r.model && r.status === 'blocked' && !r.auEnd && !r.arrival));
   assert.ok(blocked.weeks.every(w => !w.ratioMet));
@@ -86,7 +69,7 @@ test('the planner searches later receiving windows and gives existing future-rea
   delayed.input.fingerprint = stockInputFingerprint({ line: delayed.line, dealers: delayed.dealers, capacity: delayed.capacity, settings: delayed.sources.settings });
   delayed.input.plan = saveStockOpinion({ report: buildStockForecast({ dealers: delayed.dealers, rows: delayed.line.rows, today }), fingerprint: delayed.input.fingerprint, actor: 'Test' });
   const later = buildBalancedRolling({ ...delayed.input, quantity: 20 });
-  assert.ok(later.stockCount > 0); assert.ok(later.schedule.every(a => a.auEnd > plus(today, 120)));
+  assert.ok(later.stockCount > 0); assert.ok(later.stockResult.items.every(a => a.stockAfter <= a.cap), 'later or earlier receiving windows remain jointly within the saved ceiling');
   const mon = weekOf(plus(today, 110)), first = mon < plus(today, 110) ? plus(mon, 7) : mon;
   const ready = plus(first, 14);
   const future = fixture({ stockCount: 1, orders: { SRC990000: { chassis: 'SRC990000', status: 'active', customer: 'Stock', signedAt: today, forecastDate: plus(ready, -40) } } });
@@ -212,4 +195,33 @@ test('background generation returns immediately and exposes the saved result thr
   for (const r of f.input.line.rows) if (r.customer.startsWith('Customer ')) r.regentRank = 0;
   const p = buildBalancedRolling({ ...f.input, quantity: 20 });
   assert.equal(p.customerCount, 7);
+});
+
+test('weekly percentage persists with the proposal; PDF downloads the same saved snapshot with ID and session guards', async () => {
+  const f = await apiFixture();
+  assert.equal((await f.app.request('/api/rolling-plan/report.pdf?id=missing')).status, 409);
+  await f.save(await f.get());
+  const b = (await f.get('/api/production-line')).balanced;
+  const made = await f.post('/api/rolling-plan', { ...b, quantity: 40, customerPercent: 50 });
+  assert.equal(made.status, 200, await made.clone().text());
+  const live = await f.get('/api/production-line');
+  assert.equal(live.balanced.customerPercent, 50); assert.equal(live.balanced.proposal.customerCount, 20);
+  assert.equal(live.balanced.proposal.report.asOf, (await f.store.readState()).state.rollingPlan.report.asOf);
+  const path = `/api/rolling-plan/report.pdf?id=${live.balanced.expectedId}`, before = await f.store.readState();
+  const pdf = await f.app.request(path); assert.equal(pdf.status, 200);
+  assert.equal(pdf.headers.get('content-type'), 'application/pdf'); assert.match(pdf.headers.get('content-disposition'), /attachment; filename="Rolling_Production_Report_.*\.pdf"/);
+  const bytes = Buffer.from(await pdf.arrayBuffer()); assert.equal(bytes.subarray(0, 5).toString(), '%PDF-'); assert.ok(bytes.length > 5000);
+  assert.deepEqual(await f.store.readState(), before, 'export must not recalculate or change the saved proposal');
+  assert.equal((await f.app.request('/api/rolling-plan/report.pdf?id=stale')).status, 409);
+  f.auth.user = () => null; assert.equal((await f.app.request(path)).status, 401);
+});
+
+test('invalid weekly percentages cannot overwrite a saved plan or mutate orders', async () => {
+  const f = await apiFixture(); await f.save(await f.get());
+  const b = (await f.get('/api/production-line')).balanced, before = await f.store.readState();
+  for (const percent of [-1, 101, null, 'bad', '']) {
+    const r = await f.post('/api/rolling-plan', { ...b, quantity: 40, customerPercent: percent });
+    assert.equal(r.status, 400); assert.match((await r.json()).error, /比例/);
+  }
+  assert.deepEqual(await f.store.readState(), before);
 });
