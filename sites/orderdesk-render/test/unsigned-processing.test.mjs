@@ -32,8 +32,8 @@ test('unsigned Customer and Stock leave rolling and the pool for processing; poo
   const out = build([...rows, row('SIGNEDC', 'customers', { signedAt: today }),
     row('SIGNEDS', 'rolling', { customer: 'Stock', signedAt: today })]);
   assert.deepEqual(out.rows.filter(r => r.group === 'processing').map(r => r.chassis).sort(), rows.map(r => r.chassis).sort());
-  assert.equal(out.counts.processing, 6); assert.equal(out.counts.rolling, 1); assert.equal(out.counts.customers, 1);
-  assert.equal(byChassis(out).SIGNEDC.group, 'rolling'); assert.equal(byChassis(out).SIGNEDS.group, 'customers');
+  assert.equal(out.counts.processing, 6); assert.equal(out.counts.rolling, 0); assert.equal(out.counts.customers, 2);
+  assert.equal(byChassis(out).SIGNEDC.group, 'customers'); assert.equal(byChassis(out).SIGNEDS.group, 'customers');
   const pool = BOARD_GROUPS.findIndex(g => g.id === 'customers');
   assert.equal(BOARD_GROUPS[pool].zh, '库存订单池'); assert.equal(BOARD_GROUPS[pool + 1].id, 'processing');
   assert.equal(BOARD_GROUPS[pool + 1].zh, '处理中订单'); assert.ok(!BOARD_GROUPS.some(g => g.id === 'empty'));
@@ -41,7 +41,7 @@ test('unsigned Customer and Stock leave rolling and the pool for processing; poo
   assert.equal(pick.picked.length, 0); assert.equal(pick.stockAvailable.frankston, 0);
 });
 
-test('unsigned orders consume no rolling capacity; signing re-admits the same orders and recalculates the queue', () => {
+test('signing moves orders into the pool without booking rolling capacity', () => {
   const rows = [row('UC', 'rolling'), row('US', 'customers', { customer: 'Stock' }),
     row('SC', 'customers', { signedAt: today }), row('SS', 'customers', { customer: 'Stock', signedAt: today })];
   const orders = Object.fromEntries(rows.map((r, i) => [r.chassis, { chassis: r.chassis, slotRow: i + 1 }]));
@@ -51,15 +51,15 @@ test('unsigned orders consume no rolling capacity; signing re-admits the same or
   const before = build(rows, extras), b = byChassis(before);
   assert.equal(b.UC.group, 'processing'); assert.equal(b.US.group, 'processing');
   assert.equal(b.UC.auEnd, ''); assert.equal(b.US.auForecast, undefined);
-  assert.equal(b.SC.auEnd, today); assert.equal(b.SS.auEnd, '');
-  assert.equal(before.dealership.customers, 1); assert.equal(before.dealership.picked, 1);
+  assert.equal(b.SC.auEnd, ''); assert.equal(b.SS.auEnd, '');
+  assert.equal(before.dealership.customers, 0); assert.equal(before.dealership.picked, 0);
   const f = before.dealership.dealers.find(d => d.slug === 'frankston');
   assert.equal(f.stockAvailable, 1); assert.equal(f.stockPicked, 0);
-  assert.equal(f.monthly.reduce((n, m) => n + m.stockIn + m.customerIn, 0), 1);
+  assert.equal(f.monthly.reduce((n, m) => n + m.stockIn + m.customerIn, 0), 0);
   orders.UC.signedAt = today; orders.US.signedAt = today;
   const after = build(rows, extras), a = byChassis(after);
-  assert.equal(after.counts.processing, 0); assert.equal(after.dealership.customers, 2);
-  assert.equal(a.UC.group, 'rolling'); assert.equal(a.UC.auEnd, today); assert.equal(a.SC.auEnd, '2026-11-18');
+  assert.equal(after.counts.processing, 0); assert.equal(after.dealership.customers, 0);
+  assert.equal(a.UC.group, 'customers'); assert.equal(a.UC.auEnd, ''); assert.equal(a.SC.auEnd, '');
   assert.equal(a.US.group, 'customers'); assert.equal(a.SS.group, 'customers');
   assert.equal(a.UC.id, b.UC.id); assert.equal(new Set(after.rows.map(r => r.id)).size, after.rows.length);
   assert.deepEqual(rows, original, 'recomputation does not mutate cached Portal board rows');
@@ -93,7 +93,7 @@ test('Portal signature dates survive the board adapter for Towable, campers and 
   assert.deepEqual(sources.board.rows.map(r => r.signedAt), ['2026-11-16', '2026-11-15', '2026-11-14', '', '']);
   const orders = { CRM1: { chassis: 'CRM1', signedAt: today }, SRC1: { chassis: 'SRC1', signedAt: null } };
   const first = byChassis(buildProductionLine({ ...sources, orders, today }));
-  for (const c of ['SRC1', 'CRM1']) assert.equal(first[c].group, 'rolling');
+  for (const c of ['SRC1', 'CRM1']) assert.equal(first[c].group, 'customers');
   assert.equal(first.SRM2.group, 'processing'); for (const c of ['SRV1', 'SRM1']) assert.equal(first[c].group, 'later');
   raw.motorhome.orders[1].signedOffDate = today; at = 'copy-2';
   const refreshed = await src.current({ today });
@@ -107,12 +107,12 @@ test('deleted Towable plan has no synthetic rows; processing remains in all-orde
     buildPlan: { months: [], rows: [{ id: 'ghost', date: today, month: '2026-11', seq: 1, day: 1, perDay: 1 }] },
     auCapacity: new Map([[today, { towable: 1, srm: 1, srv: 0 }]]) });
   assert.equal(out.rows.length, 3); assert.ok(out.rows.every(r => !r.empty && !r.build));
-  assert.ok(!Object.hasOwn(out.counts, 'empty')); assert.equal(byChassis(out).SIGNED.auEnd, today);
+  assert.ok(!Object.hasOwn(out.counts, 'empty')); assert.equal(byChassis(out).SIGNED.auEnd, '');
   const flow = buildDealerLogistics(out.rows, { today });
   const f = flow.dealers.find(d => d.slug === 'frankston');
   assert.equal(f.stages.processing.total, 2); assert.equal(f.stages.processing.customer, 1); assert.equal(f.stages.processing.stock, 1);
   assert.equal(f.byVehicle.motorised.processing.customer, 1); assert.equal(f.byVehicle.towable.processing.stock, 1);
-  assert.equal(f.stages.pool.total, 0); assert.equal(f.stages.rolling.total, 1);
+  assert.equal(f.stages.pool.total, 1); assert.equal(f.stages.rolling.total, 0);
   assert.equal(flow.dealers.reduce((n, d) => n + Object.values(d.stages).reduce((m, s) => m + s.total, 0), 0), 3);
   assert.deepEqual(f.stages.processing.stockMonths, {}); assert.equal(f.stages.processing.stockUndated, 1);
   const duplicate = buildDealerLogistics([...out.rows, row('SRC270001', 'transport', { customer: 'Stock' })]);

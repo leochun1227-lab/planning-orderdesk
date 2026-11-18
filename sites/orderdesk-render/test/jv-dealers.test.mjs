@@ -53,7 +53,7 @@ test('JV cards are generated from final production rows, while self-owned totals
   assert.deepEqual(out.dealership.jvDealers.map(d => d.name), JV_DEALERS.map(d => d.name));
   assert.equal(out.counts.dealership, 0, 'JV yard stock does not inflate the self-owned Dealership tab');
   for (const d of out.dealership.jvDealers) {
-    assert.equal(d.monthly.length, 8); assert.equal(d.lead, 10); assert.ok(d.monthly.every(m => m.stockIn !== null && m.endStock !== null)); assert.equal(d.pipelineStock, 1); assert.equal(d.customerPicked, 1);
+    assert.equal(d.monthly.length, 8); assert.equal(d.lead, 10); assert.ok(d.monthly.every(m => m.stockIn !== null && m.endStock !== null)); assert.equal(d.pipelineStock, 1); assert.equal(d.customerPicked, 0);
     assert.equal(d.transit.stock, 2); assert.equal(d.transit.pgiStock, 1); assert.equal(d.transit.transportStock, 1);
     assert.equal(d.stockAvailable, 1); assert.equal(d.stockPicked, 0);
     assert.equal(out.rows.find(r => r.id === `${d.slug}STOCK`).group, 'customers');

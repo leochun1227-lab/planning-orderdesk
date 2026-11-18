@@ -18,9 +18,9 @@ const sections = report => ['own', 'jv', 'independent'].flatMap(g => report[g] ?
 export const dealerSettingsToken = dealers => hash(sorted((dealers || []).filter(d => dealerGroup(d) === 'independent').map(d => [d.slug, d.target, d.travelDays])));
 
 export function stockInputFingerprint({ line, dealers, capacity, settings, orders = {} }) {
-  return hash({ policyVersion: 'all-dealers-balanced-v2-customer-eligibility', today: line.today, settings,
+  return hash({ policyVersion: 'weekly-quantity-v3-signed-pool', today: line.today, settings,
     rows: sorted(line.rows.filter(r => !r.empty).map(r => rowFields.map(k => r[k] ?? null))),
-    dealers: sorted((dealers || []).map(d => [d.slug, d.target, d.own, d.jv, d.paused, d.travelDays, d.yard, d.handover?.avgStock,
+    dealers: sorted((dealers || []).map(d => [d.slug, d.target, d.own, d.jv, d.paused, d.travelDays, d.yard, d.handover?.avgStock, d.handover?.avgCustomer,
       sorted(Object.entries(d.handover?.stockByModel || {})), sorted((d.vehicles || []).map(v => [v.chassis, v.model, v.where, v.category, v.arrive]))])),
     capacity: sorted([...(capacity || new Map()).entries()]),
     inactive: sorted(Object.values(orders).filter(o => ['cancelled', 'completed'].includes(o.status)).map(o => [chassisKey(o.chassis), o.status])),
@@ -40,7 +40,7 @@ export function saveStockOpinion({ previous, report, fingerprint, actor, now = n
  * Named customer and physical/locked queues retain all their capacity. New stock
  * also needs the configured CN + sea + AU lead time and a CN start within 60 days.
  * Every candidate is feasible together with the other returned candidates. */
-export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capacity = null, settings = {}, orders = {}, blockers = [], candidateSlots = null, includeRequests = false, preallocatedStock = [] }) {
+export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capacity = null, settings = {}, orders = {}, blockers = [], candidateSlots = null, includeRequests = false, preallocatedStock = [], fillToCap = false, snapshotDate = null, horizonEnd = null }) {
   const empty = { status: !plan ? 'unsaved' : plan.fingerprint !== fingerprint ? 'stale' : blockers.length ? 'sources' : 'ready',
     planId: plan?.id || null, savedAt: plan?.savedAt || '', savedBy: plan?.savedBy || '', multiplier: plan?.multiplier ?? null, months: plan?.months ?? null,
     items: [], requests: [], admitted: [], requested: plan?.admitted || [], held: {}, monthly: [], token: '', blockers, ai: plan?.ai || null };
@@ -97,7 +97,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
   }
   const duration = (k, fallback) => Math.max(0, Number.isFinite(Number(settings[k])) ? Number(settings[k]) : fallback);
   const lead = duration('cnDays', 20) + duration('seaDays', 50) + duration('auDays', 40);
-  const earliest = plus(today, lead), latest = plus(earliest, 60);
+  const earliest = plus(today, lead), latest = horizonEnd || plus(earliest, 60);
   const slots = [];
   for (const [day, value] of [...capacity].sort(([a], [b]) => a.localeCompare(b))) if (day >= today) for (let n = 0; n < value.towable; n++) slots.push(day);
   const used = line.rows.reduce((n, r) => r.auForecast?.kind === 'towable' ? Math.max(n, r.auForecast.seq || 0) : n, 0);
@@ -120,11 +120,11 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
       if (p.r.forecast && /^\d{4}-\d{2}-\d{2}$/.test(p.r.forecast) && auEnd < plus(p.r.forecast, duration('auDays', 40))) continue;
       const arrival = plus(auEnd, p.u.lead), t = at(arrival); if (t < 0 || t >= N) continue;
       const m = modelCurve(p.u, p.r.model), buffer = Math.max(2, Math.ceil(p.u.d.target / Math.max(1, (plan.report.displayModels ?? DISPLAY_MODELS).length)));
-      if (p.u.balance[t] >= p.u.d.target - 1e-8 || p.u.max[t] > p.u.cap - 1 + 1e-8 || m.max[t] > buffer - 1 + 1e-8) continue;
-      choices.push({ p, arrival, t, modelStock: m.balance[t], score: p.u.balance[t] / p.u.d.target + (m.balance[t] < 1 ? -2 : 0) });
+      if (p.u.balance[t] >= (fillToCap ? p.u.cap : p.u.d.target) - 1e-8 || p.u.max[t] > p.u.cap - 1 + 1e-8 || m.max[t] > buffer - 1 + 1e-8) continue;
+      choices.push({ p, arrival, t, modelStock: m.balance[t], priority: { own: 0, jv: 1, independent: 2 }[dealerGroup(p.u.d)], score: p.u.balance[t] / p.u.d.target, cover: p.u.d.handover?.avgStock > 0 ? p.u.balance[t] / p.u.d.handover.avgStock : Infinity });
     }
     const actual = choices.filter(c => !c.p.virtual); if (actual.length) choices = actual;
-    choices.sort((a, b) => a.score - b.score || a.p.u.d.slug.localeCompare(b.p.u.d.slug) || a.p.r.model.localeCompare(b.p.r.model) || a.p.id.localeCompare(b.p.id));
+    choices.sort((a, b) => a.priority - b.priority || a.score - b.score || a.cover - b.cover || a.modelStock - b.modelStock || a.p.u.d.slug.localeCompare(b.p.u.d.slug) || a.p.r.model.localeCompare(b.p.r.model) || a.p.id.localeCompare(b.p.id));
     const c = choices[0];
     if (!c) {
       if (includeRequests) {
@@ -159,7 +159,22 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
         stockIn: [...items, ...requests.filter(a => a.status === 'newOrder')].filter(a => a.slug === u.d.slug && a.arrival.startsWith(m.month)).length, confirmedIn: items.filter(a => a.slug === u.d.slug && a.admitted && a.arrival.startsWith(m.month)).length };
     }) };
   });
-  return { ...empty, items, requests, held, monthly, admitted: items.filter(a => a.admitted).map(a => a.chassis), token: hash([plan.id, fingerprint, items, requests]) };
+  // All dealers use the same point in time; actual excludes uncreated Stock orders.
+  const inventoryDate = [today, snapshotDate || '', ...items.map(a => a.arrival), ...requests.filter(a => a.status === 'newOrder').map(a => a.arrival)].sort().at(-1);
+  const inventoryIndex = at(inventoryDate);
+  const inventory = [...units.values()].map(u => {
+    const actualEvents = new Float64Array(priorMonthly.get(u.d.slug).events);
+    for (const a of items.filter(a => a.slug === u.d.slug)) { const t = Math.max(0, at(a.arrival)); if (t < N) actualEvents[t]++; }
+    const actual = curve(u.d.yard.stock, actualEvents, u.d.handover?.avgStock);
+    const complete = u.cap != null && (u.lead != null || u.d.paused) && inventoryIndex >= 0 && inventoryIndex < N;
+    return { slug: u.d.slug, name: u.d.name, group: dealerGroup(u.d), ideal: u.d.target, cap: u.cap,
+      avgStock: u.d.handover?.avgStock ?? null, avgCustomer: u.d.handover?.avgCustomer ?? null,
+      before: complete ? priorMonthly.get(u.d.slug).balance[inventoryIndex] : null,
+      actual: complete ? actual.balance[inventoryIndex] : null, planned: complete ? u.balance[inventoryIndex] : null,
+      peakActual: complete ? Math.max(...actual.balance) : null, peakPlanned: complete ? Math.max(...u.balance) : null,
+      paused: Boolean(u.d.paused || u.d.slug === 'traralgon') };
+  });
+  return { ...empty, items, requests, held, monthly, inventoryDate, inventory, admitted: items.filter(a => a.admitted).map(a => a.chassis), token: hash([plan.id, fingerprint, items, requests]) };
 }
 
 export function productionLineDisplay(line) {

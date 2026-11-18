@@ -137,7 +137,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     if (active) rolling = { ...saved.stockResult, ai: state.stockForecastPlan.ai || null };
     rolling.balanced = Boolean(saved);
     rolling.balancedActive = Boolean(active);
-    const balanced = { status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
+    const balanced = { customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
       canGenerate: Boolean(state?.stockForecastPlan?.fingerprint === fingerprint && !sourceBlockers(sources).length && sources.auCapacity?.size),
       proposal: saved ? { ...saved, stockResult: undefined } : null };
     const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity })
@@ -189,7 +189,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       const body = suppliedBody || await planningBody(c), ctx = await currentLine();
       if (!ctx.state || body.inputToken !== ctx.fingerprint || body.opinionId !== ctx.state.stockForecastPlan?.id || body.expectedId !== (ctx.state.rollingPlan?.id || null)) throw conflict('来源或排产意见已变化，请刷新后重试。');
       const proposal = await runBalancedRolling({ plan: ctx.state.stockForecastPlan, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers, capacity: ctx.sources.auCapacity,
-        settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
+        settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, customerPercent: body.customerPercent, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
       const latest = await currentLine();
       if (latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
       ctx.state.rollingPlanHistory = [...(ctx.state.rollingPlanHistory || []), ...(ctx.state.rollingPlan ? [ctx.state.rollingPlan] : [])].slice(-5);
@@ -214,6 +214,17 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
   app.get('/api/rolling-plan/job', c => {
     if (!rollingJob || rollingJob.id !== c.req.query('id')) return json({ error: '任务已结束或服务已重启，请刷新查看排产结果。' }, 404);
     return json(rollingJob);
+  });
+  app.get('/api/rolling-plan/report.pdf', async c => {
+    try {
+      const { state } = await store.readState(), proposal = state?.rollingPlan;
+      if (!proposal?.report) return json({ error: '请先生成新版排产报告 / Generate a new rolling report first' }, 409);
+      if (c.req.query('id') !== proposal.id) return json({ error: '排产方案已变化，请刷新后下载 / Proposal changed; refresh before downloading' }, 409);
+      const { buildRollingPdf } = await import('./rolling-pdf.mjs');
+      const bytes = await buildRollingPdf(proposal);
+      return new Response(bytes, { headers: { ...noStore, 'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="Rolling_Production_Report_${proposal.createdAt.slice(0, 10)}.pdf"` } });
+    } catch (e) { return json({ error: message(e, '排产报告导出失败 / Report export failed') }, 500); }
   });
   app.post('/api/rolling-plan/clear', async c => {
     if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
