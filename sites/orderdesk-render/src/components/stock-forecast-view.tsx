@@ -11,7 +11,7 @@ type Summary = { cnDelayed: number; cnCompletionDelayed: number; canceled: numbe
 type Action = { chassis: string; model: string; range: string; phase: string; group: string; from: string; to: string; originalDealer: string; proposedDealer: string; originalAu: string; plannedAu: string; originalArrival: string; plannedArrival: string; depart: string; delayDays: number | null; arrivalDelayDays: number | null; action: string; reason: string; policy: string; delayed: boolean; reallocated: boolean };
 type ForecastDealer = DealerCardData & { stats: Summary; cap: number | null; settingsNeeded?: boolean; travelDays: number | null; overCapMonths: number; shortageMonths: number };
 type Section = { dealers: ForecastDealer[]; summary: Summary; actions: Action[] };
-type Report = { dealerSettingsToken: string; displayModels: string[]; notOnYardModels: string[]; today: string; multiplier: number; months: number; own: Section; jv: Section; independent: Section; totals: Summary; sources: Record<string, { at?: string; error?: string; configured?: boolean }>; warnings: { code: string; chassis: string }[]; refreshing?: boolean;
+type Report = { lockedLast?: string; adjustedLockedLast?: string; dealerSettingsToken: string; displayModels: string[]; notOnYardModels: string[]; today: string; multiplier: number; months: number; own: Section; jv: Section; independent: Section; totals: Summary; sources: Record<string, { at?: string; error?: string; configured?: boolean }>; warnings: { code: string; chassis: string }[]; refreshing?: boolean;
   previewToken: string; expectedPlanId: string | null; canSave: boolean; rolling: StockRolling };
 type Config = { multiplier: number; months: number };
 type Filter = 'cancel' | 'delay' | 'pool' | 'reallocate' | 'pending';
@@ -65,12 +65,15 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
   const canCompare = data?.rolling.status === 'ready' && data.multiplier === data.rolling.multiplier && data.months === data.rolling.months;
   const shownMode = canCompare ? chartMode : 'adjustments';
   function chartDealer(d: ForecastDealer): ForecastDealer {
-    if (!data || d.settingsNeeded || shownMode === 'adjustments') return d;
+    if (!data || d.settingsNeeded || !canCompare || shownMode === 'adjustments' && !data.rolling.balancedActive) return d;
     const comparison = data.rolling.monthly.find(x => x.slug === d.slug);
     const monthly = d.monthly.map(m => {
       const p = comparison?.months.find(x => x.month === m.month); if (!p) return m;
-      return { ...m, baselineEndStock: p.before ?? undefined, endStock: shownMode === 'confirmed' ? p.confirmed : p.after,
-        stockIn: (m.stockIn || 0) + (shownMode === 'confirmed' ? p.confirmedIn : p.stockIn), stockOut: shownMode === 'confirmed' ? p.confirmedSold : p.sold, unmet: shownMode === 'confirmed' ? p.confirmedUnmet : p.unmet };
+      const basis = data.rolling.balancedActive && p.basisIn != null;
+      const arrivals = basis ? p.basisArrivals || [] : m.arrivals || [];
+      const added = shownMode === 'adjustments' ? [] : data.rolling.items.filter(a => a.slug === d.slug && a.arrival.startsWith(m.month) && (shownMode !== 'confirmed' || a.admitted)).map(a => ({ chassis: a.chassis, group: 'rolling', auEnd: a.auEnd, arrival: a.arrival, action: 'replenish' }));
+      return { ...m, arrivals: [...arrivals, ...added], baselineEndStock: p.before ?? undefined, endStock: shownMode === 'adjustments' ? p.before : shownMode === 'confirmed' ? p.confirmed : p.after,
+        stockIn: (basis ? p.basisIn || 0 : m.stockIn || 0) + (shownMode === 'adjustments' ? 0 : shownMode === 'confirmed' ? p.confirmedIn : p.stockIn), stockOut: shownMode === 'adjustments' ? p.beforeSold ?? m.stockOut : shownMode === 'confirmed' ? p.confirmedSold : p.sold, unmet: shownMode === 'adjustments' ? p.beforeUnmet ?? m.unmet : shownMode === 'confirmed' ? p.confirmedUnmet : p.unmet };
     });
     return { ...d, monthly, need: Math.max(0, Math.ceil((d.target || 0) - (monthly.at(-1)?.endStock || 0))), overCapMonths: monthly.filter(m => (m.endStock || 0) > (d.cap ?? Infinity)).length, shortageMonths: monthly.filter(m => (m.unmet || 0) > 0).length };
   }
@@ -125,6 +128,7 @@ export default function StockForecastView({ zh }: { zh: boolean }) {
             <span>{label}</span><strong>{value}</strong><small>{note}</small></button>)}
       </div>
       <p className="da-note">{zh ? '上限 = floor(Ideal × 倍数)。国内/锁定/滚动车辆最多延期1个自然月，同时检查AU完工和到店日期；原已在途及下游车辆可能仍导致超限。调整台数按原Dealer统计，到货图按接收Dealer。库存不足时按可用库存交付，缺货量单列。' : 'Ceiling = floor(Ideal × multiplier). Delay ≤ one calendar month for both AU completion and delivery. Existing downstream supply may still exceed the ceiling. Adjustment counts use the original dealer; arrival charts use the receiving dealer. Handovers are capped to available stock; unmet sales are shown separately.'}</p>
+      <p className="da-note">{zh ? `柱子表示“到店Stock”，不是当月AU下线量。原固定线末台AU下线 ${data.lockedLast || '—'}${data.adjustedLockedLast ? `；应用方案后 ${data.adjustedLockedLast}` : ''}。到店需加出车和运输天数，延期或现货转配也可能产生之后月份的柱子；切换补货图还会加入滚动排产。可展开各店“到店柱子来源”核对每台车。` : `Bars show dealer Stock arrivals, not AU production. Original fixed-line last AU finish: ${data.lockedLast || '—'}${data.adjustedLockedLast ? `; after adjustments: ${data.adjustedLockedLast}` : ''}. Dispatch and transit, delays, yard transfers and selected rolling replenishment can create later arrival bars. Expand each dealer's arrival sources to inspect individual dates.`}</p>
       {canCompare && <div className="sf-rolling-toolbar"><b>{zh ? '到货与库存图：' : 'Arrivals and inventory:'}</b>{(['adjustments', 'confirmed', 'recommended'] as const).map(mode => <button className={`pl-export ${shownMode === mode ? 'active' : ''}`} aria-pressed={shownMode === mode} key={mode} onClick={() => setChartMode(mode)}>{mode === 'adjustments' ? (zh ? '取消延期后' : 'After adjustments') : mode === 'confirmed' ? (zh ? '加已确认补货' : 'With confirmed stock') : (zh ? '加全部推荐补货' : 'With all recommended stock')}</button>)}<span>{zh ? '补货图以取消、延期和调拨意见已落实为前提；全部推荐含待新建Stock订单，灰线为补货前库存。' : 'Replenishment assumes saved adjustments are implemented; grey shows stock before replenishment.'}</span></div>}
       {(['own', 'jv', 'independent'] as const).map(which => { const group = data[which]; return <section key={which} aria-label={which === 'own' ? 'Self-owned forecast' : which === 'jv' ? 'JV forecast' : 'Independent forecast'}>
         <div className="da-subhead"><h3 className="da-sub sf-step"><i>{which === 'own' ? 2 : which === 'jv' ? 3 : 4}</i>{which === 'own' ? (zh ? '五家直营店 · 调整后预测' : 'Five self-owned dealers · after changes') : which === 'jv' ? (zh ? 'JV Dealers · 不做Reallocation' : 'JV Dealers · no reallocation') : 'Independent Dealers'}</h3><button className="pl-export" disabled={busy || Boolean(dirty) || Boolean(exporting)} onClick={() => void download(which)}><ArrowDownToLine size={13} />{zh ? `下载${which === 'own' ? '直营' : which === 'jv' ? 'JV' : 'Independent'}清单` : `Download ${which === 'own' ? 'self-owned' : which === 'jv' ? 'JV' : 'independent'} lists`}</button></div>

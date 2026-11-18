@@ -195,7 +195,7 @@ export function buildStockForecast({ dealers, rows = [], today, multiplier = 1.3
       const sum = (a, ids = indices) => ids.reduce((s, i) => s + a[i], 0);
       const incoming = actions.filter(a => a.receive && a.to === u.d.slug && a.plannedArrival.startsWith(month)).length;
       const outgoing = actions.filter(a => a.group === 'yard' && a.from === u.d.slug && a.depart.startsWith(month)).length;
-      return { month, stockIn: incoming, stockOut: r1(sum(u.sold)), plannedSales: r1(u.avg * sum(fractions)), transferOut: outgoing,
+      return { month, arrivals: actions.filter(a => a.receive && a.to === u.d.slug && a.plannedArrival.startsWith(month)).map(a => ({ chassis: a.chassis, group: a.group, auEnd: a.plannedAu || a.originalAu || '', arrival: a.plannedArrival, action: a.action })), stockIn: incoming, stockOut: r1(sum(u.sold)), plannedSales: r1(u.avg * sum(fractions)), transferOut: outgoing,
         unmet: r1(sum(u.missed)), endStock: r1(u.balance[last]), baselineEndStock: r1(before.balance[last]), baselineIn: sum(before.events) };
     });
   }

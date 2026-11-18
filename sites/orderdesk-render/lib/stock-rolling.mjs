@@ -41,7 +41,7 @@ export function saveStockOpinion({ previous, report, fingerprint, actor, now = n
  * also needs the configured CN + sea + AU lead time and a CN start within 60 days.
  * Manual recommendations retain their reference ceiling. Mandatory-quantity
  * proposals optimise inventory instead of using that ceiling as a stop rule. */
-export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capacity = null, settings = {}, orders = {}, blockers = [], candidateSlots = null, includeRequests = false, preallocatedStock = [], fillToCap = false, snapshotDate = null, horizonEnd = null, fullTarget = false, allowDrafts = true }) {
+export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capacity = null, settings = {}, orders = {}, blockers = [], candidateSlots = null, includeRequests = false, preallocatedStock = [], fillToCap = false, snapshotDate = null, horizonEnd = null, fullTarget = false, allowDrafts = true, maxStockMonths = 3 }) {
   const empty = { status: !plan ? 'unsaved' : plan.fingerprint !== fingerprint ? 'stale' : blockers.length ? 'sources' : 'ready',
     planId: plan?.id || null, savedAt: plan?.savedAt || '', savedBy: plan?.savedBy || '', multiplier: plan?.multiplier ?? null, months: plan?.months ?? null,
     items: [], requests: [], admitted: [], requested: plan?.admitted || [], held: {}, monthly: [], token: '', blockers, ai: plan?.ai || null };
@@ -91,7 +91,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
     if (a.group === 'yard' && a.reallocated) event(units.get(a.from), a.depart, a.model, -1);
   }
   for (const u of units.values()) refresh(u);
-  const priorMonthly = new Map([...units].map(([slug, u]) => [slug, { balance: new Float64Array(u.balance), events: new Float64Array(u.events) }]));
+  const priorMonthly = new Map([...units].map(([slug, u]) => [slug, { balance: new Float64Array(u.balance), events: new Float64Array(u.events), sold: new Float64Array(u.sold), missed: new Float64Array(u.missed) }]));
   const unresolved = new Set(actions.filter(a => ['pending', 'blocked'].includes(a.action) && !['customers', 'processing', 'later'].includes(a.group)).map(a => a.from));
   const cancelled = new Set(Object.values(orders).filter(o => ['cancelled', 'completed'].includes(o.status)).map(o => chassisKey(o.chassis)));
   const counts = new Map(); for (const r of line.rows) if (!r.empty) counts.set(chassisKey(r.chassis), (counts.get(chassisKey(r.chassis)) || 0) + 1);
@@ -134,11 +134,11 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
       const arrival = plus(auEnd, p.u.lead), t = at(arrival); if (t < 0 || t >= N) continue;
       const m = modelCurve(p.u, p.r.model), buffer = Math.max(2, Math.ceil(p.u.d.target / Math.max(1, (plan.report.displayModels ?? DISPLAY_MODELS).length)));
       if (!fullTarget && (p.u.balance[t] >= (fillToCap ? p.u.cap : p.u.d.target) - 1e-8 || p.u.max[t] > p.u.cap - 1 + 1e-8 || m.max[t] > buffer - 1 + 1e-8)) continue;
-      choices.push({ p, arrival, t, modelStock: m.balance[t], priority: { own: 0, jv: 1, independent: 2 }[dealerGroup(p.u.d)], policyPenalty: p.policy && p.policy !== 'display' ? 1 : 0, deficit: p.u.max[t] < p.u.d.target - 1e-8, transfer: p.source && p.source !== p.u ? 1 : 0, score: fullTarget ? (p.u.max[t] + 1) / p.u.d.target : p.u.balance[t] / p.u.d.target, cover: p.u.d.handover?.avgStock > 0 ? p.u.balance[t] / p.u.d.handover.avgStock : Infinity });
+      choices.push({ p, arrival, t, modelStock: m.balance[t], priority: { own: 0, jv: 1, independent: 2 }[dealerGroup(p.u.d)], policyPenalty: p.policy && p.policy !== 'display' ? 1 : 0, deficit: p.u.max[t] < p.u.d.target - 1e-8, transfer: p.source && p.source !== p.u ? 1 : 0, score: fullTarget ? (p.u.max[t] + 1) / p.u.d.target : p.u.balance[t] / p.u.d.target, cover: p.u.d.handover?.avgStock > 0 ? (fullTarget ? p.u.max[t] + 1 : p.u.balance[t]) / p.u.d.handover.avgStock : Infinity });
     }
     const actual = choices.filter(c => !c.p.virtual); if (actual.length) choices = actual;
     choices.sort((a, b) => {
-      const order = fullTarget ? a.policyPenalty - b.policyPenalty || Number(b.deficit) - Number(a.deficit)
+      const order = fullTarget ? (Math.max(0, Number.isFinite(a.cover) ? a.cover - maxStockMonths : 1e6) - Math.max(0, Number.isFinite(b.cover) ? b.cover - maxStockMonths : 1e6)) || a.policyPenalty - b.policyPenalty || Number(b.deficit) - Number(a.deficit)
         || (a.deficit && b.deficit ? a.priority - b.priority || a.score - b.score : a.score - b.score || a.priority - b.priority)
         : a.priority - b.priority || a.score - b.score;
       return order || a.cover - b.cover || a.modelStock - b.modelStock || a.transfer - b.transfer
@@ -166,6 +166,8 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
   }
   for (const id of new Set(pool.map(p => p.id))) if (!selectedIds.has(id)) hold('window');
   const monthly = [...units.values()].map(u => {
+    const basisArrivals = actions.filter(a => a.receive && a.to === u.d.slug).map(a => ({ chassis: a.chassis, group: a.group, auEnd: a.plannedAu || a.originalAu || '', arrival: a.plannedArrival, action: a.action }));
+    if (fullTarget) for (const a of actions) if (!a.receive && ['pending', 'blocked'].includes(a.action) && ['pgi', 'transport', 'au', 'sea', 'cn', 'locked'].includes(a.group) && (a.to || a.from) === u.d.slug) basisArrivals.push({ chassis: a.chassis, group: a.group, auEnd: a.originalAu || '', arrival: a.originalArrival || today, action: 'reserve' });
     const confirmedEvents = new Float64Array(priorMonthly.get(u.d.slug).events);
     for (const a of items.filter(a => a.slug === u.d.slug && a.admitted)) confirmedEvents[Math.max(0, at(a.arrival))]++;
     const confirmed = curve(u.d.yard.stock, confirmedEvents, u.d.handover?.avgStock);
@@ -175,7 +177,8 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
       const indices = dates.flatMap((d, i) => d.startsWith(m.month) ? [i] : []), i = indices.at(-1);
       const sum = values => round(indices.reduce((n, t) => n + values[t], 0));
       return { month: m.month, before: !incomplete && i != null ? round(priorMonthly.get(u.d.slug).balance[i]) : null, after: !incomplete && i != null ? round(u.balance[i]) : null,
-        confirmed: !incomplete && i != null ? round(confirmed.balance[i]) : null, sold: sum(u.sold), unmet: sum(u.missed), confirmedSold: sum(confirmed.sold), confirmedUnmet: sum(confirmed.missed),
+        confirmed: !incomplete && i != null ? round(confirmed.balance[i]) : null, sold: sum(u.sold), unmet: sum(u.missed), confirmedSold: sum(confirmed.sold), confirmedUnmet: sum(confirmed.missed), beforeSold: sum(priorMonthly.get(u.d.slug).sold), beforeUnmet: sum(priorMonthly.get(u.d.slug).missed),
+        basisArrivals: basisArrivals.filter(a => a.arrival.startsWith(m.month)), basisIn: basisArrivals.filter(a => a.arrival.startsWith(m.month)).length,
         stockIn: [...items, ...requests.filter(a => a.status === 'newOrder')].filter(a => a.slug === u.d.slug && a.arrival.startsWith(m.month)).length, confirmedIn: items.filter(a => a.slug === u.d.slug && a.admitted && a.arrival.startsWith(m.month)).length };
     }) };
   });
@@ -187,11 +190,13 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
     for (const a of items.filter(a => a.slug === u.d.slug)) { const t = Math.max(0, at(a.arrival)); if (t < N) actualEvents[t]++; }
     const actual = curve(u.d.yard.stock, actualEvents, u.d.handover?.avgStock);
     const complete = u.cap != null && (u.lead != null || u.d.paused || u.d.slug === 'traralgon') && inventoryIndex >= 0 && inventoryIndex < N;
+    const firstIncoming = items.filter(a => a.slug === u.d.slug).map(a => at(a.arrival));
     return { slug: u.d.slug, name: u.d.name, group: dealerGroup(u.d), ideal: u.d.target, cap: u.cap,
       avgStock: u.d.handover?.avgStock ?? null, avgCustomer: u.d.handover?.avgCustomer ?? null,
       before: complete ? priorMonthly.get(u.d.slug).balance[inventoryIndex] : null,
       actual: complete ? actual.balance[inventoryIndex] : null, planned: complete ? u.balance[inventoryIndex] : null,
       uncertainIncoming: uncertainIncoming.get(u.d.slug) || 0,
+      peakAfterReplenishment: complete && firstIncoming.length ? Math.max(...actual.balance.slice(Math.max(0, Math.min(...firstIncoming)))) : null,
       peakActual: complete ? Math.max(...actual.balance) : null, peakPlanned: complete ? Math.max(...u.balance) : null,
       paused: Boolean(u.d.paused || u.d.slug === 'traralgon') };
   });
@@ -199,6 +204,6 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
 }
 
 export function productionLineDisplay(line) {
-  const rows = line.rows.filter(r => r.group !== 'processing' || String(r.customer || '').trim());
+  const rows = line.rows.filter(r => !r.planningExcluded && (r.group !== 'processing' || String(r.customer || '').trim()));
   return { ...line, rows, counts: { ...line.counts, processing: rows.filter(r => r.group === 'processing').length } };
 }

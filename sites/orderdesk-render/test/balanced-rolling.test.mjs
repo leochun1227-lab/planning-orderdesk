@@ -66,7 +66,7 @@ test('existing signed pool Stock can be rescheduled without its old forecast dat
   delayed.input.fingerprint = stockInputFingerprint({ line: delayed.line, dealers: delayed.dealers, capacity: delayed.capacity, settings: delayed.sources.settings });
   delayed.input.plan = saveStockOpinion({ report: buildStockForecast({ dealers: delayed.dealers, rows: delayed.line.rows, today }), fingerprint: delayed.input.fingerprint, actor: 'Test' });
   delayed.input.plan.confirmation = confirmStockAdjustments({ plan: delayed.input.plan, fingerprint: delayed.input.fingerprint, actor: 'Test' });
-  const later = buildBalancedRolling({ ...delayed.input, quantity: 20 });
+  const later = buildBalancedRolling({ ...delayed.input, quantity: 20, maxStockMonths: 24 });
   assert.ok(later.stockCount > 0); assert.ok(later.stockResult.items.every(a => a.stockAfter <= a.cap), 'later or earlier receiving windows remain jointly within the saved ceiling');
   const mon = weekOf(plus(today, 110)), first = mon < plus(today, 110) ? plus(mon, 7) : mon;
   const ready = plus(first, 14);
@@ -202,9 +202,10 @@ test('weekly percentage persists with the proposal; PDF downloads the same saved
   assert.equal((await f.app.request('/api/rolling-plan/report.pdf?id=missing')).status, 409);
   await f.save(await f.get());
   const b = (await f.get('/api/production-line')).balanced;
-  const made = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40, customerPercent: 50 });
+  const made = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40, customerPercent: 50, maxStockMonths: 2.5 });
   assert.equal(made.status, 200, await made.clone().text());
   const live = await f.get('/api/production-line');
+  assert.equal(live.balanced.maxStockMonths, 2.5); assert.equal(live.balanced.proposal.report.maxStockMonths, 2.5);
   assert.equal(live.balanced.customerPercent, 50); assert.equal(live.balanced.proposal.customerCount, 20);
   assert.equal(live.balanced.proposal.report.asOf, (await f.store.readState()).state.rollingPlan.report.asOf);
   const path = `/api/rolling-plan/report.pdf?id=${live.balanced.expectedId}`, before = await f.store.readState();
@@ -222,6 +223,10 @@ test('invalid weekly percentages cannot overwrite a saved plan or mutate orders'
   for (const percent of [-1, 101, null, 'bad', '']) {
     const r = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40, customerPercent: percent });
     assert.equal(r.status, 400); assert.match((await r.json()).error, /比例/);
+  }
+  for (const value of [0, -1, 25, null, '', 'bad']) {
+    const r = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40, maxStockMonths: value });
+    assert.equal(r.status, 400); assert.match((await r.json()).error, /覆盖/);
   }
   assert.deepEqual(await f.store.readState(), before);
 });
