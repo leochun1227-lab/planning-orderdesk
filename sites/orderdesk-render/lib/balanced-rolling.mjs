@@ -1,5 +1,5 @@
 // Quantity is the first objective. Weekly mix is a soft target; physical capacity,
-// valid signatures, lead times and safe dealer inventory remain hard constraints.
+// valid signatures and lead times remain hard constraints; inventory is optimised.
 import { randomUUID } from 'node:crypto';
 import { isRollingCustomer, isStockCustomer, dealerSlug, leadDays } from './dealership.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
@@ -44,7 +44,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
       : r.requestDate && !request && !/^(urgent|紧急|asap)$/i.test(r.requestDate.trim()) ? 'deliveryDate' : '';
     if (reason) { customerHolds.push({ chassis: r.chassis, dealer: r.dealer, model: r.model, signedAt, requestDate: r.requestDate || '', reason }); continue; }
     // Requested delivery <= AU finish, as explicitly requested by Planning.
-    const ready = [earliest, request, dateOnly(r.forecast) ? plus(r.forecast, duration('auDays', 40)) : ''].sort().at(-1);
+    const ready = [earliest, request].sort().at(-1);
     customers.push({ r, signedAt, ready });
   }
   customers.sort((a, b) => a.signedAt.localeCompare(b.signedAt) || (a.r.orderRow ?? 1e9) - (b.r.orderRow ?? 1e9) || a.r.chassis.localeCompare(b.r.chassis));
@@ -54,7 +54,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     v[isStockCustomer(r.customer) ? 'stock' : String(r.customer || '').trim() ? 'customer' : 'unknown']++; fixedByWeek.set(k, v);
   }
   const admitted = line.rows.filter(r => isStockCustomer(r.customer)).map(r => norm(r.chassis));
-  const stockInput = { plan: { ...plan, admitted }, fingerprint, line, dealers, capacity, settings, orders, blockers, fillToCap: true, horizonEnd: latest };
+  const stockInput = { plan: { ...plan, admitted }, fingerprint, line, dealers, capacity, settings, orders, blockers, fillToCap: true, horizonEnd: latest, fullTarget: true, allowDrafts: false };
   const probe = recommendPoolStock({ ...stockInput, candidateSlots: available });
   function chooseCustomers(days) {
     const chosen = new Set();
@@ -117,7 +117,8 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     }
     if (!next || !needed && score(current)[2] >= -1e-8) break;
     let at = available.findIndex((d, i) => i >= cursor && d >= next); if (at < 0) break;
-    const count = Math.min(Math.max(needed, current.byWeek.get(weekOf(after))?.length || 1), available.length - at, current.window.length);
+    const firstWeekSize = current.byWeek.values().next().value?.length || 1;
+    const count = Math.min(Math.max(needed, firstWeekSize), available.length - at, current.window.length);
     const removable = needed ? [...current.stock.requests].sort((a, b) => a.requestedAu.localeCompare(b.requestedAu)).slice(0, count).map(a => a.requestedAu) : current.window.slice(0, count);
     const tally = new Map(); for (const d of removable) tally.set(d, (tally.get(d) || 0) + 1);
     const days = current.window.filter(d => { if (!tally.get(d)) return true; tally.set(d, tally.get(d) - 1); return false; });
@@ -137,12 +138,16 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     return { week, fixedCustomer: f.customer, fixedStock: f.stock, unknown: f.unknown, target: days.length, customerTarget,
       customer, stock: realStock, newOrders, blocked: missing.length - newOrders, customerShare: ratio, plannedCustomerShare: plannedRatio,
       ratioMet: met(total), plannedRatioMet: met(plannedTotal),
-      note: met(total) ? '' : 'Quantity prioritised; eligible orders / delivery dates / safe stock constraints limit this week’s mix.' };
+      note: met(total) ? '' : 'Quantity prioritised; eligible orders or delivery dates limit this week’s mix.' };
   });
   const selected = new Set(customerItems.map(a => a.chassis));
   for (const c of customers) if (!selected.has(norm(c.r.chassis))) customerHolds.push({ chassis: c.r.chassis, dealer: c.r.dealer, model: c.r.model, signedAt: c.signedAt,
     requestDate: c.r.requestDate || '', ready: c.ready, reason: c.ready > latest ? 'notReady' : 'quantityOrMix' });
-  const result = { id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
+  if (schedule.length !== quantity) {
+    const reason = window.length < quantity ? `当前有效AU产能仅有 ${window.length} 个位置` : `当前可排的已签字Towable真实订单仅 ${schedule.length} 台`;
+    throw new Error(`本期必须排满 ${quantity} 台，${reason}，不能保存未排满的方案。请补齐合格订单、交付日期或有效产能后重试。 / Cannot save an incomplete rolling plan (${schedule.length}/${quantity}).`);
+  }
+  const result = { fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
     deliveryRule: 'requestDate<=auEnd', ratioScope: 'rolling-week', earliest, latest, windowSlots: window.length, availableSlots: available.length,
     scheduled: schedule.length, customerCount: customerItems.length, stockCount: stock.items.length,
     newOrders: requests.filter(a => a.status === 'newOrder').length, inventoryBlocked: requests.filter(a => a.status === 'blocked').length,

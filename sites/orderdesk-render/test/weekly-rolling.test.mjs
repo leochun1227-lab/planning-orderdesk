@@ -37,7 +37,7 @@ test('quantity wins over mix: use ready signed customers when safe real Stock is
   assert.equal(p.scheduled, 20); assert.equal(p.stockCount, 3); assert.equal(p.customerCount, 17); assert.equal(p.newOrders, 0);
   assert.ok(p.weeks.some(w => !w.ratioMet));
   const over = fixture({ overstock: true }), q = buildBalancedRolling({ ...over.input, quantity: 20 });
-  assert.equal(q.customerCount, 20); assert.equal(q.stockCount, 0); assert.equal(q.scheduled, 20);
+  assert.equal(q.customerCount, 7); assert.equal(q.stockCount, 13); assert.equal(q.scheduled, 20);
 });
 test('customer receipt date is FIFO; later request dates gate AU finish without losing earlier signatures', () => {
   const f = fixture({ customerCount: 0, stockCount: 0, extraRows: [
@@ -63,31 +63,65 @@ test('Stock priority serves own first, then JV then independent; lowest stock / 
   assert.deepEqual(p.stockResult.items.map(a => a.group), ['own', 'jv', 'independent']);
   const even = fixture({ customerCount: 0, stockCount: 0, extraRows: [row('SRCLOW', { dealer: 'Geelong' }), row('SRCHIGH', { dealer: 'Frankston' })] });
   even.dealers.find(d => d.slug === 'geelong').yard.stock = 0;
-  even.dealers.find(d => d.slug === 'frankston').yard.stock = 5; refresh(even);
+  even.dealers.find(d => d.slug === 'frankston').yard.stock = 5;
+  for (const d of even.dealers) if (!['frankston', 'geelong'].includes(d.slug)) d.yard.stock = 100; refresh(even);
   const q = buildBalancedRolling({ ...even.input, quantity: 1, customerPercent: 0 });
   assert.equal(q.schedule[0].dealer, 'Geelong');
 });
-test('group coverage is weighted, preserves zero-denominator N/A and separates actual from draft orders', () => {
-  const f = fixture({ customerCount: 1, stockCount: 1 }), p = buildBalancedRolling({ ...f.input, quantity: 20 });
-  assert.equal(p.scheduled, 2); assert.equal(p.newOrders, 18); assert.equal(p.quantityMet, false); assert.equal(p.actualGap, 18);
+test('full-quantity group coverage is weighted and zero handover denominators remain N/A', () => {
+  const f = fixture({ customerCount: 10, stockCount: 20 }), p = buildBalancedRolling({ ...f.input, quantity: 20 });
+  assert.equal(p.scheduled, 20); assert.equal(p.newOrders, 0); assert.equal(p.quantityMet, true); assert.equal(p.actualGap, 0);
   assert.equal(p.report.models.reduce((n, r) => n + r.totalActual, 0), p.scheduled);
-  assert.equal(p.report.ranges.reduce((n, r) => n + r.newOrders, 0), p.newOrders);
+  assert.equal(p.report.ranges.reduce((n, r) => n + r.newOrders, 0), 0);
   assert.ok(p.report.groups.every(g => g.stockMonths === null));
   const own = p.report.groups.find(g => g.group === 'own'), list = p.report.dealers.filter(d => d.group === 'own' && d.actual != null);
   assert.equal(own.actualIdeal, list.reduce((n, d) => n + d.actual, 0) / list.reduce((n, d) => n + d.ideal, 0));
-  assert.ok(own.plannedIdeal > own.actualIdeal);
-  assert.equal(p.scheduled + p.newOrders + p.inventoryBlocked + p.capacityGap, p.quantity);
-  assert.ok(p.stockResult.inventory.every(d => d.peakPlanned == null || d.peakPlanned <= Math.max(d.cap, d.peakActual) + 1e-8));
+  assert.equal(own.plannedIdeal, own.actualIdeal);
 });
+
 test('physical customers, cancelled orders and duplicate chassis cannot fill quantity', () => {
   const f = fixture({ customerCount: 0, stockCount: 0, extraRows: [row('SRCPHYSICAL', { customer: 'Physical' }), row('SRCGONE', { customer: 'Gone' }), row('SRCDUP', { customer: 'Dup' }), row('SRCDUP', { customer: 'Dup' })],
     orders: { SRCGONE: { chassis: 'SRCGONE', status: 'cancelled' } } });
   f.dealers[0].vehicles.push({ chassis: 'SRCPHYSICAL', where: 'yard', category: 'customer' }); refresh(f);
-  const p = buildBalancedRolling({ ...f.input, quantity: 5, customerPercent: 100 });
-  assert.equal(p.customerCount, 0); assert.ok(p.customerHolds.some(h => h.chassis === 'SRCPHYSICAL'));
+  assert.throws(() => buildBalancedRolling({ ...f.input, quantity: 5, customerPercent: 100 }), /Cannot save an incomplete/);
 });
 test('real orders later than 60 days of CN starts can fill the quantity within the saved forecast horizon', () => {
   const ready = plus(today, 180), f = fixture({ stockCount: 0, customerCount: 0, weeks: 16, extraRows: [row('SRCLATER', { customer: 'Later', inSchedule: true, requestDate: ready })] });
   const p = buildBalancedRolling({ ...f.input, quantity: 1, customerPercent: 100 });
   assert.equal(p.scheduled, 1); assert.equal(p.schedule[0].chassis, 'SRCLATER'); assert.ok(p.schedule[0].auEnd >= ready);
+});
+
+test('pending inbound does not veto a whole dealer: the 83-customer scenario fills 180 real slots', () => {
+  const f = fixture({ customerCount: 83, stockCount: 140, weeks: 12 });
+  for (const group of ['own', 'jv', 'independent']) for (const d of f.input.plan.report[group].dealers) {
+    f.input.plan.report[group].actions.push({ chassis: `PENDING-${d.slug}`, from: d.slug, model: 'SRC21', group: 'cn', action: 'pending', reason: 'date' });
+  }
+  const legacy = recommendPoolStock(f.input); assert.equal(legacy.items.length, 0);
+  const p = buildBalancedRolling({ ...f.input, quantity: 180, customerPercent: 35 });
+  assert.equal(p.scheduled, 180); assert.equal(p.customerCount, 63); assert.equal(p.stockCount, 117); assert.equal(p.newOrders, 0);
+  assert.equal(new Set(p.schedule.map(a => a.chassis)).size, 180);
+  assert.ok(p.report.uncertainIncoming > 0); assert.ok(p.report.dealers.some(d => d.uncertainIncoming > 0 && d.before > 0));
+  const applied = buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule, rollingSize: 180 });
+  assert.equal(applied.counts.rolling, 180); assert.ok(p.weeks.every(w => w.ratioMet));
+});
+
+test('own pool transfers balance relative stock levels without modifying source orders or entering JV-owned orders', () => {
+  const f = fixture({ stockCount: 0, customerCount: 0, weeks: 12, extraRows: Array.from({ length: 180 }, (_, i) => row(`SRCOWN${i}`, { model: 'SRC21', dealer: 'Frankston' })) });
+  const original = structuredClone(f.sources.board.rows), p = buildBalancedRolling({ ...f.input, quantity: 180, customerPercent: 0 });
+  assert.equal(p.scheduled, 180); assert.ok(p.report.reallocationCount > 0);
+  const active = p.report.dealers.filter(d => d.group === 'own' && !d.paused);
+  assert.ok(Math.max(...active.map(d => d.actualIdeal)) - Math.min(...active.map(d => d.actualIdeal)) <= .041);
+  const applied = buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule });
+  assert.equal(applied.counts.rolling, 180); assert.ok(applied.rows.some(r => r.plannedReallocation && r.originalDealer === 'Frankston'));
+  assert.deepEqual(f.sources.board.rows, original);
+  const jv = fixture({ customerCount: 0, stockCount: 0, extraRows: [row('SRCJVOWN', { dealer: 'Bundaberg' })] });
+  const forged = [{ chassis: 'SRCJVOWN', model: 'SRC21', dealer: 'Geelong', originalDealer: 'Bundaberg', fullTarget: true, reallocated: true, auEnd: plus(today, 120) }];
+  assert.equal(buildProductionLine({ ...jv.sources, today, orders: {}, rollingSchedule: forged }).counts.rolling, 0);
+});
+
+test('nonrecommended models are a fallback cost, while unsigned and actual production still cannot fill slots', () => {
+  const f = fixture({ customerCount: 0, stockCount: 0, extraRows: [row('SRCOLD', { model: 'SRC20' }), row('SRCNEW', { model: 'SRC21' })] });
+  const p = buildBalancedRolling({ ...f.input, quantity: 2, customerPercent: 0 });
+  assert.equal(p.stockCount, 2); assert.equal(p.report.nonRecommendedCount, 1);
+  assert.equal(buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule }).counts.rolling, 2);
 });

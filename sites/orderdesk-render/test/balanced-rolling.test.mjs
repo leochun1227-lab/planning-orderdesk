@@ -28,30 +28,26 @@ test('balanced schedule fills the target with pool stock and customers at 30–4
   assert.deepEqual(f.input, original);
 });
 
-test('pool shortage produces named model/dealer requests with no chassis; overstock requests remain blocked instead of filling capacity', () => {
-  const short = fixture({ stockCount: 3, customerCount: 7 }), p = buildBalancedRolling({ ...short.input, quantity: 20 });
-  assert.equal(p.stockCount, 3); assert.equal(p.customerCount, 7); assert.equal(p.newOrders, 10);
-  assert.equal(p.scheduled + p.newOrders + p.inventoryBlocked + p.capacityGap, 20);
-  assert.ok(p.requests.every(r => r.status === 'newOrder' && r.dealer && r.model && !r.chassis && r.auEnd && r.arrival));
-  assert.ok(p.weeks.every(w => w.plannedCustomerShare >= .3 && w.plannedCustomerShare <= .4));
-  assert.ok(p.weeks.some(w => !w.ratioMet), 'missing orders must not inflate the actual customer/stock ratio denominator');
-  const excess = fixture({ overstock: true, customerCount: 7 }), blocked = buildBalancedRolling({ ...excess.input, quantity: 20 });
-  assert.equal(blocked.stockCount + blocked.newOrders, 0); assert.equal(blocked.inventoryBlocked, 13);
-  assert.ok(blocked.requests.every(r => r.dealer && r.model && r.status === 'blocked' && !r.auEnd && !r.arrival));
-  assert.ok(blocked.weeks.every(w => !w.ratioMet));
-  assert.equal(blocked.scheduled + blocked.newOrders + blocked.inventoryBlocked + blocked.capacityGap, 20);
+test('an incomplete real-order target is rejected; reference ceilings do not create empty slots', () => {
+  const short = fixture({ stockCount: 3, customerCount: 7 });
+  assert.throws(() => buildBalancedRolling({ ...short.input, quantity: 20 }), /Cannot save an incomplete/);
+  const excess = fixture({ overstock: true }), full = buildBalancedRolling({ ...excess.input, quantity: 20 });
+  assert.equal(full.scheduled, 20); assert.equal(full.customerCount, 7); assert.equal(full.stockCount, 13);
+  assert.equal(full.newOrders + full.inventoryBlocked + full.capacityGap, 0);
+  assert.ok(full.stockResult.inventory.some(d => d.peakActual > d.cap));
 });
 
 test('quantity, stale opinions, readiness, motorhomes, duplicates and receiving exclusions are enforced', () => {
   for (const q of ['', null, 0, -1, 1.5, 3001, Infinity, 'bad']) assert.throws(() => rollingQuantity(q));
   const f = fixture({ extraRows: [row('SRM990001', { customer: 'MH customer', model: 'SRM22.1' }), row('SRV990001'), row('SRC970001', { signedAt: '' }), row('SRC970002', { dealer: 'Traralgon' }), row('SRC970003', { model: 'SRC20' }), row('SRC970004'), row('SRC970004')] });
   const p = buildBalancedRolling(f.input);
-  assert.ok(p.schedule.every(a => !/^(SRM|SRV|SRC970)/.test(a.chassis)));
+  assert.ok(p.schedule.every(a => !/^(SRM|SRV)/.test(a.chassis) && !['SRC970001', 'SRC970004'].includes(a.chassis)));
+  assert.ok(p.schedule.filter(a => a.chassis === 'SRC970002').every(a => a.reallocated && a.dealer !== 'Traralgon'));
   assert.ok(!p.requests.some(a => a.dealer === 'Traralgon'));
   assert.throws(() => buildBalancedRolling({ ...f.input, fingerprint: 'changed' }), /保存/);
   assert.throws(() => buildBalancedRolling({ ...f.input, blockers: ['portal'] }), /保存/);
-  const small = fixture({ weeks: 1 }), gap = buildBalancedRolling({ ...small.input, quantity: 100 });
-  assert.equal(gap.capacityGap, 80); assert.equal(gap.scheduled + gap.newOrders + gap.inventoryBlocked + gap.capacityGap, 100);
+  const small = fixture({ weeks: 1 });
+  assert.throws(() => buildBalancedRolling({ ...small.input, quantity: 100 }), /有效AU产能仅有 20/);
 });
 
 test('fixed orders preserve occupied capacity even when chassis/model labels disagree, and count towards the same weekly ratio', () => {
@@ -63,7 +59,7 @@ test('fixed orders preserve occupied capacity even when chassis/model labels dis
   for (const [d, cap] of f.capacity) assert.ok(applied.rows.filter(r => ['locked', 'rolling'].includes(r.group) && r.auEnd === d).length <= cap.towable);
 });
 
-test('the planner searches later receiving windows and gives existing future-ready stock priority over new orders', () => {
+test('existing signed pool Stock can be rescheduled without its old forecast date becoming a production lock', () => {
   const delayed = fixture({ weeks: 9 });
   for (const d of delayed.dealers) if (d.target) { d.yard.stock = d.target + 50; d.handover.avgStock = 10; }
   delayed.input.fingerprint = stockInputFingerprint({ line: delayed.line, dealers: delayed.dealers, capacity: delayed.capacity, settings: delayed.sources.settings });
@@ -74,10 +70,10 @@ test('the planner searches later receiving windows and gives existing future-rea
   const ready = plus(first, 14);
   const future = fixture({ stockCount: 1, orders: { SRC990000: { chassis: 'SRC990000', status: 'active', customer: 'Stock', signedAt: today, forecastDate: plus(ready, -40) } } });
   const p = buildBalancedRolling({ ...future.input, quantity: 20 });
-  assert.equal(p.stockCount, 1); assert.ok(p.schedule.find(a => a.chassis === 'SRC990000').auEnd >= ready);
+  assert.equal(p.stockCount, 1); assert.ok(p.schedule.find(a => a.chassis === 'SRC990000').auEnd >= plus(today, 110), 'a movable pool order is rescheduled from real lead time, not its old forecast slot');
 });
 
-test('later pool orders replace early draft requests before extra new stock is proposed', () => {
+test('old source forecast dates do not force draft requests when real pool orders can fill the target', () => {
   const mon = weekOf(plus(today, 110)), first = mon < plus(today, 110) ? plus(mon, 7) : mon, ready = plus(first, 21);
   const orders = Object.fromEntries(Array.from({ length: 57 }, (_, i) => {
     const chassis = `SRC99${String(i + 3).padStart(4, '0')}`;
@@ -85,7 +81,7 @@ test('later pool orders replace early draft requests before extra new stock is p
   }));
   const f = fixture({ orders, weeks: 7 }), p = buildBalancedRolling({ ...f.input, quantity: 20 });
   assert.equal(p.scheduled, 20); assert.equal(p.newOrders, 0);
-  assert.ok(p.stockCount >= 12); assert.ok(p.schedule.some(a => a.kind === 'stock' && a.auEnd >= ready));
+  assert.ok(p.stockCount >= 12); assert.ok(p.schedule.every(a => a.auEnd >= plus(today, 110)));
   assert.equal(p.scheduled + p.newOrders + p.inventoryBlocked + p.capacityGap, 20);
 });
 
@@ -223,5 +219,25 @@ test('invalid weekly percentages cannot overwrite a saved plan or mutate orders'
     const r = await f.post('/api/rolling-plan', { ...b, quantity: 40, customerPercent: percent });
     assert.equal(r.status, 400); assert.match((await r.json()).error, /比例/);
   }
+  assert.deepEqual(await f.store.readState(), before);
+});
+
+test('a background job cannot replace the saved proposal with a partial quantity', async () => {
+  const f = await apiFixture(); await f.save(await f.get());
+  let b = (await f.get('/api/production-line')).balanced;
+  assert.equal((await f.post('/api/rolling-plan', { ...b, quantity: 40 })).status, 200);
+  f.sources.board.rows = f.sources.board.rows.slice(0, 1);
+  await f.save(await f.get());
+  b = (await f.get('/api/production-line')).balanced;
+  const before = await f.store.readState();
+  const started = await f.post('/api/rolling-plan', { quantity: 180, background: true, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId });
+  assert.equal(started.status, 202);
+  const { jobId } = await started.json(); let job;
+  for (let i = 0; i < 200; i++) {
+    job = await (await f.app.request(`/api/rolling-plan/job?id=${jobId}`)).json();
+    if (job.status !== 'running') break;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(job.status, 'failed'); assert.match(job.error, /不能保存未排满/);
   assert.deepEqual(await f.store.readState(), before);
 });
