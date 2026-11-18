@@ -35,7 +35,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   line = replayed.line; plan = { ...plan, report: replayed.report };
   const duration = (k, d) => Math.max(0, Number.isFinite(Number(settings[k])) ? Number(settings[k]) : d);
   const today = line.today, lead = duration('cnDays', 20) + duration('seaDays', 50) + duration('auDays', 40);
-  const earliest = plus(today, lead), latest = plan.report.planningEnd;
+  const earliest = [plus(today, lead), replayed.replay.rollingBoundary].sort().at(-1), latest = plan.report.planningEnd;
   const fixed = line.rows.filter(r => fixedGroups.has(r.group) && !r.planningExcluded && !r.empty && r.auForecast?.kind === 'towable');
   const available = availableRollingSlots(line, capacity, earliest, latest);
   const inactive = new Set(Object.values(orders).filter(o => ['cancelled', 'completed'].includes(o.status)).map(o => norm(o.chassis)));
@@ -60,7 +60,6 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   }
   const admitted = line.rows.filter(r => isStockCustomer(r.customer)).map(r => norm(r.chassis));
   const stockInput = { plan: { ...plan, admitted }, fingerprint, line, dealers, capacity, settings, orders, blockers, fillToCap: true, horizonEnd: latest, fullTarget: true, allowDrafts: false, maxStockMonths };
-  const probe = recommendPoolStock({ ...stockInput, candidateSlots: available });
   function chooseCustomers(days) {
     const chosen = new Set();
     return [...days].sort().flatMap(day => {
@@ -97,44 +96,9 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     stock.requested = stock.admitted;
     return { byWeek, customerItems, stock, window };
   }
-  function coverCost(p) {
-    return p.stock.inventory.filter(d => d.peakAfterReplenishment != null && d.avgStock > 0).reduce((sum,d) => sum + Math.max(0, d.peakAfterReplenishment / d.avgStock - maxStockMonths) ** 2, 0);
-  }
-  function score(p) {
-    const real = p.customerItems.length + p.stock.items.length, planned = real + p.stock.requests.filter(a => a.status === 'newOrder').length;
-    let deviation = 0;
-    for (const [week, days] of p.byWeek) {
-      const c = p.customerItems.filter(a => a.week === week).length;
-      deviation += Math.abs(c - days.length * share);
-    }
-    return [real, planned, -coverCost(p), -deviation, -stamp(p.window.at(-1) || today)];
-  }
-  const better = (a, b) => { const x = score(a), y = score(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
-  let current = allocateWindow(available.slice(0, quantity)), best = current;
-  let cursor = current.window.length, futureProbe = null;
-  // Compare later working weeks when real orders, weekly mix or handover cover
-  // improve. The bounded search covers up to 64 weeks of the saved horizon.
-  for (let attempt = 0; attempt < 64 && cursor < available.length; attempt++) {
-    const needed = current.stock.requests.length;
-    const unselected = customers.filter(c => !current.customerItems.some(a => a.chassis === norm(c.r.chassis)));
-    const after = current.window.at(-1) || earliest;
-    let next = [...probe.items.filter(a => a.auEnd > after).map(a => a.auEnd), ...unselected.filter(c => c.ready > after).map(c => c.ready)].sort()[0];
-    if (!next && current.stock.requests.some(a => a.status === 'blocked')) {
-      futureProbe ??= recommendPoolStock({ ...stockInput, candidateSlots: available, includeRequests: true, preallocatedStock: probe.items });
-      next = futureProbe.requests.filter(a => a.status === 'newOrder' && a.auEnd > after).map(a => a.auEnd).sort()[0];
-    }
-    if (coverCost(current) > 1e-8) next = [next || available[cursor], plus(weekOf(after), 7)].sort().at(-1);
-    if (!next || !needed && coverCost(current) <= 1e-8 && score(current)[3] >= -1e-8) break;
-    let at = available.findIndex((d, i) => i >= cursor && d >= next); if (at < 0) break;
-    const firstWeekSize = Math.max(1, ...[...current.byWeek.values()].map(days => days.length));
-    const count = Math.min(Math.max(needed, firstWeekSize), available.length - at, current.window.length);
-    const removable = needed ? [...current.stock.requests].sort((a, b) => a.requestedAu.localeCompare(b.requestedAu)).slice(0, count).map(a => a.requestedAu) : current.window.slice(0, count);
-    const tally = new Map(); for (const d of removable) tally.set(d, (tally.get(d) || 0) + 1);
-    const days = current.window.filter(d => { if (!tally.get(d)) return true; tally.set(d, tally.get(d) - 1); return false; });
-    days.push(...available.slice(at, at + removable.length)); days.sort(); cursor = at + removable.length;
-    current = allocateWindow(days); if (better(current, best)) best = current;
-  }
-  const { byWeek, customerItems, stock, window } = best;
+  // The period is the first N remaining places after the adjusted locked line.
+  // Inventory cover and weekly mix must never move or skip these places.
+  const { byWeek, customerItems, stock, window } = allocateWindow(available.slice(0, quantity));
   const schedule = [...customerItems, ...stock.items.map(a => ({ ...a, kind: 'stock', week: weekOf(a.auEnd) }))]
     .sort((a, b) => a.auEnd.localeCompare(b.auEnd) || (a.kind === 'customer' ? 0 : 1) - (b.kind === 'customer' ? 0 : 1) || (a.signedAt || '').localeCompare(b.signedAt || '') || a.chassis.localeCompare(b.chassis));
   const requests = stock.requests.map(a => ({ ...a, week: weekOf(a.requestedAu) }));
@@ -153,13 +117,13 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   for (const c of customers) if (!selected.has(norm(c.r.chassis))) customerHolds.push({ chassis: c.r.chassis, dealer: c.r.dealer, model: c.r.model, signedAt: c.signedAt,
     requestDate: c.r.requestDate || '', ready: c.ready, reason: c.ready > latest ? 'notReady' : 'quantityOrMix' });
   if (schedule.length !== quantity) {
-    const reason = window.length < quantity ? `当前有效AU产能仅有 ${window.length} 个位置` : `当前可排的已签字Towable真实订单仅 ${schedule.length} 台`;
+    const reason = window.length < quantity ? `当前有效AU产能仅有 ${window.length} 个位置` : `锁定线后连续产能窗口内可排的已签字Towable真实订单仅 ${schedule.length} 台`;
     throw new Error(`本期必须排满 ${quantity} 台，${reason}，不能保存未排满的方案。请补齐合格订单、交付日期或有效产能后重试。 / Cannot save an incomplete rolling plan (${schedule.length}/${quantity}).`);
   }
   const c = plan.confirmation;
   const adjustmentBasis = { planId: plan.id, confirmationId: c.id, confirmedAt: c.confirmedAt, confirmedBy: c.confirmedBy, summary: c.summary };
-  const result = { algorithmVersion: 4, confirmationId: c.id, adjustmentBasis, basisReplay: replayed.replay, maxStockMonths, confirmedAdjustments: ['own', 'jv', 'independent'].flatMap(g => plan.report[g]?.actions || []).filter(a => a.action === 'cancel' || a.delayed || a.reallocated), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
-    deliveryRule: 'requestDate<=auEnd', ratioScope: 'rolling-week', earliest, latest, windowSlots: window.length, availableSlots: available.length,
+  const result = { algorithmVersion: 5, confirmationId: c.id, adjustmentBasis, basisReplay: replayed.replay, maxStockMonths, confirmedAdjustments: ['own', 'jv', 'independent'].flatMap(g => plan.report[g]?.actions || []).filter(a => a.action === 'cancel' || a.delayed || a.reallocated), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
+    deliveryRule: 'requestDate<=auEnd', ratioScope: 'rolling-week', start: window[0] || '', end: window.at(-1) || '', earliest, latest, windowSlots: window.length, availableSlots: available.length,
     scheduled: schedule.length, customerCount: customerItems.length, stockCount: stock.items.length,
     newOrders: requests.filter(a => a.status === 'newOrder').length, inventoryBlocked: requests.filter(a => a.status === 'blocked').length,
     capacityGap: Math.max(0, quantity - window.length), customerWaiting: customers.length - customerItems.length, customerHolds,

@@ -40,14 +40,14 @@ export function buildRollingReport(proposal, dealers, plan) {
   const coverExceptions = rows.filter(d => d.coverExcess > 1e-8 || d.stockMonths > proposal.maxStockMonths + 1e-8 || d.stock > 0 && !(d.avgStock > 0))
     .map(d => ({ slug: d.slug, name: d.name, peakStockMonths: d.peakStockMonths ?? d.stockMonths,
       reason: !(d.avgStock > 0) ? 'noStockHandoverHistory' : d.stock > 0 ? 'mandatoryQuantityOrFixedInbound' : 'existingStockOrFixedInbound' }));
-  return { version: 4, maxStockMonths: proposal.maxStockMonths, basisReplay: proposal.basisReplay, coverExceptions,
+  return { version: 5, maxStockMonths: proposal.maxStockMonths, basisReplay: proposal.basisReplay, coverExceptions,
     adjustmentBasis: proposal.adjustmentBasis || null, fullTarget: true,
     nonRecommendedCount: schedule.filter(a => a.kind === 'stock' && a.modelPolicy && a.modelPolicy !== 'display').length,
     reallocationCount: schedule.filter(a => a.reallocated).length, uncertainIncoming: sum(rows, 'uncertainIncoming'),
     asOf: proposal.stockResult.inventoryDate, handoverMonths: HANDOVER_MONTHS, stockCeilingMultiplier: plan.multiplier,
-    inventoryBasis: 'Towable Stock; saved adjustments and fixed inbound supply replayed, daily Stock handovers deducted. Pending existing arrivals are reserved at their known original date or conservatively from today when undated.',
+    inventoryBasis: 'Towable Stock; saved adjustments and fixed inbound supply replayed, daily Stock handovers deducted. Pending existing arrivals are reserved at their adjusted known arrival date or conservatively from today when undated.',
     ratioBasis: 'New rolling orders per AU-finish week, with floor/ceiling rounding; fixed production shown separately.',
-    optimisation: 'Fill the exact real-order quantity. Prioritise staying within the Stock handover-cover target; meet Ideal deficits for own, then JV, then independent, and balance projected peak Stock / Ideal. Mandatory quantity can exceed the cover target when all eligible destinations are constrained; report these exceptions. Reference ceilings and model buffers are soft costs, not reasons to leave capacity empty. Own pool Stock may have a planned receiving-dealer reallocation.',
+    optimisation: 'Fill the exact real-order quantity in the earliest consecutive remaining daily places from the adjusted locked-line tail. Inventory targets cannot postpone or skip production places. Prioritise staying within the Stock handover-cover target; meet Ideal deficits for own, then JV, then independent, and balance projected peak Stock / Ideal. Mandatory quantity can exceed the cover target when all eligible destinations are constrained; report these exceptions. Reference ceilings and model buffers are soft costs, not reasons to leave capacity empty. Own pool Stock may have a planned receiving-dealer reallocation.',
     groups, dealers: rows, models: breakdown([...schedule, ...requests], 'model'), ranges: breakdown([...schedule, ...requests], 'range'),
     unclassified: schedule.filter(a => !dealers.some(d => d.slug === dealerSlug(dealers, a.dealer))).length };
 }

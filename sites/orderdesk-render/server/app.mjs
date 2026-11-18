@@ -135,12 +135,12 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     let rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
       capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
     const confirmation = stockPlanConfirmation(state?.stockForecastPlan, fingerprint);
-    const saved = state?.rollingPlan, active = saved && saved.algorithmVersion === 4 && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && confirmation.status === 'confirmed' && saved.confirmationId === confirmation.id && !sourceBlockers(sources).length;
+    const saved = state?.rollingPlan, active = saved && saved.algorithmVersion === 5 && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && confirmation.status === 'confirmed' && saved.confirmationId === confirmation.id && !sourceBlockers(sources).length;
     if (active) rolling = { ...saved.stockResult, ai: state.stockForecastPlan.ai || null };
     rolling.confirmation = confirmation;
     rolling.balanced = Boolean(saved);
     rolling.balancedActive = Boolean(active);
-    const balanced = { staleReason: saved && !active ? saved.algorithmVersion !== 4 ? 'algorithm' : 'inputs' : null, maxStockMonths: saved?.maxStockMonths ?? 3, confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
+    const balanced = { staleReason: saved && !active ? saved.algorithmVersion !== 5 ? 'algorithm' : 'inputs' : null, maxStockMonths: saved?.maxStockMonths ?? 3, confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
       canGenerate: Boolean(confirmation.status === 'confirmed' && !sourceBlockers(sources).length && sources.auCapacity?.size),
       proposal: saved ? { ...saved, stockResult: undefined } : null };
     const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity, inventoryBasis: state.stockForecastPlan.confirmation.report })
@@ -175,7 +175,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
       return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: state?.stockNotOnYardModels ?? NOT_ON_YARD }),
         dealerSettingsToken: dealerSettingsToken(sources.forecastDealers),
-        lockedLast: baseLine.dealership?.lockedLast || '', adjustedLockedLast: balanced.status === 'ready' ? balanced.proposal?.basisReplay?.lastFixed || '' : '',
+        lockedLast: baseLine.dealership?.lockedLast || '', adjustedLockedLast: balanced.status === 'ready' ? balanced.proposal?.basisReplay?.rollingBoundary || '' : '',
         balanced,
         previewToken: forecastPreviewToken(fingerprint, multiplier, months), expectedPlanId: state?.stockForecastPlan?.id || null,
         canSave: !sourceBlockers(sources).length && Boolean(sources.auCapacity?.size), rolling: { ...rolling, aiConfigured: Boolean(env.OPENAI_API?.trim()) },

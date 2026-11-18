@@ -83,7 +83,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
   if (fullTarget) for (const a of actions) {
     if (!['pending', 'blocked'].includes(a.action) || !['pgi', 'transport', 'au', 'sea', 'cn', 'locked'].includes(a.group) || a.receive) continue;
     const u = units.get(a.to || a.from); if (!u) continue;
-    event(u, a.originalArrival || today, a.model, 1);
+    event(u, a.plannedArrival || a.originalArrival || today, a.model, 1);
     uncertainIncoming.set(u.d.slug, (uncertainIncoming.get(u.d.slug) || 0) + 1);
   }
   for (const a of actions) {
@@ -167,7 +167,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
   for (const id of new Set(pool.map(p => p.id))) if (!selectedIds.has(id)) hold('window');
   const monthly = [...units.values()].map(u => {
     const basisArrivals = actions.filter(a => a.receive && a.to === u.d.slug).map(a => ({ chassis: a.chassis, group: a.group, auEnd: a.plannedAu || a.originalAu || '', arrival: a.plannedArrival, action: a.action }));
-    if (fullTarget) for (const a of actions) if (!a.receive && ['pending', 'blocked'].includes(a.action) && ['pgi', 'transport', 'au', 'sea', 'cn', 'locked'].includes(a.group) && (a.to || a.from) === u.d.slug) basisArrivals.push({ chassis: a.chassis, group: a.group, auEnd: a.originalAu || '', arrival: a.originalArrival || today, action: 'reserve' });
+    if (fullTarget) for (const a of actions) if (!a.receive && ['pending', 'blocked'].includes(a.action) && ['pgi', 'transport', 'au', 'sea', 'cn', 'locked'].includes(a.group) && (a.to || a.from) === u.d.slug) basisArrivals.push({ chassis: a.chassis, group: a.group, auEnd: a.originalAu || '', arrival: a.plannedArrival || a.originalArrival || today, action: 'reserve' });
     const confirmedEvents = new Float64Array(priorMonthly.get(u.d.slug).events);
     for (const a of items.filter(a => a.slug === u.d.slug && a.admitted)) confirmedEvents[Math.max(0, at(a.arrival))]++;
     const confirmed = curve(u.d.yard.stock, confirmedEvents, u.d.handover?.avgStock);
