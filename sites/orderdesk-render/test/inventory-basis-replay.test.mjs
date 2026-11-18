@@ -27,7 +27,8 @@ test('confirmed cancellation releases a real occupied day; delay and reallocatio
   assert.equal(p.schedule[0].auEnd, p.basisReplay.lastLocked);
   assert.equal(p.schedule.filter(a => a.auEnd === p.basisReplay.lastLocked).length, 3, 'use the three remaining places on the last locked day');
   const applied = buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule, inventoryBasis: f.plan.confirmation.report });
-  assert.ok(!applied.rows.some(r => r.chassis === cancel.chassis));
+  assert.equal(applied.rows.find(r => r.chassis === cancel.chassis).group, 'customers');
+  assert.equal(applied.rows.find(r => r.chassis === cancel.chassis).returnedToPool, true);
   const moved = applied.rows.find(r => r.chassis === delay.chassis);
   assert.equal(moved.dealer, 'Geelong'); assert.ok(moved.auEnd >= plus(delay.auEnd, 7));
   for (const a of p.schedule) assert.equal(applied.rows.find(r => r.chassis === a.chassis).auEnd, a.auEnd);

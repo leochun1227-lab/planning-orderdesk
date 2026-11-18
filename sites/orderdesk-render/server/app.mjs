@@ -18,6 +18,7 @@ import { buildStockForecast, forecastMultiplier, DISPLAY_MODELS, NOT_ON_YARD, va
 import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay, dealerSettingsToken } from '../lib/stock-rolling.mjs';
 import { configureDealers, validateDealerSettings } from '../lib/dealership.mjs';
 import { stockPlanConfirmation, confirmStockAdjustments } from '../lib/stock-plan-confirmation.mjs';
+import { replayInventoryBasis } from '../lib/inventory-basis-replay.mjs';
 import { runBalancedRolling } from './balanced-runner.mjs';
 import { reviewStockWithAI } from '../lib/stock-rolling-ai.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
@@ -132,27 +133,39 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     args.notOnYardModels = state?.stockNotOnYardModels ?? NOT_ON_YARD;
     const baseLine = buildProductionLine(args);
     const fingerprint = stockInputFingerprint({ line: baseLine, dealers: sources.forecastDealers, capacity: sources.auCapacity, settings: { ...sources.settings, displayModels: args.displayModels, notOnYardModels: args.notOnYardModels }, orders: args.orders });
-    let rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
-      capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
     const confirmation = stockPlanConfirmation(state?.stockForecastPlan, fingerprint);
-    const saved = state?.rollingPlan, active = saved && saved.algorithmVersion === 5 && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && confirmation.status === 'confirmed' && saved.confirmationId === confirmation.id && !sourceBlockers(sources).length;
+    const chosen = state?.productionStockAdjustments;
+    const applied = Boolean(chosen?.enabled && chosen.planId === state?.stockForecastPlan?.id && chosen.fingerprint === fingerprint
+      && confirmation.status === 'confirmed' && chosen.confirmationId === confirmation.id && !sourceBlockers(sources).length && sources.auCapacity?.size);
+    const adjusted = applied ? replayInventoryBasis({ line: baseLine, report: state.stockForecastPlan.confirmation.report, capacity: sources.auCapacity, dealers: sources.forecastDealers }) : null;
+    const effectivePlan = adjusted ? { ...state.stockForecastPlan, report: adjusted.report } : state?.stockForecastPlan;
+    let rolling = recommendPoolStock({ plan: effectivePlan, fingerprint, line: adjusted?.line || baseLine, dealers: sources.forecastDealers,
+      capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
+    const saved = state?.rollingPlan, active = saved && saved.algorithmVersion === 6 && applied && saved.applicationId === chosen.id
+      && saved.fingerprint === fingerprint && saved.opinionId === state.stockForecastPlan.id && saved.confirmationId === confirmation.id;
     if (active) rolling = { ...saved.stockResult, ai: state.stockForecastPlan.ai || null };
-    rolling.confirmation = confirmation;
-    rolling.balanced = Boolean(saved);
-    rolling.balancedActive = Boolean(active);
-    const balanced = { staleReason: saved && !active ? saved.algorithmVersion !== 5 ? 'algorithm' : 'inputs' : null, maxStockMonths: saved?.maxStockMonths ?? 3, confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
-      canGenerate: Boolean(confirmation.status === 'confirmed' && !sourceBlockers(sources).length && sources.auCapacity?.size),
-      proposal: saved ? { ...saved, stockResult: undefined } : null };
+    rolling.confirmation = confirmation; rolling.adjustmentsApplied = applied;
+    rolling.balanced = Boolean(saved); rolling.balancedActive = Boolean(active);
+    const stockAdjustments = { enabled: applied, requested: Boolean(chosen?.enabled), status: applied ? 'applied' : chosen?.enabled ? 'stale' : 'off',
+      id: chosen?.id || null, inputToken: fingerprint, planId: state?.stockForecastPlan?.id || null,
+      canApply: Boolean(state?.stockForecastPlan?.fingerprint === fingerprint && !sourceBlockers(sources).length && sources.auCapacity?.size),
+      summary: confirmation.summary, appliedAt: chosen?.appliedAt || '', appliedBy: chosen?.appliedBy || '', basis: adjusted?.replay || null };
+    const balanced = { applicationId: applied ? chosen.id : null, adjustmentsApplied: applied,
+      staleReason: saved && !active ? saved.algorithmVersion !== 6 ? 'algorithm' : !applied || saved.applicationId !== chosen?.id ? 'application' : 'inputs' : null,
+      maxStockMonths: saved?.maxStockMonths ?? 3, confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180,
+      inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
+      canGenerate: applied, proposal: saved ? { ...saved, stockResult: undefined } : null };
     const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity, inventoryBasis: state.stockForecastPlan.confirmation.report })
-      : !saved && rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
+      : applied ? buildProductionLine({ ...args, inventoryBasis: state.stockForecastPlan.confirmation.report })
+      : !chosen && !saved && rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
     const recommendations = new Map(rolling.items.map(a => [a.chassis, a]));
     for (const row of line.rows) { const a = recommendations.get(String(row.chassis).replace(/[-\s]/g, '').toUpperCase()); if (a) row.stockRecommendation = a; }
-    return { sources, line, baseLine, state, etag, fingerprint, rolling, balanced };
+    return { sources, line, baseLine, state, etag, fingerprint, rolling, balanced, stockAdjustments };
   }
   app.get('/api/production-line', async c => {
     try {
-      const { sources, line, rolling, balanced } = await currentLine(c.req.query('refresh') === '1');
-      return json({ ...productionLineDisplay(line), balanced, stockRolling: { ...rolling, items: undefined, monthly: undefined }, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
+      const { sources, line, rolling, balanced, stockAdjustments } = await currentLine(c.req.query('refresh') === '1');
+      return json({ ...productionLineDisplay(line), balanced, stockAdjustments, stockRolling: { ...rolling, items: undefined, monthly: undefined }, groups: BOARD_GROUPS, stages: STAGES, sources: sources.status, refreshing: sources.refreshing });
     } catch (e) { return json({ error: message(e, '产线数据暂时读取不到') }, 502); }
   });
   // Dealer analysis (our five dealerships): the same computation, only the dealership part.
@@ -171,11 +184,11 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (![8, 14].includes(months)) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
     } catch (e) { return json({ error: message(e, 'Invalid forecast settings') }, 400); }
     try {
-      const { sources, baseLine, fingerprint, rolling, state, balanced } = await currentLine(c.req.query('refresh') === '1');
+      const { sources, baseLine, fingerprint, rolling, state, balanced, stockAdjustments } = await currentLine(c.req.query('refresh') === '1');
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
       return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: state?.stockNotOnYardModels ?? NOT_ON_YARD }),
         dealerSettingsToken: dealerSettingsToken(sources.forecastDealers),
-        lockedLast: baseLine.dealership?.lockedLast || '', adjustedLockedLast: balanced.status === 'ready' ? balanced.proposal?.basisReplay?.rollingBoundary || '' : '',
+        lockedLast: baseLine.dealership?.lockedLast || '', adjustedLockedLast: stockAdjustments.basis?.rollingBoundary || '',
         balanced,
         previewToken: forecastPreviewToken(fingerprint, multiplier, months), expectedPlanId: state?.stockForecastPlan?.id || null,
         canSave: !sourceBlockers(sources).length && Boolean(sources.auCapacity?.size), rolling: { ...rolling, aiConfigured: Boolean(env.OPENAI_API?.trim()) },
@@ -192,11 +205,13 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     try {
       const body = suppliedBody || await planningBody(c), ctx = await currentLine();
       if (!ctx.state || body.inputToken !== ctx.fingerprint || body.opinionId !== ctx.state.stockForecastPlan?.id || body.expectedId !== (ctx.state.rollingPlan?.id || null)) throw conflict('来源或排产意见已变化，请刷新后重试。');
+      if (!ctx.stockAdjustments.enabled || body.applicationId !== ctx.stockAdjustments.id) throw conflict('请先在产线勾选应用库存调整预测，再重新排产。');
       if (ctx.balanced.confirmation.status !== 'confirmed' || body.confirmationId !== ctx.balanced.confirmation.id) throw conflict('请先确认已保存的库存调整计划作为排产前提，再重新生成。');
       const proposal = await runBalancedRolling({ plan: ctx.state.stockForecastPlan, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers, capacity: ctx.sources.auCapacity,
         settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, customerPercent: body.customerPercent, maxStockMonths: body.maxStockMonths, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
+      proposal.applicationId = ctx.stockAdjustments.id;
       const latest = await currentLine();
-      if (latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || latest.balanced.confirmation.status !== 'confirmed' || latest.balanced.confirmation.id !== proposal.confirmationId || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
+      if (!latest.stockAdjustments.enabled || latest.stockAdjustments.id !== ctx.stockAdjustments.id || latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || latest.balanced.confirmation.status !== 'confirmed' || latest.balanced.confirmation.id !== proposal.confirmationId || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
       ctx.state.rollingPlanHistory = [...(ctx.state.rollingPlanHistory || []), ...(ctx.state.rollingPlan ? [ctx.state.rollingPlan] : [])].slice(-5);
       ctx.state.rollingPlan = proposal;
       ctx.state.stockForecastPlan.admitted = [];
@@ -240,6 +255,28 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       await store.writeState(state, etag); return json({ ok: true });
     } catch (e) { return json({ error: message(e, '撤回失败') }, e.status || 400); }
   });
+  app.post('/api/production-line/stock-adjustments', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    if (rollingBusy) return json({ error: '正在生成排产，请完成后再切换库存调整。' }, 409);
+    try {
+      const body = await planningBody(c), ctx = await currentLine();
+      if (typeof body.enabled !== 'boolean') throw new Error('应用选项无效 / Invalid apply option');
+      if (!ctx.state || body.expectedId !== ctx.stockAdjustments.id) throw conflict('应用选项已变化，请刷新后重试。');
+      if (body.enabled) {
+        const plan = ctx.state.stockForecastPlan;
+        if (!ctx.stockAdjustments.canApply || body.inputToken !== ctx.fingerprint || body.planId !== plan?.id) throw conflict('请先保存当前库存调整预测，刷新后再应用。');
+        if (ctx.stockAdjustments.enabled) return json({ ok: true, applicationId: ctx.stockAdjustments.id });
+        plan.confirmation = confirmStockAdjustments({ plan, fingerprint: ctx.fingerprint, actor: auth.user(c.req.raw)?.name });
+        // Validate all effective rows and capacity before persisting the checkbox.
+        replayInventoryBasis({ line: ctx.baseLine, report: plan.confirmation.report, capacity: ctx.sources.auCapacity, dealers: ctx.sources.forecastDealers });
+        ctx.state.productionStockAdjustments = { id: crypto.randomUUID(), enabled: true, planId: plan.id, confirmationId: plan.confirmation.id,
+          fingerprint: ctx.fingerprint, appliedAt: new Date().toISOString(), appliedBy: auth.user(c.req.raw)?.name || 'Planning' };
+      } else ctx.state.productionStockAdjustments = { id: crypto.randomUUID(), enabled: false };
+      await store.writeState(ctx.state, ctx.etag);
+      return json({ ok: true, applicationId: ctx.state.productionStockAdjustments.id });
+    } catch (e) { return json({ error: message(e, '应用库存调整失败') }, e.status || 400); }
+  });
+
   app.post('/api/stock-forecast/dealers', async c => {
     if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
     try {

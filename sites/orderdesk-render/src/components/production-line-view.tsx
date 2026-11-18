@@ -16,7 +16,7 @@ type Live = { stage: string; since: string; days: number | null; inLongtree: boo
   ship: null | { container: string; voyage: string; vesselStatus: string; arrived: boolean; shippingDate: string; shippingText: string; eta: string; etaText: string; confidence: string; classification: string; containerGr: string; containerStatus: string };
   inSap: boolean; grAt: string; po: string; grDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
-type Row = {
+type Row = { returnedToPool?: boolean;
   originalDealer?: string; plannedReallocation?: boolean; planningRequest?: RollingRequest; liveStageName?: string; liveTone?: string; v?: View;
   id: string; chassis: string; empty: boolean; line: string; source: string; group: string; portalGroup: string; status: string;
   planOrder: number | null; planRef: string; planWeld: string; planAssembly: string;
@@ -42,7 +42,8 @@ type DealerSummary = { slug: string; name: string; target: number; yard: { stock
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   sold: number; projected: number; need: number; stockPicked: number; stockAvailable: number; customerPicked: number };
 type Dealership = { deliveredBy: string; lockedLast: string; size: number; picked: number; customers: number; offsetDays: number; months: number; targetSource: string; dealers: DealerSummary[] };
-type Payload = { balanced?: BalancedRolling; stockRolling?: { status: string; admitted: string[]; requested: string[] }; dealership?: Dealership | null; crmDone?: string[]; auForecast?: AuForecastSummary | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
+type AdjustmentApplication = { enabled: boolean; requested: boolean; status: string; id: string | null; inputToken: string; planId: string | null; canApply: boolean; summary: { cancellations: number; delays: number; reallocations: number } | null; basis: { cancelled: number; shifted: number; reallocated: number; rollingBoundary: string } | null };
+type Payload = { stockAdjustments?: AdjustmentApplication; balanced?: BalancedRolling; stockRolling?: { status: string; admitted: string[]; requested: string[] }; dealership?: Dealership | null; crmDone?: string[]; auForecast?: AuForecastSummary | null; plan?: { name: string; files: string[]; activeUntil: string; count: number } | null; today: string; counts: Record<string, number>; completed: number; averages: Record<string, { days: number | null; count: number }>; rows: Row[]; groups: Group[]; stages: { id: string; zh: string; en: string; group: string }[]; refreshing?: boolean; sources: Record<string, { at: string; error: string; count: number; configured: boolean }> };
 
 const EXEC = ['transport', 'au', 'sea', 'cn'];
 const STAGE_TONE: Record<string, string> = { cn: '#b35c00', sea: '#1971c2', au: '#2b8a3e', done: '#5c677d' };
@@ -112,6 +113,7 @@ function viewOf(r: Row, zh: boolean, today: string, stageName: (id?: string) => 
 
 export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; onOpenOrder: (id: string) => void }) {
   const [data, setData] = useState<Payload | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [applying, setApplying] = useState(false);
   const [group, setGroup] = useState('au'), [line, setLine] = useState('All'), [chip, setChip] = useState(''), [sort, setSort] = useState<SortKey>('status');
   const [query, setQuery] = useState(''), [dealer, setDealer] = useState(''), [detail, setDetail] = useState<Row | null>(null);
   const [orderType, setOrderType] = useState<'all' | 'stock' | 'customer'>('all');
@@ -127,6 +129,16 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       if (!r.ok) throw new Error(body.error || (zh ? '产线数据读取失败' : 'Could not load production data'));
       setData(body);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  }
+  async function applyStockAdjustments(enabled: boolean) {
+    const basis = data?.stockAdjustments; if (!basis) return;
+    setApplying(true); setError('');
+    try {
+      const r = await fetch('/api/production-line/stock-adjustments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, expectedId: basis.id, inputToken: basis.inputToken, planId: basis.planId }) });
+      const body = await readApiResponse(r); if (!r.ok) throw new Error(body.error || 'Could not apply inventory adjustments');
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setApplying(false); }
   }
   useEffect(() => { void load(); }, []);
   const groups = data?.groups || [];
@@ -177,7 +189,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
           if (r.auEnd && f?.beforeArrival) return <div className="pl-two" title={zh ? `排到的日子早于 Shipment ETA ${f.beforeArrival}` : `Slot is before the Shipment ETA ${f.beforeArrival}`}><strong>{r.auEnd}</strong><small className="pl-late">{zh ? `早于到港 ETA ${f.beforeArrival}` : `before ETA ${f.beforeArrival}`}</small></div>;
           if (r.auEnd && f) return <div className="pl-two" title={zh ? `${KIND_NAME[f.kind || 'towable']} 第 ${f.seq} 台 · 当天 ${KIND_NAME[f.kind || 'towable']} 产能 ${f.perDay} 台` : ''}><strong>{r.auEnd}</strong><small>{zh ? '预计' : 'expected'} · {KIND_NAME[f.kind || 'towable']} #{f.seq}</small></div>;
           return r.auEnd ? <strong>{r.auEnd}</strong> : <span className="pl-quiet">{zh ? '待排' : 'To schedule'}</span>; } },
-      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.planningRequest ? <><strong>{zh ? '补单建议' : 'New order needed'}</strong><small>{zh ? '未建单 · 未占实际产能' : 'Not ordered · not booked'}</small></> : p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}</small></>}</div> },
+      { field: 'chassis', headerName: zh ? '车架号 / 订单' : 'Chassis / order', pinned: 'left', width: 150, cellRenderer: (p: any) => p.data && <div className="pl-two">{p.data.planningRequest ? <><strong>{zh ? '补单建议' : 'New order needed'}</strong><small>{zh ? '未建单 · 未占实际产能' : 'Not ordered · not booked'}</small></> : p.data.build ? <><strong>{`${p.data.build.month} #${p.data.build.seq}`}</strong><small>{zh ? `第 ${p.data.build.day} 个工作日 · 当天 ${p.data.build.perDay} 台` : `working day ${p.data.build.day} · ${p.data.build.perDay} that day`}</small></> : <><button className="chassis-link" onClick={() => setDetail(p.data)}>{p.data.empty ? 'Empty slot' : p.value}</button><small>{p.data.line} · {p.data.source}{p.data.returnedToPool ? (zh ? ' · 取消排产退回' : ' · returned from cancelled production') : ''}</small></>}</div> },
       { colId: 'issues', headerName: zh ? '异常' : 'Issues', pinned: 'left', width: 128, valueGetter: p => (p.data?.issues || []).map(i => ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code).join(zh ? '、' : ', '),
         tooltipValueGetter: p => (p.data?.issues || []).map(i => (zh ? i.zh : i.en)).join(zh ? '；' : '; ') || undefined,
         cellRenderer: (p: any) => p.data && p.data.issues.length > 0 && <div className="pl-issues">{p.data.issues.map((i: Issue) => <span key={i.code} className={`pl-issue ${i.level}`}>{ISSUE_SHORT[i.code]?.[zh ? 0 : 1] || i.code}</span>)}</div> },
@@ -275,6 +287,8 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
   const note = searching ? (zh ? '在所有分组里搜索' : 'Searching every group') : [planNote, fcNote, g?.note].filter(Boolean).join(' · ');
 
   return <section className="table-panel schedule-panel pl-panel">
+    <div className="sf-rolling-toolbar"><label><input type="checkbox" checked={Boolean(data?.stockAdjustments?.enabled)} disabled={busy || applying || !data?.stockAdjustments || (!data.stockAdjustments.enabled && !data.stockAdjustments.canApply)} onChange={e => void applyStockAdjustments(e.target.checked)} /> {zh ? '应用库存调整预测 · 全部延期、取消及Reallocation' : 'Apply inventory forecast · all delays, cancellations and reallocations'}</label>{applying && <span>{zh ? '正在应用…' : 'Applying…'}</span>}<a href="#stock-forecast">{zh ? '打开库存调整预测' : 'Open stock forecast'}</a></div>
+    <p className="da-note">{data?.stockAdjustments?.enabled ? (zh ? `已应用保存方案：取消排产退回订单池 ${data.stockAdjustments.basis?.cancelled || 0} 台；延期 ${data.stockAdjustments.summary?.delays || 0} 台；Reallocation ${data.stockAdjustments.summary?.reallocations || 0} 台。调整后锁定线末台AU完工 ${data.stockAdjustments.basis?.rollingBoundary || '—'}。请重新按数量排产。` : `Saved inventory adjustments applied. ${data.stockAdjustments.basis?.cancelled || 0} cancellations returned to the pool; ${data.stockAdjustments.summary?.delays || 0} delays; ${data.stockAdjustments.summary?.reallocations || 0} reallocations. Adjusted locked-line tail: ${data.stockAdjustments.basis?.rollingBoundary || '—'}. Generate the rolling quantity next.`) : data?.stockAdjustments?.status === 'stale' ? (zh ? '保存方案或来源已变化，原应用已暂停。请重新保存预测并勾选应用。' : 'The saved plan or source changed. Save the forecast and apply it again.') : (zh ? '先保存库存调整预测，再勾选应用。取消只撤销原排产，车辆返回订单池；仅已保存的Reallocation改变Dealer。' : 'Save the inventory forecast, then tick Apply. Production cancellations return vehicles to the pool; only saved reallocations change dealers.')}</p>
     <div className="pl-overview">
       {card(['dealership'], Store, 'Dealership', dl ? (zh ? `在途 ${dl.dealers.reduce((n, d) => n + d.transit.total, 0)} · 月均交付 stock ${dl.dealers.reduce((n, d) => n + d.handover.avgStock, 0).toFixed(0)}` : `Transit ${dl.dealers.reduce((n, d) => n + d.transit.total, 0)}`) : '', 'dealership')}
       {card(['transport', 'au', 'sea', 'cn'], Factory, zh ? '01 · 产线执行' : '01 · Execution', `Transport ${counts.transport ?? 0} · ${zh ? '澳洲' : 'AU'} ${counts.au ?? 0} · ${zh ? '海运' : 'Sea'} ${counts.sea ?? 0} · ${zh ? '国内' : 'CN'} ${counts.cn ?? 0}`, 'transport')}
@@ -295,7 +309,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
     </div>
     {group === 'dealership' && !searching && dl && <p className="pl-dealer-note">{zh ? `五家店里 new stock ${dl.dealers.reduce((n, d) => n + d.yard.stock, 0)} 台、在途 ${dl.dealers.reduce((n, d) => n + d.transit.total - (d.transit.transportStock || 0) - (d.transit.transportCustomer || 0), 0)} 台；交付、目标库存、还缺多少见左侧「Dealer 分析」页。` : 'Handovers, targets and stock needs: see the Dealer analysis page.'}</p>}
     {(group === 'rolling' || group === 'customers') && !searching && <p className="pl-dealer-note">{zh ? `按已保存库存意见组合Customer与Stock，下方可输入本期总数量；已选Stock ${data?.stockRolling?.admitted.length || 0} 台。` : `Signed Towable customer orders have priority. Stock needs a saved opinion and explicit confirmation; ${data?.stockRolling?.admitted.length || 0} confirmed.`} <a href="#stock-forecast">{zh ? '核对补货建议' : 'Review stock recommendations'}</a>{data?.stockRolling?.status === 'stale' && <b className="pl-delay"> · {zh ? '来源已变化，请重新保存意见' : 'Inputs changed; save a new opinion'}</b>}</p>}
-    {group === 'rolling' && !searching && data?.balanced && <BalancedRollingPanel data={data.balanced} zh={zh} disabled={busy} reload={() => load()} />}
+    {group === 'rolling' && !searching && data?.balanced && <BalancedRollingPanel data={data.balanced} zh={zh} disabled={busy || applying} reload={() => load()} />}
     <div className="schedule-toolbar pl-toolbar">
       <div className="seg" role="group">{[['All', zh ? '全部' : 'All'], ['SRV', 'SRV'], ['SRM', 'SRM'], ['Towable', 'Towable']].map(([v, l]) => <button key={v} aria-pressed={line === v} onClick={() => setLine(v)}>{l}</button>)}</div>
       {!searching && <div className="chips">{CHIPS.map(c => <button key={c.id} className={`chip ${chip === c.id ? 'on' : ''}`} onClick={() => setChip(chip === c.id ? '' : c.id)}><i style={{ background: chipCounts[c.id] ? '#ffe3e3' : '#f1f3f5', color: chipCounts[c.id] ? '#c92a2a' : '#868e96' }}>{chipCounts[c.id] ?? 0}</i>{zh ? c.zh : c.en}</button>)}</div>}

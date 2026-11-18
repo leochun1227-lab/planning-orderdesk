@@ -26,7 +26,7 @@ export function replayInventoryBasis({ line, report, capacity, dealers = [], inc
     r.auEnd = day; r.auForecast = { ...r.auForecast, kind, seq: offsets.get(`${day}:${kind}`) + used.get(`${day}:${kind}`), perDay: capacity.get(day)[kind] };
     delete r.auForecast.note;
     if (a?.reallocated) {
-      r.originalDealer ||= r.dealer;
+      r.originalDealer ||= r.dealer; r.plannedReallocation = true;
       const target = dealers.find(d => d.slug === a.to);
       r.dealer = a.proposedDealer || target?.name || r.dealer;
     }
@@ -50,7 +50,11 @@ export function replayInventoryBasis({ line, report, capacity, dealers = [], inc
   for (const r of line.rows.filter(r => fixed.has(r.group) && !r.empty)) {
     const a = by.get(norm(r.chassis));
     if (r.group === 'locked') {
-      if (a?.action === 'cancel') { r.planningExcluded = true; r.auEnd = ''; r.auForecast = undefined; cancelled.push(r.chassis); }
+      if (a?.action === 'cancel') {
+        r.group = 'customers'; r.returnedToPool = true; r.locked = false; r.inventoryAdjustment = 'returnToPool';
+        for (const key of ['auEnd', 'auStart', 'auPlanStart', 'auPlanEnd', 'cnStart', 'cnPlanStart', 'cnPlanEnd', 'cnPlanMonth', 'planStart', 'planEnd', 'expectedEnd', 'planRef', 'planWeld', 'planAssembly', 'rollingNotBefore']) r[key] = '';
+        r.planOrder = null; r.auForecast = undefined; cancelled.push(r.chassis);
+      }
       else locked.push({ r, a });
       continue;
     }
@@ -85,4 +89,22 @@ export function availableRollingSlots(line, capacity, earliest, latest) {
   const occupied = new Map();
   for (const r of line.rows) if (fixed.has(r.group) && !r.planningExcluded && r.auEnd && capacityKind(r.model) === 'towable') occupied.set(r.auEnd, (occupied.get(r.auEnd) || 0) + 1);
   return [...capacity].sort(([a],[b]) => a.localeCompare(b)).flatMap(([day,c]) => day >= earliest && day <= latest ? Array(Math.max(0,c.towable-(occupied.get(day)||0))).fill(day) : []);
+}
+
+/** Add the saved rolling dates to a basis that was already applied before pool selection. */
+export function appendRollingToBasis({ rows, capacity, today, basis }) {
+  const used = new Map(), offsets = new Map(), totals = { towable: 0, srm: 0, srv: 0 };
+  for (const day of [...capacity.keys()].filter(d => d >= today).sort()) for (const kind of Object.keys(totals)) {
+    offsets.set(`${day}:${kind}`, totals[kind]); totals[kind] += capacity.get(day)?.[kind] || 0;
+  }
+  for (const r of rows.filter(r => fixed.has(r.group) && !r.empty && r.auEnd)) {
+    const key = `${r.auEnd}:${capacityKind(r.model)}`; used.set(key, (used.get(key) || 0) + 1);
+  }
+  for (const r of rows.filter(r => r.group === 'rolling' && !r.empty)) {
+    const day = r.rollingNotBefore, kind = capacityKind(r.model), key = `${day}:${kind}`, occupied = used.get(key) || 0;
+    if (!day || day < basis.rollingBoundary || occupied >= (capacity.get(day)?.[kind] || 0)) throw new Error('滚动排产与已应用调整后的产能冲突，请重新生成 / Rolling capacity conflict with applied inventory basis');
+    used.set(key, occupied + 1); r.auEnd = day;
+    r.auForecast = { ...r.auForecast, kind, seq: offsets.get(key) + occupied + 1, perDay: capacity.get(day)[kind] };
+    delete r.auForecast.note;
+  }
 }
