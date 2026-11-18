@@ -17,7 +17,7 @@ type Live = { stage: string; since: string; days: number | null; inLongtree: boo
   inSap: boolean; grAt: string; po: string; grDoc: string; giAt: string; giDoc: string; inProduction: boolean; location: string; station: string; flags: string[]; enteredAt: string; stationSince: string; daysAtStation: number | null; history: { stage: string; location: string; at: string }[] };
 type View = { grText: string; grSub: string; giText: string; giSub: string; ltText: string; ltSub: string; prodText: string; prodSub: string; judge: string; judgeSub: string; judgeTone: string; differs: boolean };
 type Row = {
-  planningRequest?: RollingRequest; liveStageName?: string; liveTone?: string; v?: View;
+  originalDealer?: string; plannedReallocation?: boolean; planningRequest?: RollingRequest; liveStageName?: string; liveTone?: string; v?: View;
   id: string; chassis: string; empty: boolean; line: string; source: string; group: string; portalGroup: string; status: string;
   planOrder: number | null; planRef: string; planWeld: string; planAssembly: string;
   regent: string; regentRank: number; regentDerived: boolean; ltRank: number; ltField: string; ltDate: string; issues: Issue[]; dealer: string; model: string; modelYear?: string; requestDate?: string; range: string; customer: string; orderId: string;
@@ -188,7 +188,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
         cellRenderer: (p: any) => p.data?.planningRequest ? <Two strong top={p.value} sub={`${zh ? '目标AU完工' : 'Target AU finish'} ${p.data.planningRequest.requestedAu}`} /> : p.data?.stockRecommendation ? <Two strong top={p.value} sub={`${zh ? 'AU完工' : 'AU finish'} ${p.data.stockRecommendation.auEnd} · ${zh ? '到店' : 'arrival'} ${p.data.stockRecommendation.arrival}`} /> : <span className="pl-quiet">—</span> } as ColDef<Row>] : []),
       ...(group === 'locked' && !searching ? [{ colId: 'plan', headerName: zh ? 'Longtree 排产计划' : 'Longtree plan', width: 168, valueGetter: (p: any) => p.data?.planOrder ? `#${p.data.planOrder}` : '',
         cellRenderer: (p: any) => p.data && (p.data.planOrder ? <Two strong top={`#${p.data.planOrder} · ${p.data.planRef.replace(/2026-(\d+)#/g, (_: string, m: string) => `${Number(m)}${zh ? '月' : '/'}#`)}`} sub={[p.data.planWeld && `${zh ? '钣焊' : 'Weld'} ${p.data.planWeld}`, p.data.planAssembly && `${zh ? '总装' : 'Assy'} ${p.data.planAssembly}`].filter(Boolean).join(' · ')} /> : <span className="pl-missing">{zh ? '不在计划' : 'Not in plan'}</span>) }] : []),
-      { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
+      { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.data?.plannedReallocation ? <span title={`${zh ? '计划转配，原Dealer：' : 'Planned transfer from: '}${p.data.originalDealer}`}>{p.value} ↔</span> : p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
       { field: 'customer', headerName: 'Customer name', width: 190, tooltipField: 'customer', cellClass: 'pl-clip' },
       { field: 'modelYear', headerName: 'Model year', width: 90 },
       { field: 'requestDate', headerName: 'Request Delivery Date', headerTooltip: zh ? '排产表的 Request Delivery Date（空 = 没有要求日期）；SRM / SRV 用 Orderdesk 订单的日期' : 'Orderlist Request Delivery Date (blank = none); SRM / SRV from the Orderdesk order', width: 118,
