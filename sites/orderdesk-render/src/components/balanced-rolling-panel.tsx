@@ -31,16 +31,22 @@ export default function BalancedRollingPanel({ data, zh, disabled, reload }: { d
   }
   const p = data.proposal;
   return <section className="sf-rolling br-panel" aria-label={zh ? '按数量平衡排产' : 'Balanced rolling plan'}>
+    <div className="br-head"><h3>{zh ? '按数量平衡排产' : 'Balanced rolling plan'}</h3><a className="br-link" href="#stock-forecast">{zh ? '打开库存调整预测 →' : 'Open stock forecast →'}</a></div>
     <div className="sf-rolling-toolbar"><b>{zh ? '滚动排产数量' : 'Rolling quantity'}</b><input aria-label={zh ? '滚动排产数量' : 'Rolling quantity'} type="number" min={1} max={3000} value={quantity} disabled={busy || disabled} onChange={e => setQuantity(e.target.value)} />
       <button className="sf-calculate" disabled={busy || disabled || !data.canGenerate} onClick={() => void submit()}>{busy ? (zh ? '正在排产…' : 'Scheduling…') : (zh ? '按数量自动排产' : 'Generate and apply')}</button>
       {data.expectedId && <button className="pl-export" disabled={busy || disabled} onClick={() => void submit(true)}>{zh ? '撤回本次安排' : 'Clear this proposal'}</button>}
-      <a href="#stock-forecast">{zh ? '库存调整预测 · 直营 / JV / Independent' : 'Stock forecast · self-owned / JV / independent'}</a></div>
+    </div>
     <p className="da-note">{zh ? '每周Towable澳洲下线目标：Customer 30%–40%，其余Stock。按接收窗口及产能先选库存池，保留前序固定产能；方案以已保存的取消、延期和调拨意见落实为前提。补单建议标明Dealer及车型，尚未建单或占用实际产能。比例无法达到时如实列出。' : 'Weekly Towable AU finish target: 30–40% customer, remainder stock. Prefers the pool within receiving windows and preserves fixed capacity. The proposal assumes saved cancellations, delays and transfers are implemented. New-order suggestions are not actual orders or booked production; unachievable ratios remain visible.'}</p>
     {!data.canGenerate && <p className="sf-warning">{zh ? '请先在库存调整预测中补齐必要设置并保存当前意见。' : 'Complete necessary settings and save the current stock opinion first.'}</p>}
     {data.status === 'stale' && <p className="sf-warning" role="status">{zh ? '来源或库存意见已变化，原排产暂缓；请重新生成。下方周表是原方案。' : 'Sources or inventory opinions changed. Regenerate the held proposal; the weekly table below is the previous proposal.'}</p>}
     {error && <p className="message error compact-msg" role="alert">{error}</p>}
-    {p && <><div className="br-counts"><b>{zh ? `目标 ${p.quantity} · 实际订单 ${p.scheduled}（Customer ${p.customerCount} / Stock ${p.stockCount}）` : `Target ${p.quantity} · actual orders ${p.scheduled} (customer ${p.customerCount} / stock ${p.stockCount})`}</b>
-      <span>{zh ? `待新建Stock ${p.newOrders} · 库存/设置受限 ${p.inventoryBlocked} · 接收及产能窗口缺口 ${p.capacityGap} · 待后续排产客户 ${p.customerWaiting}` : `New stock orders needed ${p.newOrders} · inventory/settings blocked ${p.inventoryBlocked} · window gap ${p.capacityGap} · customers waiting ${p.customerWaiting}`}</span></div>
+    {p && <><div className="br-counts">
+      {([
+        ['', zh ? '目标' : 'Target', p.quantity], ['main', zh ? '实际订单' : 'Actual orders', p.scheduled], ['cust', 'Customer', p.customerCount], ['stock', 'Stock', p.stockCount],
+        ['warn', zh ? '待新建Stock' : 'New stock orders needed', p.newOrders], ['warn', zh ? '库存/设置受限' : 'Inventory/settings blocked', p.inventoryBlocked],
+        ['warn', zh ? '接收及产能窗口缺口' : 'Window gap', p.capacityGap], ['', zh ? '待后续排产客户' : 'Customers waiting', p.customerWaiting],
+      ] as [string, string, number][]).map(([tone, label, value]) => <span key={label} className={`br-chip ${tone} ${value ? '' : 'zero'}`}>{label}<b>{value}</b></span>)}
+    </div>
       <details className="sf-rules" open><summary>{zh ? '每周澳洲下线 · 含前序固定产量' : 'Weekly AU finishes · includes fixed supply'}</summary><div className="da-table br-weeks"><table><thead><tr><th>{zh ? '周一' : 'Week commencing'}</th><th>Customer</th><th>Stock</th><th>{zh ? '待补Stock单' : 'Stock orders needed'}</th><th>{zh ? '受限缺口' : 'Blocked'}</th><th>{zh ? '实际订单客户比例' : 'Customer share of actual orders'}</th><th>{zh ? '补单落实后比例' : 'Share after new orders'}</th></tr></thead><tbody>{p.weeks.map(w => <tr key={w.week}><td>{w.week}</td><td title={`fixed ${w.fixedCustomer} + rolling ${w.customer}`}>{w.fixedCustomer + w.customer}</td><td title={`fixed ${w.fixedStock} + rolling ${w.stock}`}>{w.fixedStock + w.stock}</td><td>{w.newOrders}</td><td>{w.blocked}{w.unknown ? ` · ${w.unknown} ?` : ''}</td><td className={w.ratioMet ? 'br-ok' : 'br-gap'}>{pct(w.customerShare)}</td><td>{pct(w.plannedCustomerShare)}</td></tr>)}</tbody></table></div></details>
     </>}
   </section>;

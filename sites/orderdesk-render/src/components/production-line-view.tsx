@@ -188,7 +188,7 @@ export default function ProductionLineView({ zh, onOpenOrder }: { zh: boolean; o
       ...(group === 'locked' && !searching ? [{ colId: 'plan', headerName: zh ? 'Longtree 排产计划' : 'Longtree plan', width: 168, valueGetter: (p: any) => p.data?.planOrder ? `#${p.data.planOrder}` : '',
         cellRenderer: (p: any) => p.data && (p.data.planOrder ? <Two strong top={`#${p.data.planOrder} · ${p.data.planRef.replace(/2026-(\d+)#/g, (_: string, m: string) => `${Number(m)}${zh ? '月' : '/'}#`)}`} sub={[p.data.planWeld && `${zh ? '钣焊' : 'Weld'} ${p.data.planWeld}`, p.data.planAssembly && `${zh ? '总装' : 'Assy'} ${p.data.planAssembly}`].filter(Boolean).join(' · ')} /> : <span className="pl-missing">{zh ? '不在计划' : 'Not in plan'}</span>) }] : []),
       { field: 'dealer', headerName: 'Dealer', width: 116, cellRenderer: (p: any) => p.value || <span className="pl-missing">{zh ? '待分配 Dealer' : 'No dealer'}</span> },
-      { field: 'customer', headerName: 'Customer name', width: 190 },
+      { field: 'customer', headerName: 'Customer name', width: 190, tooltipField: 'customer', cellClass: 'pl-clip' },
       { field: 'modelYear', headerName: 'Model year', width: 90 },
       { field: 'requestDate', headerName: 'Request Delivery Date', headerTooltip: zh ? '排产表的 Request Delivery Date（空 = 没有要求日期）；SRM / SRV 用 Orderdesk 订单的日期' : 'Orderlist Request Delivery Date (blank = none); SRM / SRV from the Orderdesk order', width: 118,
         comparator: (a: string, b: string) => (a || '~').localeCompare(b || '~') },
