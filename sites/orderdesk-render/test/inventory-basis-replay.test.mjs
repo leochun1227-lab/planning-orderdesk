@@ -5,7 +5,7 @@ import { buildBalancedRolling } from '../lib/balanced-rolling.mjs';
 import { buildProductionLine } from '../lib/production-line.mjs';
 import { buildStockForecast } from '../lib/stock-forecast.mjs';
 import { confirmStockAdjustments } from '../lib/stock-plan-confirmation.mjs';
-import { availableRollingSlots } from '../lib/inventory-basis-replay.mjs';
+import { availableRollingSlots, replayInventoryBasis } from '../lib/inventory-basis-replay.mjs';
 
 const reconfirm = f => { f.plan.confirmation = confirmStockAdjustments({ plan: f.plan, fingerprint: f.fingerprint }); };
 test('confirmed cancellation releases a real occupied day; delay and reallocation reserve later capacity and apply identically on display', () => {
@@ -23,7 +23,9 @@ test('confirmed cancellation releases a real occupied day; delay and reallocatio
   const p = buildBalancedRolling({ ...f.input, quantity: 4, customerPercent: 100 });
   assert.equal(p.basisReplay.cancelled, 1); assert.equal(p.basisReplay.shifted, 1); assert.equal(p.basisReplay.reallocated, 1);
   assert.equal(before.schedule.filter(a => a.auEnd === cancel.auEnd).length, 2);
-  assert.equal(p.schedule.filter(a => a.auEnd === cancel.auEnd).length, 4, 'both released places are actually reusable');
+  assert.equal(p.schedule.filter(a => a.auEnd === cancel.auEnd).length, 0, 'rolling cannot use holes before the adjusted locked-line tail');
+  assert.equal(p.schedule[0].auEnd, p.basisReplay.lastLocked);
+  assert.equal(p.schedule.filter(a => a.auEnd === p.basisReplay.lastLocked).length, 3, 'use the three remaining places on the last locked day');
   const applied = buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule, inventoryBasis: f.plan.confirmation.report });
   assert.ok(!applied.rows.some(r => r.chassis === cancel.chassis));
   const moved = applied.rows.find(r => r.chassis === delay.chassis);
@@ -59,14 +61,52 @@ test('arrival bar details reconcile to totals and retain distinct AU-finish and 
   for (const d of p.stockResult.monthly) for (const m of d.months) assert.equal(m.basisIn, m.basisArrivals.length);
 });
 
-test('later working weeks are compared to reduce handover cover while preserving the exact real-order quantity', () => {
+test('handover cover can change allocation but cannot move the continuous production window', () => {
   const f = fixture({ customerCount: 0, stockCount: 40, weeks: 12 });
   for (const d of f.dealers) if (d.target) { d.yard.stock = 100; d.handover.avgStock = 10; }
   f.plan.report = buildStockForecast({ dealers: f.dealers, rows: f.line.rows, today }); reconfirm(f);
   const early = buildBalancedRolling({ ...f.input, quantity: 4, customerPercent: 0, maxStockMonths: 24 });
   const balanced = buildBalancedRolling({ ...f.input, quantity: 4, customerPercent: 0, maxStockMonths: 3 });
   assert.equal(balanced.scheduled, 4); assert.equal(balanced.customerCount, 0);
-  assert.ok(balanced.schedule[0].auEnd >= plus(early.schedule[0].auEnd, 35));
-  const cost = p => p.stockResult.inventory.filter(d => d.peakAfterReplenishment != null).reduce((n,d) => n + Math.max(0, d.peakAfterReplenishment / d.avgStock - 3) ** 2, 0);
-  assert.ok(cost(balanced) < cost(early));
+  assert.deepEqual(balanced.schedule.map(a => a.auEnd), early.schedule.map(a => a.auEnd));
+  assert.ok(balanced.report.coverExceptions.length, 'report excess rather than moving the period');
+});
+
+test('cancellation repacks surviving locked quantities and moves the rolling boundary earlier without crossing it', () => {
+  const f = fixture({ customerCount: 20, stockCount: 0, extraRows: Array.from({ length: 10 }, (_,i) => row(`SRCLOCK${i}`, { group: 'locked', customer: 'Fixed customer' })) });
+  const fixed = f.line.rows.filter(r => r.group === 'locked');
+  const before = buildBalancedRolling({ ...f.input, quantity: 8, customerPercent: 100 });
+  for (const r of fixed.slice(1,7)) f.plan.report.own.actions.push({ chassis: r.chassis, group: 'locked', action: 'cancel', receive: false });
+  reconfirm(f);
+  const p = buildBalancedRolling({ ...f.input, quantity: 8, customerPercent: 100 });
+  assert.ok(p.basisReplay.lastLocked < before.basisReplay.lastLocked);
+  assert.ok(p.schedule[0].auEnd < before.schedule[0].auEnd);
+  const applied = buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule, inventoryBasis: f.plan.confirmation.report });
+  assert.equal(applied.counts.locked, 4);
+  assert.equal(applied.dealership.lockedLast, p.basisReplay.lastLocked);
+  for (const a of p.schedule) assert.equal(applied.rows.find(r => r.chassis === a.chassis).auEnd, a.auEnd);
+});
+test('locked-line boundary uses Towable capacity and the remaining last-day places across weekends', () => {
+  const f = fixture({ customerCount: 20, stockCount: 0, extraRows: [row('SRCLOCK', { group: 'locked', customer: 'Fixed' }), row('SRMMH', { group: 'locked', model: 'SRM22.1', customer: 'Motorhome' })] });
+  const futureDays = [...f.capacity.keys()].filter(d => d > today).sort();
+  const friday = futureDays.find(d => new Date(d + 'T00:00:00Z').getUTCDay() === 5);
+  f.plan.report.own.actions.push({ chassis: 'SRCLOCK', group: 'locked', action: 'delay', delayed: true, plannedAu: friday, receive: false });
+  f.plan.report.own.actions.push({ chassis: 'SRMMH', group: 'locked', action: 'delay', delayed: true, plannedAu: plus(friday,7), receive: false }); reconfirm(f);
+  const p = buildBalancedRolling({ ...f.input, quantity: 8, customerPercent: 100 });
+  const expected = availableRollingSlots({ rows: [{ group: 'locked', model: 'SRC21', auEnd: friday }] }, f.capacity, friday, p.latest).slice(0,8);
+  assert.deepEqual(p.schedule.map(a => a.auEnd), expected);
+  assert.equal(p.basisReplay.rollingBoundary, friday, 'later Motorhome capacity must not postpone Towable rolling places');
+  assert.equal(p.schedule.filter(a => a.auEnd === friday).length, 3);
+  assert.equal(p.schedule[3].auEnd, plus(friday,3));
+});
+
+test('repacked pending locked supply reserves its updated dealer-arrival date', () => {
+  const line = { today: '2027-05-03', rows: [row('CANCEL', { group: 'locked', auEnd: '2027-05-03', auForecast: { seq: 1 } }), row('PENDING', { group: 'locked', auEnd: '2027-05-04', auForecast: { seq: 2 } })] };
+  const report = { own: { actions: [{ chassis: 'CANCEL', action: 'cancel', group: 'locked' }, { chassis: 'PENDING', action: 'pending', group: 'locked', originalAu: '2027-05-04', originalArrival: '2027-05-08', from: 'frankston', receive: false }] } };
+  const capacity = new Map(['2027-05-03','2027-05-04'].map(d => [d, { towable: 1, srm: 0, srv: 0 }]));
+  const replayed = replayInventoryBasis({ line, report, capacity, dealers: [{ slug: 'frankston', name: 'Frankston', travelDays: 1 }] });
+  const a = replayed.report.own.actions.find(a => a.chassis === 'PENDING');
+  assert.equal(a.plannedAu, '2027-05-03'); assert.equal(a.plannedArrival, '2027-05-07');
+  assert.equal(a.receive, false, 'capacity replay must not claim that a pending arrival has been confirmed');
+  assert.equal(report.own.actions[1].plannedArrival, undefined, 'the confirmed snapshot remains immutable');
 });

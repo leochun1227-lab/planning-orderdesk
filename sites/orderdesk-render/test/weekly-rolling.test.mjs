@@ -42,16 +42,17 @@ test('quantity wins over mix: use ready signed customers when safe real Stock is
   assert.equal(q.customerCount, 7); assert.equal(q.stockCount, 13); assert.equal(q.scheduled, 20);
 });
 test('customer receipt date is FIFO; later request dates gate AU finish without losing earlier signatures', () => {
-  const f = fixture({ customerCount: 0, stockCount: 0, extraRows: [
+  const f = fixture({ customerCount: 0, stockCount: 60, extraRows: [
     row('SRCFIFO1', { customer: 'Old', signedAt: plus(today, -25), inSchedule: true, requestDate: plus(today, 128) }),
     row('SRCFIFO2', { customer: 'Second', signedAt: plus(today, -20), inSchedule: true, requestDate: plus(today, 111) }),
     row('SRCFIFO3', { customer: 'Third', signedAt: plus(today, -10), inSchedule: true, requestDate: plus(today, 111) }),
     row('SRCUNSIGNED', { customer: 'Unsigned', signedAt: '' }),
     row('SRCBADDATE', { customer: 'Bad date', signedAt: today, inSchedule: true, requestDate: '(fixed in August)' }),
   ] });
-  const p = buildBalancedRolling({ ...f.input, quantity: 3, customerPercent: 100 });
+  const p = buildBalancedRolling({ ...f.input, quantity: 60, customerPercent: 100 });
   assert.equal(p.customerCount, 3);
-  assert.ok(p.schedule.every(a => a.requestDate <= a.auEnd));
+  assert.equal(p.stockCount, 57);
+  assert.ok(p.schedule.filter(a => a.kind === 'customer').every(a => a.requestDate <= a.auEnd));
   assert.ok(p.customerHolds.some(h => h.chassis === 'SRCUNSIGNED' && h.reason === 'unsigned'));
   assert.ok(p.customerHolds.some(h => h.chassis === 'SRCBADDATE' && h.reason === 'deliveryDate'));
   const same = fixture({ customerCount: 0, stockCount: 0, extraRows: [
@@ -87,10 +88,9 @@ test('physical customers, cancelled orders and duplicate chassis cannot fill qua
   f.dealers[0].vehicles.push({ chassis: 'SRCPHYSICAL', where: 'yard', category: 'customer' }); refresh(f);
   assert.throws(() => buildBalancedRolling({ ...f.input, quantity: 5, customerPercent: 100 }), /Cannot save an incomplete/);
 });
-test('real orders later than 60 days of CN starts can fill the quantity within the saved forecast horizon', () => {
+test('future-only customers cannot move the entire rolling window past empty earlier capacity', () => {
   const ready = plus(today, 180), f = fixture({ stockCount: 0, customerCount: 0, weeks: 16, extraRows: [row('SRCLATER', { customer: 'Later', inSchedule: true, requestDate: ready })] });
-  const p = buildBalancedRolling({ ...f.input, quantity: 1, customerPercent: 100 });
-  assert.equal(p.scheduled, 1); assert.equal(p.schedule[0].chassis, 'SRCLATER'); assert.ok(p.schedule[0].auEnd >= ready);
+  assert.throws(() => buildBalancedRolling({ ...f.input, quantity: 1, customerPercent: 100 }), /连续产能窗口/);
 });
 
 test('pending inbound does not veto a whole dealer: the 83-customer scenario fills 180 real slots', () => {

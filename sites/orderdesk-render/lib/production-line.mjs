@@ -410,7 +410,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today, inventoryBasis, dealersAll || dealers || []) : null;
   for (const id of Object.keys(counts)) if (id !== 'dealership') counts[id] = rows.filter(r => r.group === id && !r.planningExcluded).length;
   if (dealership) {
-    if (inventoryBasis) lockedLast = rows.filter(r => ['au', 'sea', 'cn', 'locked'].includes(r.group) && !r.planningExcluded).reduce((last,r) => r.auEnd > last ? r.auEnd : last, '');
+    if (inventoryBasis) lockedLast = auForecast.basisReplay.rollingBoundary;
     dealership.lockedLast = lockedLast;
     const rolling = rows.filter(r => r.group === 'rolling');
     rollingEnd = rolling.some(r => !r.auEnd || r.auForecast?.note === 'overflow') ? '' : rolling.reduce((last, r) => r.auEnd > last ? r.auEnd : last, lockedLast);

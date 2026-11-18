@@ -304,3 +304,14 @@ test('repeated confirmation is idempotent, guarded by the expected version and t
   f.auth.user = () => null;
   assert.equal((await f.post('/api/stock-forecast/confirm', body)).status, 401);
 });
+
+test('previous non-contiguous scheduling versions are held until regenerated using the locked-line boundary', async () => {
+  const f = await apiFixture(); await f.save(await f.get());
+  const b = (await f.get('/api/production-line')).balanced;
+  assert.equal((await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40 })).status, 200);
+  const saved = await f.store.readState(); saved.state.rollingPlan.algorithmVersion = 4;
+  await f.store.writeState(saved.state, saved.etag);
+  const live = await f.get('/api/production-line');
+  assert.equal(live.balanced.status, 'stale'); assert.equal(live.balanced.staleReason, 'algorithm');
+  assert.equal(live.counts.rolling, 0); assert.equal(live.balanced.canGenerate, true);
+});
