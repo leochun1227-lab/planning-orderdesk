@@ -2,6 +2,7 @@ import { buildProductionLine } from '../../lib/production-line.mjs';
 import { buildStockForecast, DISPLAY_MODELS } from '../../lib/stock-forecast.mjs';
 import { configureDealers, dealerSnapshot } from '../../lib/dealership.mjs';
 import { stockInputFingerprint, saveStockOpinion } from '../../lib/stock-rolling.mjs';
+import { confirmStockAdjustments } from '../../lib/stock-plan-confirmation.mjs';
 import { dayInSydney } from '../../lib/order-engine.mjs';
 import { weekOf } from '../../lib/balanced-rolling.mjs';
 export const today = dayInSydney(), plus = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -20,6 +21,7 @@ export function fixture({ customerCount = 40, stockCount = 60, overstock = false
   const fingerprint = stockInputFingerprint({ line, dealers, capacity, settings: sources.settings, orders });
   const report = buildStockForecast({ dealers, rows: line.rows, today });
   const plan = saveStockOpinion({ report, fingerprint, actor: 'Test' });
+  plan.confirmation = confirmStockAdjustments({ plan, fingerprint, actor: 'Test' });
   return { sources, rows, dealers, capacity, line, fingerprint, report, plan, input: { plan, fingerprint, line, dealers, capacity, settings: sources.settings, orders, quantity: 40 } };
 }
 

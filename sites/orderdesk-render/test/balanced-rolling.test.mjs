@@ -6,6 +6,7 @@ import { buildStockForecast, DISPLAY_MODELS } from '../lib/stock-forecast.mjs';
 import { configureDealers, dealerList, dealerSnapshot, validateDealerSettings } from '../lib/dealership.mjs';
 import { stockInputFingerprint, saveStockOpinion } from '../lib/stock-rolling.mjs';
 import { forecastExportSheets, buildForecastWorkbook } from '../lib/stock-forecast-export.mjs';
+import { confirmStockAdjustments } from '../lib/stock-plan-confirmation.mjs';
 import { createApp } from '../server/app.mjs';
 import { createStore } from '../server/store.mjs';
 import { createMemoryFirebase } from '../server/firebase.mjs';
@@ -64,6 +65,7 @@ test('existing signed pool Stock can be rescheduled without its old forecast dat
   for (const d of delayed.dealers) if (d.target) { d.yard.stock = d.target + 50; d.handover.avgStock = 10; }
   delayed.input.fingerprint = stockInputFingerprint({ line: delayed.line, dealers: delayed.dealers, capacity: delayed.capacity, settings: delayed.sources.settings });
   delayed.input.plan = saveStockOpinion({ report: buildStockForecast({ dealers: delayed.dealers, rows: delayed.line.rows, today }), fingerprint: delayed.input.fingerprint, actor: 'Test' });
+  delayed.input.plan.confirmation = confirmStockAdjustments({ plan: delayed.input.plan, fingerprint: delayed.input.fingerprint, actor: 'Test' });
   const later = buildBalancedRolling({ ...delayed.input, quantity: 20 });
   assert.ok(later.stockCount > 0); assert.ok(later.stockResult.items.every(a => a.stockAfter <= a.cap), 'later or earlier receiving windows remain jointly within the saved ceiling');
   const mon = weekOf(plus(today, 110)), first = mon < plus(today, 110) ? plus(mon, 7) : mon;
@@ -117,14 +119,16 @@ async function apiFixture() {
   const auth = { user: () => ({ name: 'Planner' }) }, app = createApp({ store, auth, env: {}, productionSource: { current: async () => f.sources } });
   const get = async (path = '/api/stock-forecast') => { const r = await app.request(path); assert.equal(r.status, 200, await r.clone().text()); return r.json(); };
   const post = (path, body, origin = 'http://localhost') => app.request(path, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const save = async report => { const r = await post('/api/stock-forecast/save', { multiplier: report.multiplier, months: report.months, previewToken: report.previewToken, expectedPlanId: report.expectedPlanId }); assert.equal(r.status, 200, await r.clone().text()); };
+  const save = async (report, confirm = true) => { const r = await post('/api/stock-forecast/save', { multiplier: report.multiplier, months: report.months, previewToken: report.previewToken, expectedPlanId: report.expectedPlanId }); assert.equal(r.status, 200, await r.clone().text());
+    if (confirm) { const p = (await get()).rolling.confirmation; const c = await post('/api/stock-forecast/confirm', { planId: p.planId, inputToken: p.inputToken, reportToken: p.reportToken, expectedConfirmationId: p.id }); assert.equal(c.status, 200, await c.clone().text()); }
+  };
   return { ...f, firebase, store, auth, app, get, post, save };
 }
 
 test('API generation is persistent, applies exact pool dates, aligns the forecast and can be cleared without editing orders', async () => {
   const f = await apiFixture(); await f.save(await f.get());
   const initial = await f.get('/api/production-line'), b = initial.balanced;
-  const body = { quantity: 40, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId };
+  const body = { quantity: 40, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId, confirmationId: b.confirmation.id };
   assert.equal((await f.post('/api/rolling-plan', body, 'https://wrong.example')).status, 403);
   const made = await f.post('/api/rolling-plan', body); assert.equal(made.status, 200, await made.clone().text());
   const live = await f.get('/api/production-line'), forecast = await f.get();
@@ -144,7 +148,7 @@ test('API generation is persistent, applies exact pool dates, aligns the forecas
 
 test('a generation job leaves liveness responsive and rejects overlapping generation requests', async () => {
   const f = await apiFixture(); await f.save(await f.get());
-  const { balanced: b } = await f.get('/api/production-line'), body = { ...b, quantity: 40 };
+  const { balanced: b } = await f.get('/api/production-line'), body = { ...b, confirmationId: b.confirmation.id, quantity: 40 };
   const pending = f.post('/api/rolling-plan', body);
   const repeated = await f.post('/api/rolling-plan', body);
   assert.equal(repeated.status, 409);
@@ -164,7 +168,7 @@ test('independent settings persist and invalidate stale opinions and rolling sch
   assert.equal((await f.post('/api/stock-forecast/dealers', { dealers: [{ slug: 'frankston', target: 10, travelDays: 7 }], previous: report.dealerSettingsToken })).status, 400);
   await f.save(report);
   let live = await f.get('/api/production-line');
-  assert.equal((await f.post('/api/rolling-plan', { ...live.balanced, quantity: 20 })).status, 200);
+  assert.equal((await f.post('/api/rolling-plan', { ...live.balanced, confirmationId: live.balanced.confirmation.id, quantity: 20 })).status, 200);
   f.sources.board.rows[0].signedAt = '';
   live = await f.get('/api/production-line'); assert.equal(live.balanced.status, 'stale');
   assert.equal(live.rows.filter(r => r.rollingKind === 'stock').length, 0);
@@ -174,7 +178,7 @@ test('independent settings persist and invalidate stale opinions and rolling sch
 test('background generation returns immediately and exposes the saved result through polling', async () => {
   const f = await apiFixture(); await f.save(await f.get());
   const { balanced: b } = await f.get('/api/production-line');
-  const response = await f.post('/api/rolling-plan', { ...b, quantity: 20, background: true });
+  const response = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 20, background: true });
   assert.equal(response.status, 202); const { jobId } = await response.json();
   let job;
   for (let i = 0; i < 100; i++) {
@@ -198,7 +202,7 @@ test('weekly percentage persists with the proposal; PDF downloads the same saved
   assert.equal((await f.app.request('/api/rolling-plan/report.pdf?id=missing')).status, 409);
   await f.save(await f.get());
   const b = (await f.get('/api/production-line')).balanced;
-  const made = await f.post('/api/rolling-plan', { ...b, quantity: 40, customerPercent: 50 });
+  const made = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40, customerPercent: 50 });
   assert.equal(made.status, 200, await made.clone().text());
   const live = await f.get('/api/production-line');
   assert.equal(live.balanced.customerPercent, 50); assert.equal(live.balanced.proposal.customerCount, 20);
@@ -216,7 +220,7 @@ test('invalid weekly percentages cannot overwrite a saved plan or mutate orders'
   const f = await apiFixture(); await f.save(await f.get());
   const b = (await f.get('/api/production-line')).balanced, before = await f.store.readState();
   for (const percent of [-1, 101, null, 'bad', '']) {
-    const r = await f.post('/api/rolling-plan', { ...b, quantity: 40, customerPercent: percent });
+    const r = await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40, customerPercent: percent });
     assert.equal(r.status, 400); assert.match((await r.json()).error, /比例/);
   }
   assert.deepEqual(await f.store.readState(), before);
@@ -225,12 +229,12 @@ test('invalid weekly percentages cannot overwrite a saved plan or mutate orders'
 test('a background job cannot replace the saved proposal with a partial quantity', async () => {
   const f = await apiFixture(); await f.save(await f.get());
   let b = (await f.get('/api/production-line')).balanced;
-  assert.equal((await f.post('/api/rolling-plan', { ...b, quantity: 40 })).status, 200);
+  assert.equal((await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 40 })).status, 200);
   f.sources.board.rows = f.sources.board.rows.slice(0, 1);
   await f.save(await f.get());
   b = (await f.get('/api/production-line')).balanced;
   const before = await f.store.readState();
-  const started = await f.post('/api/rolling-plan', { quantity: 180, background: true, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId });
+  const started = await f.post('/api/rolling-plan', { quantity: 180, background: true, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId, confirmationId: b.confirmation.id });
   assert.equal(started.status, 202);
   const { jobId } = await started.json(); let job;
   for (let i = 0; i < 200; i++) {
@@ -240,4 +244,58 @@ test('a background job cannot replace the saved proposal with a partial quantity
   }
   assert.equal(job.status, 'failed'); assert.match(job.error, /不能保存未排满/);
   assert.deepEqual(await f.store.readState(), before);
+});
+
+test('save → explicit confirmation → generation persists the chosen inventory basis without changing orders', async () => {
+  const f = await apiFixture(), originalOrders = (await f.store.readState()).state.orders;
+  await f.save(await f.get(), false);
+  let forecast = await f.get(), b = (await f.get('/api/production-line')).balanced;
+  assert.equal(b.canGenerate, false); assert.equal(b.confirmation.status, 'unconfirmed');
+  const payload = () => ({ quantity: 40, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId, confirmationId: b.confirmation.id });
+  const blocked = await f.post('/api/rolling-plan', payload()); assert.equal(blocked.status, 409); assert.match((await blocked.json()).error, /确认/);
+  const c = forecast.rolling.confirmation, confirm = { planId: c.planId, inputToken: c.inputToken, reportToken: c.reportToken, expectedConfirmationId: c.id };
+  assert.equal((await f.post('/api/stock-forecast/confirm', confirm, 'https://wrong.example')).status, 403);
+  assert.equal((await f.post('/api/stock-forecast/confirm', { ...confirm, reportToken: 'old-token' })).status, 409);
+  assert.equal((await f.post('/api/stock-forecast/confirm', { ...confirm, multiplier: 2, months: 14 })).status, 409);
+  assert.equal((await f.post('/api/stock-forecast/confirm', confirm)).status, 200);
+  b = (await f.get('/api/production-line')).balanced;
+  assert.equal(b.canGenerate, true); assert.equal(b.confirmation.status, 'confirmed');
+  assert.equal((await f.post('/api/rolling-plan', { ...payload(), confirmationId: null })).status, 409);
+  assert.equal((await f.post('/api/rolling-plan', payload())).status, 200);
+  const saved = (await createStore(f.firebase).readState()).state;
+  assert.equal(saved.stockForecastPlan.confirmation.confirmedBy, 'Planner');
+  assert.equal(saved.rollingPlan.confirmationId, saved.stockForecastPlan.confirmation.id);
+  assert.equal(saved.rollingPlan.adjustmentBasis.planId, saved.stockForecastPlan.id);
+  assert.ok(saved.stockForecastPlan.confirmation.report.own.actions.every(a => a.action !== 'pool'));
+  assert.ok(saved.rollingPlan.adjustmentBasis.summary.poolExcluded > 0);
+  assert.equal(saved.rollingPlan.scheduled, 40); assert.ok(saved.rollingPlan.stockCount > 0);
+  assert.deepEqual(saved.orders, originalOrders);
+});
+
+test('saving again and changed source data both invalidate the previous confirmation', async () => {
+  const f = await apiFixture(); await f.save(await f.get());
+  const first = (await f.get('/api/production-line')).balanced;
+  const firstConfirmation = first.confirmation.id;
+  await f.save(await f.get(), false);
+  let b = (await f.get('/api/production-line')).balanced;
+  assert.equal(b.canGenerate, false); assert.equal(b.confirmation.status, 'unconfirmed'); assert.equal(b.confirmation.id, null);
+  assert.equal((await f.post('/api/rolling-plan', { quantity: 20, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId, confirmationId: firstConfirmation })).status, 409);
+  let c = b.confirmation;
+  assert.equal((await f.post('/api/stock-forecast/confirm', { planId: c.planId, inputToken: c.inputToken, reportToken: c.reportToken, expectedConfirmationId: null })).status, 200);
+  b = (await f.get('/api/production-line')).balanced; assert.notEqual(b.confirmation.id, firstConfirmation);
+  c = b.confirmation; f.sources.board.rows[0].signedAt = '';
+  b = (await f.get('/api/production-line')).balanced;
+  assert.equal(b.canGenerate, false); assert.equal(b.confirmation.status, 'stale');
+  assert.equal((await f.post('/api/stock-forecast/confirm', { planId: c.planId, inputToken: b.inputToken, reportToken: c.reportToken, expectedConfirmationId: c.id })).status, 409);
+});
+
+test('repeated confirmation is idempotent, guarded by the expected version and the normal session', async () => {
+  const f = await apiFixture(); await f.save(await f.get());
+  const c = (await f.get()).rolling.confirmation, before = await f.store.readState();
+  const body = { planId: c.planId, inputToken: c.inputToken, reportToken: c.reportToken, expectedConfirmationId: c.id };
+  assert.equal((await f.post('/api/stock-forecast/confirm', body)).status, 200);
+  assert.deepEqual(await f.store.readState(), before);
+  assert.equal((await f.post('/api/stock-forecast/confirm', { ...body, expectedConfirmationId: null })).status, 409);
+  f.auth.user = () => null;
+  assert.equal((await f.post('/api/stock-forecast/confirm', body)).status, 401);
 });

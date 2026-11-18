@@ -42,6 +42,10 @@ export async function buildRollingPdf(p) {
   paragraph(p.quantityMet ? 'The requested quantity is fully assigned to real orders.' : `The requested quantity is not fully covered by real orders. ${p.newOrders} draft Stock orders remain to be created; blocked places do not reserve production capacity.`);
   paragraph(`Quantity takes priority over the weekly mix. Customers are selected by signed-plan receipt date, earliest first among orders ready for the slot. Unsigned, duplicate, inactive and physical vehicles are excluded. AU-finish horizon: ${p.earliest} to ${p.latest} AU finish (configured lead time included).`);
   paragraph(`Stock allocation: fill Ideal deficits for Self-owned, then JV, then Independent. Additional units minimise projected peak Stock / Ideal. Ideal x ${p.report.stockCeilingMultiplier} is a reference, not a production cutoff. Results assume saved cancellations, delays and reallocations are implemented; this report does not execute them.`);
+  if (p.adjustmentBasis) {
+    const b = p.adjustmentBasis, s = b.summary;
+    paragraph(`Confirmed inventory basis: ${b.confirmedAt} by ${b.confirmedBy}. ${s.cancellations} cancellations, ${s.delays} delays, ${s.reallocations} reallocations; ${s.total} distinct chassis. ${s.poolExcluded} pool do-not-build rows excluded. This proposal uses that saved snapshot, assuming its adjustments are implemented.`);
+  }
   if (p.report.uncertainIncoming) paragraph(`Stock forecasts include ${p.report.uncertainIncoming} pending existing inbound vehicles, reserved at their original arrival dates or conservatively from today if undated. Confirm these dates before acting on stock coverage.`);
   if (p.report.reallocationCount) paragraph(`${p.report.reallocationCount} self-owned pool Stock orders have a planned receiving-dealer reallocation. CRM / SAP orders are unchanged; implement and confirm these allocations separately.`);
   if (p.report.nonRecommendedCount) paragraph(`${p.report.nonRecommendedCount} nonrecommended model orders are included to meet the mandatory quantity after preferred models were used.`);
@@ -55,6 +59,9 @@ export async function buildRollingPdf(p) {
     p.weeks.map(w => [w.week, w.target, w.customer, w.stock, w.newOrders, w.blocked, pct(w.customerShare), pct(w.plannedCustomerShare), w.ratioMet ? 'Yes' : 'No', `${w.fixedCustomer} / ${w.fixedStock}`]), [1.5,.6,.8,.6,.8,.6,1.2,1.2,.8,1]);
   paragraph('* Whole-vehicle rounding allows floor/ceiling of the weekly target. Capacity and quantity take precedence when the requested mix cannot be achieved; fixed preceding production is shown separately.');
   for (const [title, rows] of [['Models', p.report.models], ['Model ranges', p.report.ranges]]) table(title, ['Model / range', 'Customer', 'Dealer Stock', 'Total real', 'Draft Stock needed'], rows.map(r => [r.name, r.customer, r.stock, r.totalActual, r.newOrders]));
+  if (p.confirmedAdjustments?.length) table('Confirmed inventory adjustment prerequisite - pool exclusions omitted',
+    ['Chassis', 'Actions', 'Original dealer', 'Receiving dealer', 'Original AU', 'Planned AU', 'Planned arrival'],
+    p.confirmedAdjustments.map(a => [a.chassis, a.action === 'cancel' ? 'Cancel' : [a.delayed ? 'Delay' : '', a.reallocated ? 'Reallocate' : ''].filter(Boolean).join(' + '), a.originalDealer || a.from, a.proposedDealer || a.to, a.originalAu, a.plannedAu, a.plannedArrival]), [1.2,1.1,1.5,1.5,1,1,1]);
   table('Real orders - saved production dates', ['Chassis', 'Type', 'Receiving dealer (from original if transferred)', 'Model', 'Signed plans', 'Request delivery', 'CN start', 'AU finish', 'Dealer arrival'],
     p.schedule.map(a => [a.chassis, a.kind === 'customer' ? 'Customer' : 'Stock', a.reallocated ? `${a.dealer} (from ${a.originalDealer})` : a.dealer, a.model, a.signedAt, a.requestDate, a.cnStart, a.auEnd, a.arrival]), [1.3,.8,1.5,1.1,1.1,1.1,1.1,1.1,1.1]);
   table('Draft Stock orders and blocked places - not real orders', ['Status', 'Dealer', 'Model', 'Quantity', 'Target AU', 'Proposed AU', 'Arrival', 'Reason'],
