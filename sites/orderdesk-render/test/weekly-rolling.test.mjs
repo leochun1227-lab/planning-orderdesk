@@ -108,14 +108,14 @@ test('pending inbound does not veto a whole dealer: the 83-customer scenario fil
   assert.equal(applied.counts.rolling, 180); assert.ok(p.weeks.every(w => w.ratioMet));
 });
 
-test('own pool transfers balance relative stock levels without modifying source orders or entering JV-owned orders', () => {
+test('automatic selection never changes a pool order dealer or invents additional reallocations', () => {
   const f = fixture({ stockCount: 0, customerCount: 0, weeks: 12, extraRows: Array.from({ length: 180 }, (_, i) => row(`SRCOWN${i}`, { model: 'SRC21', dealer: 'Frankston' })) });
   const original = structuredClone(f.sources.board.rows), p = buildBalancedRolling({ ...f.input, quantity: 180, customerPercent: 0 });
-  assert.equal(p.scheduled, 180); assert.ok(p.report.reallocationCount > 0);
-  const active = p.report.dealers.filter(d => d.group === 'own' && !d.paused);
-  assert.ok(Math.max(...active.map(d => d.actualIdeal)) - Math.min(...active.map(d => d.actualIdeal)) <= .041);
+  assert.equal(p.scheduled, 180); assert.equal(p.report.reallocationCount, 0);
+  assert.ok(p.schedule.every(a => a.dealer === 'Frankston'));
+  assert.ok(p.report.coverExceptions.some(d => d.name === 'Frankston'));
   const applied = buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule });
-  assert.equal(applied.counts.rolling, 180); assert.ok(applied.rows.some(r => r.plannedReallocation && r.originalDealer === 'Frankston'));
+  assert.equal(applied.counts.rolling, 180); assert.ok(applied.rows.filter(r => r.group === 'rolling').every(r => r.dealer === 'Frankston'));
   assert.deepEqual(f.sources.board.rows, original);
   const jv = fixture({ customerCount: 0, stockCount: 0, extraRows: [row('SRCJVOWN', { dealer: 'Bundaberg' })] });
   const forged = [{ chassis: 'SRCJVOWN', model: 'SRC21', dealer: 'Geelong', originalDealer: 'Bundaberg', fullTarget: true, reallocated: true, auEnd: plus(today, 120) }];
@@ -127,4 +127,23 @@ test('nonrecommended models are a fallback cost, while unsigned and actual produ
   const p = buildBalancedRolling({ ...f.input, quantity: 2, customerPercent: 0 });
   assert.equal(p.stockCount, 2); assert.equal(p.report.nonRecommendedCount, 1);
   assert.equal(buildProductionLine({ ...f.sources, today, orders: {}, rollingSchedule: p.schedule }).counts.rolling, 2);
+});
+
+test('St James is not preferred solely for faster handovers when both dealers already exceed cover and have equal projected Ideal ratios', () => {
+  const f = fixture({ customerCount: 0, stockCount: 0, extraRows: Array.from({ length: 80 }, (_,i) => row(`SRCFAIR${i}`, { dealer: i < 40 ? 'Frankston' : 'ST James', model: 'SRC21' })) });
+  const days = [...f.capacity].filter(([d]) => d >= plus(today,110)).flatMap(([d,c]) => Array(c.towable).fill(d)).sort().slice(0,40);
+  const common = plus(days.at(-1),23);
+  let fractions = 0;
+  for (let d = today; d <= common; d = plus(d,1)) fractions += 1 / new Date(Date.UTC(Number(d.slice(0,4)),Number(d.slice(5,7)),0)).getUTCDate();
+  for (const d of f.dealers) if (['frankston','st-james'].includes(d.slug)) {
+    d.handover.avgStock = d.slug === 'st-james' ? 20 : 2;
+    d.yard.stock = d.target * 1.5 + d.handover.avgStock * fractions;
+  }
+  refresh(f);
+  const p = buildBalancedRolling({ ...f.input, quantity: 40, customerPercent: 0, maxStockMonths: 3 });
+  const frankston = p.report.dealers.find(d => d.slug === 'frankston'), stjames = p.report.dealers.find(d => d.slug === 'st-james');
+  assert.equal(p.report.asOf,common); assert.equal(p.scheduled,40);
+  assert.ok(frankston.stock >= 16); assert.ok(stjames.stock <= 24, 'a higher handover denominator must not capture the entire rolling Stock allocation');
+  assert.ok(Math.abs(frankston.actualIdeal - stjames.actualIdeal) <= .021);
+  assert.equal(frankston.poolAvailable,40); assert.equal(stjames.poolAvailable,40); assert.equal(p.report.reallocationCount,0);
 });

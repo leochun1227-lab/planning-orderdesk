@@ -84,14 +84,15 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     let customerItems = chooseCustomers(desiredCustomerDays);
     const subtractDays = (all, occupied) => { const count = new Map(); for (const d of occupied) count.set(d, (count.get(d) || 0) + 1); return all.filter(d => { if (!count.get(d)) return true; count.set(d, count.get(d) - 1); return false; }); };
     let stockSlots = subtractDays(window, customerItems.map(a => a.auEnd));
-    const actual = recommendPoolStock({ ...stockInput, candidateSlots: stockSlots });
+    const maxDealerLead = Math.max(0, ...dealers.filter(d => !d.paused && d.target > 0).map(d => leadDays(d) ?? 0));
+    const snapshotDate = [today, ...customerItems.map(a => a.arrival || a.auEnd), window.length ? plus(window.at(-1), maxDealerLead) : today].sort().at(-1);
+    const actual = recommendPoolStock({ ...stockInput, candidateSlots: stockSlots, snapshotDate });
     // Fill unoccupied places with ready signed customers before creating any draft
     // Stock orders. A requested mix must never leave usable real orders unplanned.
     const gaps = subtractDays(stockSlots, actual.items.map(a => a.auEnd));
     const fallbackDays = [...customerItems.map(a => a.auEnd), ...gaps];
     customerItems = chooseCustomers(fallbackDays);
     stockSlots = subtractDays(window, customerItems.map(a => a.auEnd));
-    const snapshotDate = [today, ...customerItems.map(a => a.arrival || a.auEnd), ...window].sort().at(-1);
     const stock = recommendPoolStock({ ...stockInput, candidateSlots: stockSlots, includeRequests: true, preallocatedStock: actual.items, snapshotDate });
     stock.requested = stock.admitted;
     return { byWeek, customerItems, stock, window };
@@ -122,7 +123,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   }
   const c = plan.confirmation;
   const adjustmentBasis = { planId: plan.id, confirmationId: c.id, confirmedAt: c.confirmedAt, confirmedBy: c.confirmedBy, summary: c.summary };
-  const result = { algorithmVersion: 5, confirmationId: c.id, adjustmentBasis, basisReplay: replayed.replay, maxStockMonths, confirmedAdjustments: ['own', 'jv', 'independent'].flatMap(g => plan.report[g]?.actions || []).filter(a => a.action === 'cancel' || a.delayed || a.reallocated), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
+  const result = { algorithmVersion: 6, confirmationId: c.id, adjustmentBasis, basisReplay: replayed.replay, maxStockMonths, confirmedAdjustments: ['own', 'jv', 'independent'].flatMap(g => plan.report[g]?.actions || []).filter(a => a.action === 'cancel' || a.delayed || a.reallocated), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
     deliveryRule: 'requestDate<=auEnd', ratioScope: 'rolling-week', start: window[0] || '', end: window.at(-1) || '', earliest, latest, windowSlots: window.length, availableSlots: available.length,
     scheduled: schedule.length, customerCount: customerItems.length, stockCount: stock.items.length,
     newOrders: requests.filter(a => a.status === 'newOrder').length, inventoryBlocked: requests.filter(a => a.status === 'blocked').length,

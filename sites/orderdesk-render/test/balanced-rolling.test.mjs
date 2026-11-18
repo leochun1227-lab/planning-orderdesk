@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildBalancedRolling, rollingQuantity, weekOf } from '../lib/balanced-rolling.mjs';
-import { buildProductionLine } from '../lib/production-line.mjs';
+import { buildProductionLine, loadRollingPlan } from '../lib/production-line.mjs';
 import { buildStockForecast, DISPLAY_MODELS } from '../lib/stock-forecast.mjs';
 import { configureDealers, dealerList, dealerSnapshot, validateDealerSettings } from '../lib/dealership.mjs';
 import { stockInputFingerprint, saveStockOpinion } from '../lib/stock-rolling.mjs';
@@ -67,7 +67,7 @@ test('existing signed pool Stock can be rescheduled without its old forecast dat
   delayed.input.plan = saveStockOpinion({ report: buildStockForecast({ dealers: delayed.dealers, rows: delayed.line.rows, today }), fingerprint: delayed.input.fingerprint, actor: 'Test' });
   delayed.input.plan.confirmation = confirmStockAdjustments({ plan: delayed.input.plan, fingerprint: delayed.input.fingerprint, actor: 'Test' });
   const later = buildBalancedRolling({ ...delayed.input, quantity: 20, maxStockMonths: 24 });
-  assert.ok(later.stockCount > 0); assert.ok(later.stockResult.items.every(a => a.stockAfter <= a.cap), 'later or earlier receiving windows remain jointly within the saved ceiling');
+  assert.ok(later.stockCount > 0); assert.ok(later.stockResult.items.every(a => !a.reallocated), 'automatic selection preserves the pool dealer');
   const mon = weekOf(plus(today, 110)), first = mon < plus(today, 110) ? plus(mon, 7) : mon;
   const ready = plus(first, 14);
   const future = fixture({ stockCount: 1, orders: { SRC990000: { chassis: 'SRC990000', status: 'active', customer: 'Stock', signedAt: today, forecastDate: plus(ready, -40) } } });
@@ -113,16 +113,20 @@ test('independent dealer discovery, missing settings and forecasts preserve all 
   assert.deepEqual(forecastExportSheets(ready, 'independent').find(s => s.name === 'Independent-月度预测').rows.map(r => r[0]).filter((n, i, a) => a.indexOf(n) === i).sort(), ready.independent.dealers.map(d => d.name).sort());
 });
 
-async function apiFixture() {
-  const f = fixture(), firebase = createMemoryFirebase(), store = createStore(firebase);
+async function apiFixture(options = {}) {
+  const f = fixture(options), firebase = createMemoryFirebase(), store = createStore(firebase);
   await store.writeState({ orders: {}, events: {}, imports: {}, meta: {}, refs: {} }, '0');
   const auth = { user: () => ({ name: 'Planner' }) }, app = createApp({ store, auth, env: {}, productionSource: { current: async () => f.sources } });
   const get = async (path = '/api/stock-forecast') => { const r = await app.request(path); assert.equal(r.status, 200, await r.clone().text()); return r.json(); };
-  const post = (path, body, origin = 'http://localhost') => app.request(path, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const save = async (report, confirm = true) => { const r = await post('/api/stock-forecast/save', { multiplier: report.multiplier, months: report.months, previewToken: report.previewToken, expectedPlanId: report.expectedPlanId }); assert.equal(r.status, 200, await r.clone().text());
-    if (confirm) { const p = (await get()).rolling.confirmation; const c = await post('/api/stock-forecast/confirm', { planId: p.planId, inputToken: p.inputToken, reportToken: p.reportToken, expectedConfirmationId: p.id }); assert.equal(c.status, 200, await c.clone().text()); }
+  const post = async (path, body, origin = 'http://localhost') => {
+    if (auth.user() && path === '/api/rolling-plan' && !Object.hasOwn(body, 'applicationId')) body = { ...body, applicationId: (await get('/api/production-line')).balanced.applicationId };
+    return app.request(path, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   };
-  return { ...f, firebase, store, auth, app, get, post, save };
+  const apply = async (enabled = true) => { const a = (await get('/api/production-line')).stockAdjustments; const r = await post('/api/production-line/stock-adjustments', { enabled, expectedId: a.id, inputToken: a.inputToken, planId: a.planId }); assert.equal(r.status, 200, await r.clone().text()); };
+  const save = async (report, confirm = true) => { const r = await post('/api/stock-forecast/save', { multiplier: report.multiplier, months: report.months, previewToken: report.previewToken, expectedPlanId: report.expectedPlanId }); assert.equal(r.status, 200, await r.clone().text());
+    if (confirm) { const p = (await get()).rolling.confirmation; const c = await post('/api/stock-forecast/confirm', { planId: p.planId, inputToken: p.inputToken, reportToken: p.reportToken, expectedConfirmationId: p.id }); assert.equal(c.status, 200, await c.clone().text()); await apply(); }
+  };
+  return { ...f, firebase, store, auth, app, get, post, save, apply };
 }
 
 test('API generation is persistent, applies exact pool dates, aligns the forecast and can be cleared without editing orders', async () => {
@@ -257,14 +261,15 @@ test('save → explicit confirmation → generation persists the chosen inventor
   let forecast = await f.get(), b = (await f.get('/api/production-line')).balanced;
   assert.equal(b.canGenerate, false); assert.equal(b.confirmation.status, 'unconfirmed');
   const payload = () => ({ quantity: 40, inputToken: b.inputToken, opinionId: b.opinionId, expectedId: b.expectedId, confirmationId: b.confirmation.id });
-  const blocked = await f.post('/api/rolling-plan', payload()); assert.equal(blocked.status, 409); assert.match((await blocked.json()).error, /确认/);
+  const blocked = await f.post('/api/rolling-plan', payload()); assert.equal(blocked.status, 409); assert.match((await blocked.json()).error, /勾选|应用/);
   const c = forecast.rolling.confirmation, confirm = { planId: c.planId, inputToken: c.inputToken, reportToken: c.reportToken, expectedConfirmationId: c.id };
   assert.equal((await f.post('/api/stock-forecast/confirm', confirm, 'https://wrong.example')).status, 403);
   assert.equal((await f.post('/api/stock-forecast/confirm', { ...confirm, reportToken: 'old-token' })).status, 409);
   assert.equal((await f.post('/api/stock-forecast/confirm', { ...confirm, multiplier: 2, months: 14 })).status, 409);
   assert.equal((await f.post('/api/stock-forecast/confirm', confirm)).status, 200);
   b = (await f.get('/api/production-line')).balanced;
-  assert.equal(b.canGenerate, true); assert.equal(b.confirmation.status, 'confirmed');
+  assert.equal(b.canGenerate, false); assert.equal(b.confirmation.status, 'confirmed');
+  await f.apply(); b = (await f.get('/api/production-line')).balanced; assert.equal(b.canGenerate, true);
   assert.equal((await f.post('/api/rolling-plan', { ...payload(), confirmationId: null })).status, 409);
   assert.equal((await f.post('/api/rolling-plan', payload())).status, 200);
   const saved = (await createStore(f.firebase).readState()).state;
@@ -314,4 +319,69 @@ test('previous non-contiguous scheduling versions are held until regenerated usi
   const live = await f.get('/api/production-line');
   assert.equal(live.balanced.status, 'stale'); assert.equal(live.balanced.staleReason, 'algorithm');
   assert.equal(live.counts.rolling, 0); assert.equal(live.balanced.canGenerate, true);
+});
+
+test('checkbox applies all changes before generation, rebuilds the cancelled pool, and restores the source when unticked', async () => {
+  const ids = loadRollingPlan().rows.slice(0,7).map(r => r.chassis);
+  const f = await apiFixture({ customerCount: 30, stockCount: 0, extraRows: ids.map((chassis,i) => row(chassis, { group: 'locked', signedAt: i === 6 ? '' : today })) });
+  const own = f.dealers.find(d => d.slug === 'frankston');
+  own.vehicles.push({ chassis: 'SRCYARD', model: 'SRC21', category: 'stock', where: 'yard', since: today }); own.yard.stock++;
+  const sourceRows = structuredClone(f.sources.board.rows);
+  await f.save(await f.get(), false);
+  const saved = await f.store.readState(), plan = saved.state.stockForecastPlan;
+  const original = await f.get('/api/production-line'), fixed = original.rows.filter(r => r.group === 'locked');
+  const cancel = fixed[0], move = fixed[1], delay = fixed[5], unsigned = fixed.find(r => r.chassis === ids[6]);
+  plan.report.own.actions = [
+    { chassis: cancel.chassis, group: 'locked', action: 'cancel', from: 'frankston', receive: false },
+    { chassis: unsigned.chassis, group: 'locked', action: 'cancel', from: 'frankston', receive: false },
+    { chassis: move.chassis, group: 'locked', action: 'reallocate', reallocated: true, from: 'frankston', to: 'geelong', proposedDealer: 'Geelong', originalAu: move.auEnd, plannedAu: move.auEnd, plannedArrival: plus(move.auEnd,4), receive: true, model: move.model },
+    { chassis: delay.chassis, group: 'locked', action: 'delay', delayed: true, from: 'frankston', to: 'frankston', originalAu: delay.auEnd, plannedAu: plus(delay.auEnd,7), plannedArrival: plus(delay.auEnd,11), receive: true, model: delay.model },
+    { chassis: 'SRCYARD', group: 'yard', action: 'reallocate', reallocated: true, from: 'frankston', to: 'geelong', proposedDealer: 'Geelong', depart: today, plannedArrival: plus(today,8), receive: true, model: 'SRC21' },
+  ];
+  await f.store.writeState(saved.state, saved.etag);
+  assert.equal((await f.get('/api/production-line')).stockAdjustments.enabled, false);
+  await f.apply();
+  let live = await f.get('/api/production-line');
+  assert.equal(live.stockAdjustments.enabled, true); assert.equal(live.balanced.canGenerate, true); assert.equal(live.counts.rolling, 0);
+  for (const chassis of [cancel.chassis, unsigned.chassis]) {
+    const r = live.rows.find(r => r.chassis === chassis); assert.equal(r.group, 'customers'); assert.equal(r.returnedToPool, true); assert.equal(r.auEnd, '');
+  }
+  assert.equal(live.rows.find(r => r.chassis === move.chassis).dealer, 'Geelong');
+  assert.equal(live.rows.find(r => r.chassis === 'SRCYARD').dealer, 'Geelong');
+  assert.ok(live.rows.find(r => r.chassis === delay.chassis).auEnd >= plus(delay.auEnd,7));
+  const id = live.stockAdjustments.id, counts = live.counts;
+  await f.apply(); live = await f.get('/api/production-line'); assert.equal(live.stockAdjustments.id,id); assert.deepEqual(live.counts,counts);
+  const b = live.balanced;
+  assert.equal((await f.post('/api/rolling-plan', { ...b, confirmationId: b.confirmation.id, quantity: 20 })).status,200);
+  live = await f.get('/api/production-line');
+  assert.equal(live.balanced.status,'ready'); assert.equal(live.counts.rolling,20);
+  assert.equal(live.rows.find(r => r.chassis === cancel.chassis).group,'rolling');
+  assert.equal(live.rows.find(r => r.chassis === unsigned.chassis).group,'customers');
+  const tail = live.rows.filter(r => r.group === 'locked' && r.auForecast?.kind === 'towable').map(r => r.auEnd).sort().at(-1);
+  assert.equal(live.balanced.proposal.basisReplay.rollingBoundary,tail); assert.equal(live.balanced.proposal.start,tail);
+  for (const a of live.balanced.proposal.schedule) assert.equal(live.rows.find(r => r.chassis === a.chassis).auEnd,a.auEnd);
+  assert.equal((await f.store.readState()).state.rollingPlan.applicationId,id);
+  await f.apply(false); live = await f.get('/api/production-line');
+  assert.equal(live.stockAdjustments.enabled,false); assert.equal(live.balanced.status,'stale'); assert.equal(live.counts.rolling,0);
+  assert.equal(live.rows.find(r => r.chassis === cancel.chassis).group,'locked');
+  assert.equal(live.rows.find(r => r.chassis === move.chassis).dealer,'Frankston');
+  assert.equal(live.rows.find(r => r.chassis === 'SRCYARD').dealer,'Frankston');
+  assert.deepEqual(f.sources.board.rows,sourceRows); assert.deepEqual((await f.store.readState()).state.orders,{});
+});
+test('checkbox enforces the current plan, expected version, origin and generation identity', async () => {
+  const f = await apiFixture(); await f.save(await f.get(),false);
+  const a = (await f.get('/api/production-line')).stockAdjustments;
+  const body = { enabled:true,expectedId:a.id,inputToken:a.inputToken,planId:a.planId };
+  assert.equal((await f.post('/api/production-line/stock-adjustments',body,'https://wrong.example')).status,403);
+  assert.equal((await f.post('/api/production-line/stock-adjustments',{ ...body, enabled:'true' })).status,400);
+  assert.equal((await f.post('/api/production-line/stock-adjustments',{ ...body, planId:'old-plan' })).status,409);
+  await f.apply(); const live = await f.get('/api/production-line'), b = live.balanced;
+  assert.equal((await f.post('/api/production-line/stock-adjustments',body)).status,409);
+  assert.equal((await f.post('/api/rolling-plan',{ ...b, confirmationId:b.confirmation.id, applicationId:null, quantity:20 })).status,409);
+  await f.save(await f.get(),false);
+  const stale = await f.get('/api/production-line'); assert.equal(stale.stockAdjustments.status,'stale'); assert.equal(stale.balanced.canGenerate,false);
+  await f.apply(); assert.equal((await f.get('/api/production-line')).stockAdjustments.status,'applied');
+  f.sources.board.rows[0].signedAt='';
+  const changed = await f.get('/api/production-line'); assert.equal(changed.stockAdjustments.status,'stale'); assert.equal(changed.stockAdjustments.canApply,false);
+  await f.apply(false); assert.equal((await f.get('/api/production-line')).stockAdjustments.status,'off');
 });

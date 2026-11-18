@@ -101,7 +101,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
   for (const r of line.rows.filter(r => r.group === 'customers' && isStockCustomer(r.customer))) {
     const id = chassisKey(r.chassis), source = units.get(dealerSlug(dealers, r.dealer));
     const policy = modelPolicy(r.model, r.modelYear, plan.report.displayModels ?? DISPLAY_MODELS, plan.report.notOnYardModels ?? NOT_ON_YARD);
-    const destinations = fullTarget && source && dealerGroup(source.d) === 'own' ? [...units.values()].filter(u => dealerGroup(u.d) === 'own' && receiving(u)) : [source].filter(receiving);
+    const destinations = [source].filter(receiving); // Dealer is authoritative after the explicitly applied Reallocation plan.
     const reason = !id || counts.get(id) !== 1 || physical.has(id) ? 'duplicate' : cancelled.has(id) ? 'cancelled' : r.regentRank < 6 ? 'progress' : isMotorhomeOrder(r) ? 'motorhome'
       : !signedPlansDate([r.signedAt], today) ? 'unsigned' : !source ? 'dealer' : !destinations.length ? 'receiving'
       : !String(r.model || '').trim() || !fullTarget && policy !== 'display' ? 'model' : !fullTarget && unresolved.has(source.d.slug) ? 'unresolved' : '';
@@ -134,11 +134,13 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
       const arrival = plus(auEnd, p.u.lead), t = at(arrival); if (t < 0 || t >= N) continue;
       const m = modelCurve(p.u, p.r.model), buffer = Math.max(2, Math.ceil(p.u.d.target / Math.max(1, (plan.report.displayModels ?? DISPLAY_MODELS).length)));
       if (!fullTarget && (p.u.balance[t] >= (fillToCap ? p.u.cap : p.u.d.target) - 1e-8 || p.u.max[t] > p.u.cap - 1 + 1e-8 || m.max[t] > buffer - 1 + 1e-8)) continue;
-      choices.push({ p, arrival, t, modelStock: m.balance[t], priority: { own: 0, jv: 1, independent: 2 }[dealerGroup(p.u.d)], policyPenalty: p.policy && p.policy !== 'display' ? 1 : 0, deficit: p.u.max[t] < p.u.d.target - 1e-8, transfer: p.source && p.source !== p.u ? 1 : 0, score: fullTarget ? (p.u.max[t] + 1) / p.u.d.target : p.u.balance[t] / p.u.d.target, cover: p.u.d.handover?.avgStock > 0 ? (fullTarget ? p.u.max[t] + 1 : p.u.balance[t]) / p.u.d.handover.avgStock : Infinity });
+      const assessment = fullTarget && snapshotDate ? Math.max(t, Math.min(N - 1, at(snapshotDate))) : t;
+      const projected = p.u.balance[assessment] + 1;
+      choices.push({ p, arrival, t, modelStock: m.balance[t], priority: { own: 0, jv: 1, independent: 2 }[dealerGroup(p.u.d)], policyPenalty: p.policy && p.policy !== 'display' ? 1 : 0, deficit: p.u.balance[assessment] < p.u.d.target - 1e-8, transfer: p.source && p.source !== p.u ? 1 : 0, score: fullTarget ? projected / p.u.d.target : p.u.balance[t] / p.u.d.target, cover: p.u.d.handover?.avgStock > 0 ? (fullTarget ? projected : p.u.balance[t]) / p.u.d.handover.avgStock : Infinity });
     }
     const actual = choices.filter(c => !c.p.virtual); if (actual.length) choices = actual;
     choices.sort((a, b) => {
-      const order = fullTarget ? (Math.max(0, Number.isFinite(a.cover) ? a.cover - maxStockMonths : 1e6) - Math.max(0, Number.isFinite(b.cover) ? b.cover - maxStockMonths : 1e6)) || a.policyPenalty - b.policyPenalty || Number(b.deficit) - Number(a.deficit)
+      const order = fullTarget ? Number(b.cover <= maxStockMonths) - Number(a.cover <= maxStockMonths) || a.policyPenalty - b.policyPenalty || Number(b.deficit) - Number(a.deficit)
         || (a.deficit && b.deficit ? a.priority - b.priority || a.score - b.score : a.score - b.score || a.priority - b.priority)
         : a.priority - b.priority || a.score - b.score;
       return order || a.cover - b.cover || a.modelStock - b.modelStock || a.transfer - b.transfer
@@ -192,6 +194,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
     const complete = u.cap != null && (u.lead != null || u.d.paused || u.d.slug === 'traralgon') && inventoryIndex >= 0 && inventoryIndex < N;
     const firstIncoming = items.filter(a => a.slug === u.d.slug).map(a => at(a.arrival));
     return { slug: u.d.slug, name: u.d.name, group: dealerGroup(u.d), ideal: u.d.target, cap: u.cap,
+      poolAvailable: pool.filter(p => p.u === u).length, poolReturned: pool.filter(p => p.u === u && p.r.returnedToPool).length,
       avgStock: u.d.handover?.avgStock ?? null, avgCustomer: u.d.handover?.avgCustomer ?? null,
       before: complete ? priorMonthly.get(u.d.slug).balance[inventoryIndex] : null,
       actual: complete ? actual.balance[inventoryIndex] : null, planned: complete ? u.balance[inventoryIndex] : null,

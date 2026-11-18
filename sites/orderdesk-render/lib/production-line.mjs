@@ -9,9 +9,9 @@ import { normalizeChassis, toDay } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
-import { replayInventoryBasis } from './inventory-basis-replay.mjs';
+import { replayInventoryBasis, appendRollingToBasis } from './inventory-basis-replay.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
-import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, dealerGroup, dealerSlug, isStockCustomer, isRollingCustomer, isMotorhomeOrder, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
+import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, dealerSlug, isStockCustomer, isRollingCustomer, isMotorhomeOrder, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, modelPolicy } from './stock-forecast.mjs';
 import { loadWorkCalendar, towableQuantities, planQuantities, dailyCapacity, capacityKind, buildPlanSlots } from './build-plan.mjs';
 
@@ -349,12 +349,12 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   // Rebuild after physical/locked grouping: signed Towable Customer only, independent of dealer stock needs.
   for (const r of rows) if (r.group === 'rolling') r.group = 'customers';
   let dealership = null, dealersAll = null, shown = null, lockedLast = today, rollingEnd = today;
+  const preparedBasis = auCapacity ? forecastAuFinish(rows, auCapacity, today, inventoryBasis, dealers || []).basisReplay || null : null;
   if (dealers) {
     dealersAll = dealers; shown = dealers.filter(d => d.own !== false); // Dealership tab: self-owned yard + transit
     dealers = withTransport(shown, rows, today); // analysis still combines Transport and transit
-    if (auCapacity) forecastAuFinish(rows, auCapacity, today);
     // The rolling line takes the Towable places after the last Towable van ahead of it; its last place is `rollingEnd`.
-    lockedLast = rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
+    lockedLast = preparedBasis?.rollingBoundary || rows.reduce((m, r) => (r.auForecast?.kind === 'towable' && r.auEnd > m ? r.auEnd : m), '') || today;
   }
   // Pool membership never books capacity. Only an explicit saved proposal/admission does.
   const pick = pickRolling(rows);
@@ -367,14 +367,12 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
         || !a.auEnd || a.auEnd < today || r.model !== a.model) continue;
       const stock = isStockCustomer(r.customer), known = dealersAll || dealers || [];
       const sourceSlug = dealerSlug(known, r.dealer), targetSlug = dealerSlug(known, a.dealer);
-      const sourceDealer = known.find(d => d.slug === sourceSlug), targetDealer = known.find(d => d.slug === targetSlug);
+      const targetDealer = known.find(d => d.slug === targetSlug);
       const transfer = sourceSlug !== targetSlug;
-      if (transfer && (!stock || !a.fullTarget || !a.reallocated || dealerSlug(known, a.originalDealer) !== sourceSlug
-        || !sourceDealer || !targetDealer || dealerGroup(sourceDealer) !== 'own' || dealerGroup(targetDealer) !== 'own')) continue;
+      if (transfer) continue; // Only the applied inventory basis may change a dealer.
       if (stock && ((!a.fullTarget && modelPolicy(r.model, r.modelYear, displayModels, notOnYardModels) !== 'display')
         || !String(r.model || '').trim() || targetSlug === 'traralgon' || targetDealer?.paused || r.regentRank < 6)) continue;
       if (!stock && !isRollingCustomer(r)) continue;
-      if (transfer) { r.originalDealer = r.dealer; r.dealer = a.dealer; r.plannedReallocation = true; }
       selected.add(r.chassis); r.rollingNotBefore = a.auEnd;
       if (stock) { r.rollingApproval = { planId: a.planId, arrival: a.arrival, auEnd: a.auEnd }; pick.stockPicked[dealerSlug(dealersAll || dealers || [], r.dealer)] = (pick.stockPicked[dealerSlug(dealersAll || dealers || [], r.dealer)] || 0) + 1; }
       else pick.customers++;
@@ -397,17 +395,26 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   pick.picked.forEach(({ r, kind }, i) => { r.group = 'rolling'; r.rollingOrder = i + 1; r.rollingKind = kind; r.issues = r.issues.filter(x => x.code !== 'notInPlan'); });
   for (const r of rows) {
     if (r.group === 'later' && !r.waitingRolling) r.group = 'customers';
-    if (r.group === 'customers' && !isStockCustomer(r.customer) && !isRollingCustomer(r)) r.group = 'later';
+    if (r.group === 'customers' && !r.returnedToPool && !isStockCustomer(r.customer) && !isRollingCustomer(r)) r.group = 'later';
   }
   if (shown) {
     const names = new Map(); for (const r of rows) if (r.dealer && !names.has(slugify(r.dealer))) names.set(slugify(r.dealer), r.dealer);
-    for (const d of shown) for (const v of d.vehicles) rows.push(dealerRow(d, v, names.get(d.slug) || d.name, today));
+    const transfers = new Map(['own', 'jv', 'independent'].flatMap(g => inventoryBasis?.[g]?.actions || []).filter(a => a.group === 'yard' && a.reallocated).map(a => [normalizeChassis(a.chassis), a]));
+    for (const d of shown) for (const v of d.vehicles) {
+      const r = dealerRow(d, v, names.get(d.slug) || d.name, today), a = transfers.get(normalizeChassis(v.chassis));
+      if (a) {
+        r.originalDealer = r.dealer; r.dealer = a.proposedDealer || dealersAll.find(x => x.slug === a.to)?.name || r.dealer;
+        r.plannedReallocation = true; r.inventoryAdjustment = 'reallocate';
+        r.dealerSite = { ...r.dealerSite, slug: a.to, where: 'transit', arrive: a.plannedArrival, since: a.depart, via: 'planned-reallocation' };
+      }
+      rows.push(r);
+    }
     dealership = { lockedLast, rollingEnd, size: rollingSize, picked: pick.picked.length, customers: pick.customers, dispatchDays: DISPATCH_DAYS, months: HANDOVER_MONTHS, targetSource: IDEAL_STOCK_SOURCE,
       dealers: dealers.map(d => { const { vehicles, ...rest } = d; return { ...rest, monthly: [], stockPicked: pick.stockPicked[d.slug], stockAvailable: pick.stockAvailable[d.slug], customerPicked: pick.picked.filter(p => p.kind === 'customer' && slugify(p.r.dealer) === d.slug).length }; }) };
   }
   for (const id of Object.keys(counts)) counts[id] = rows.filter(r => r.group === id).length;
   if (dealership) counts.dealership = dealership.dealers.reduce((n, d) => n + d.yard.stock, 0);
-  const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today, inventoryBasis, dealersAll || dealers || []) : null;
+  const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today, null, dealersAll || dealers || [], preparedBasis) : null;
   for (const id of Object.keys(counts)) if (id !== 'dealership') counts[id] = rows.filter(r => r.group === id && !r.planningExcluded).length;
   if (dealership) {
     if (inventoryBasis) lockedLast = auForecast.basisReplay.rollingBoundary;
@@ -448,7 +455,7 @@ function dealerRow(d, v, dealerName, today) {
 // station, then GR date; the queue fills today's places first, then the next working day, and so on.
 const AU_STAGE = { qc: 0, production: 1, 'pre-assembly': 2, received: 3 };
 const CRM_DONE = new Set(['Finished', 'Ready for Dispatch']);
-export function forecastAuFinish(rows, capacity, today, inventoryBasis = null, dealers = []) {
+export function forecastAuFinish(rows, capacity, today, inventoryBasis = null, dealers = [], preparedBasis = null) {
   const slots = { towable: [], srm: [], srv: [] };
   for (const d of [...capacity.keys()].filter(d => d >= today).sort()) for (const k of Object.keys(slots)) for (let i = 0; i < capacity.get(d)[k]; i++) slots[k].push([d, capacity.get(d)[k]]);
   // Queue: AU production (by line progress) → shipping (by ETA) → China production (group order) → rolling 60 days (plan order).
@@ -461,7 +468,7 @@ export function forecastAuFinish(rows, capacity, today, inventoryBasis = null, d
     ...of('rolling').sort(by(num(r => r.rollingOrder), asc(r => r.chassis))),
   ];
   const used = { towable: 0, srm: 0, srv: 0 }, summary = { towable: 0, srm: 0, srv: 0, overflow: 0 };
-  for (const [order, r] of queue.entries()) {
+  if (!preparedBasis) for (const [order, r] of queue.entries()) {
     const kind = capacityKind(r.model);
     if (r.group === 'rolling' && r.rollingNotBefore) {
       while (slots[kind][used[kind]] && slots[kind][used[kind]][0] < r.rollingNotBefore) used[kind]++;
@@ -477,12 +484,14 @@ export function forecastAuFinish(rows, capacity, today, inventoryBasis = null, d
     const ship = r.live?.ship, arrive = ship && !ship.arrived ? ship.eta || '' : '';
     if (arrive && r.auEnd < arrive) r.auForecast.beforeArrival = arrive;
   }
+  if (preparedBasis) { appendRollingToBasis({ rows, capacity, today, basis: preparedBasis }); summary.basisReplay = preparedBasis; }
   if (inventoryBasis) {
     const adjusted = replayInventoryBasis({ line: { rows, today }, report: inventoryBasis, capacity, dealers, includeRolling: true });
-    adjusted.line.rows.forEach((r, i) => Object.assign(rows[i], r));
-    for (const kind of ['towable', 'srm', 'srv']) summary[kind] = queue.filter(r => !r.planningExcluded && r.auEnd && capacityKind(r.model) === kind).length;
-    summary.overflow = queue.filter(r => !r.planningExcluded && !r.auEnd).length;
-    summary.basisReplay = adjusted.replay;
+    adjusted.line.rows.forEach((r, i) => Object.assign(rows[i], r)); summary.basisReplay = adjusted.replay;
+  }
+  if (inventoryBasis || preparedBasis) {
+    for (const kind of ['towable', 'srm', 'srv']) summary[kind] = queue.filter(r => ['au', 'sea', 'cn', 'locked', 'rolling'].includes(r.group) && !r.planningExcluded && r.auEnd && capacityKind(r.model) === kind).length;
+    summary.overflow = queue.filter(r => ['au', 'sea', 'cn', 'locked', 'rolling'].includes(r.group) && !r.planningExcluded && !r.auEnd).length;
   }
   for (const g of ['au', 'sea', 'cn', 'locked', 'rolling']) summary[g] = queue.filter(r => r.group === g && !r.planningExcluded).reduce((m, r) => ({ first: m.first && m.first < r.auEnd ? m.first : r.auEnd, last: r.auEnd > m.last ? r.auEnd : m.last, n: m.n + 1 }), { first: '', last: '', n: 0 });
   summary.beforeArrival = queue.filter(r => r.auForecast?.beforeArrival).length;
