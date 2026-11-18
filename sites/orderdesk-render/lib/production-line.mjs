@@ -9,6 +9,7 @@ import { normalizeChassis, toDay } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
 import { parseTms } from './tms-shipping.mjs';
+import { replayInventoryBasis } from './inventory-basis-replay.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
 import { dealerSnapshot, dealerNeeds, pickRolling, dealerMonthly, withTransport, dealerOverview, dealerGroup, dealerSlug, isStockCustomer, isRollingCustomer, isMotorhomeOrder, slugify, ROLLING_SIZE, DISPATCH_DAYS, IDEAL_STOCK_SOURCE, HANDOVER_MONTHS } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, modelPolicy } from './stock-forecast.mjs';
@@ -279,7 +280,7 @@ export function issuesFor({ b, group, lt, au, sap = {}, regent, today }) {
   return out;
 }
 
-export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE, rollingAdmissions = [], rollingSchedule = null, displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD }) {
+export function buildProductionLine({ board, orders, longtree, prod, portal, today, settings, plan = null, tms = new Map(), buildPlan = null, auCapacity = null, dealers = null, rollingSize = ROLLING_SIZE, rollingAdmissions = [], rollingSchedule = null, inventoryBasis = null, displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD }) {
   const activePlan = plan && (!plan.activeUntil || today <= plan.activeUntil) ? plan : null;
   const seen = new Map();
   for (const r of board.rows) { const c = r.empty ? '' : normalizeChassis(r.chassis); if (c) seen.set(c, [...(seen.get(c) || []), r.group]); }
@@ -406,8 +407,11 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   }
   for (const id of Object.keys(counts)) counts[id] = rows.filter(r => r.group === id).length;
   if (dealership) counts.dealership = dealership.dealers.reduce((n, d) => n + d.yard.stock, 0);
-  const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today) : null;
+  const auForecast = auCapacity ? forecastAuFinish(rows, auCapacity, today, inventoryBasis, dealersAll || dealers || []) : null;
+  for (const id of Object.keys(counts)) if (id !== 'dealership') counts[id] = rows.filter(r => r.group === id && !r.planningExcluded).length;
   if (dealership) {
+    if (inventoryBasis) lockedLast = rows.filter(r => ['au', 'sea', 'cn', 'locked'].includes(r.group) && !r.planningExcluded).reduce((last,r) => r.auEnd > last ? r.auEnd : last, '');
+    dealership.lockedLast = lockedLast;
     const rolling = rows.filter(r => r.group === 'rolling');
     rollingEnd = rolling.some(r => !r.auEnd || r.auForecast?.note === 'overflow') ? '' : rolling.reduce((last, r) => r.auEnd > last ? r.auEnd : last, lockedLast);
     dealership.rollingEnd = rollingEnd;
@@ -423,7 +427,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
     });
     dealership.all = dealerOverview(dealersAll, rows, today);
   }
-  return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows), auForecast,
+  return { today, counts, dealership, completed: board.completed, crmDone, averages: board.averages, settings, rows: sortLineRows(rows.filter(r => !r.planningExcluded)), auForecast,
     buildPlan: buildPlan ? { months: buildPlan.months, calendar: 'VIC 2026 + 2027 Draft V3' } : null,
     plan: activePlan ? { name: activePlan.name, files: activePlan.files, activeUntil: activePlan.activeUntil, count: activePlan.rows.length } : null };
 }
@@ -444,7 +448,7 @@ function dealerRow(d, v, dealerName, today) {
 // station, then GR date; the queue fills today's places first, then the next working day, and so on.
 const AU_STAGE = { qc: 0, production: 1, 'pre-assembly': 2, received: 3 };
 const CRM_DONE = new Set(['Finished', 'Ready for Dispatch']);
-export function forecastAuFinish(rows, capacity, today) {
+export function forecastAuFinish(rows, capacity, today, inventoryBasis = null, dealers = []) {
   const slots = { towable: [], srm: [], srv: [] };
   for (const d of [...capacity.keys()].filter(d => d >= today).sort()) for (const k of Object.keys(slots)) for (let i = 0; i < capacity.get(d)[k]; i++) slots[k].push([d, capacity.get(d)[k]]);
   // Queue: AU production (by line progress) → shipping (by ETA) → China production (group order) → rolling 60 days (plan order).
@@ -473,7 +477,14 @@ export function forecastAuFinish(rows, capacity, today) {
     const ship = r.live?.ship, arrive = ship && !ship.arrived ? ship.eta || '' : '';
     if (arrive && r.auEnd < arrive) r.auForecast.beforeArrival = arrive;
   }
-  for (const g of ['au', 'sea', 'cn', 'locked', 'rolling']) summary[g] = queue.filter(r => r.group === g).reduce((m, r) => ({ first: m.first && m.first < r.auEnd ? m.first : r.auEnd, last: r.auEnd > m.last ? r.auEnd : m.last, n: m.n + 1 }), { first: '', last: '', n: 0 });
+  if (inventoryBasis) {
+    const adjusted = replayInventoryBasis({ line: { rows, today }, report: inventoryBasis, capacity, dealers, includeRolling: true });
+    adjusted.line.rows.forEach((r, i) => Object.assign(rows[i], r));
+    for (const kind of ['towable', 'srm', 'srv']) summary[kind] = queue.filter(r => !r.planningExcluded && r.auEnd && capacityKind(r.model) === kind).length;
+    summary.overflow = queue.filter(r => !r.planningExcluded && !r.auEnd).length;
+    summary.basisReplay = adjusted.replay;
+  }
+  for (const g of ['au', 'sea', 'cn', 'locked', 'rolling']) summary[g] = queue.filter(r => r.group === g && !r.planningExcluded).reduce((m, r) => ({ first: m.first && m.first < r.auEnd ? m.first : r.auEnd, last: r.auEnd > m.last ? r.auEnd : m.last, n: m.n + 1 }), { first: '', last: '', n: 0 });
   summary.beforeArrival = queue.filter(r => r.auForecast?.beforeArrival).length;
   const first = [...capacity.keys()].filter(d => d >= today).sort()[0];
   return { ...summary, today: first ? { date: first, ...capacity.get(first) } : null, last: queue.reduce((m, r) => (r.auEnd > m ? r.auEnd : m), '') };

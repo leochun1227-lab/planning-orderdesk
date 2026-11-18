@@ -135,15 +135,15 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     let rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
       capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
     const confirmation = stockPlanConfirmation(state?.stockForecastPlan, fingerprint);
-    const saved = state?.rollingPlan, active = saved && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && confirmation.status === 'confirmed' && saved.confirmationId === confirmation.id && !sourceBlockers(sources).length;
+    const saved = state?.rollingPlan, active = saved && saved.algorithmVersion === 4 && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && confirmation.status === 'confirmed' && saved.confirmationId === confirmation.id && !sourceBlockers(sources).length;
     if (active) rolling = { ...saved.stockResult, ai: state.stockForecastPlan.ai || null };
     rolling.confirmation = confirmation;
     rolling.balanced = Boolean(saved);
     rolling.balancedActive = Boolean(active);
-    const balanced = { confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
+    const balanced = { staleReason: saved && !active ? saved.algorithmVersion !== 4 ? 'algorithm' : 'inputs' : null, maxStockMonths: saved?.maxStockMonths ?? 3, confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
       canGenerate: Boolean(confirmation.status === 'confirmed' && !sourceBlockers(sources).length && sources.auCapacity?.size),
       proposal: saved ? { ...saved, stockResult: undefined } : null };
-    const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity })
+    const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity, inventoryBasis: state.stockForecastPlan.confirmation.report })
       : !saved && rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
     const recommendations = new Map(rolling.items.map(a => [a.chassis, a]));
     for (const row of line.rows) { const a = recommendations.get(String(row.chassis).replace(/[-\s]/g, '').toUpperCase()); if (a) row.stockRecommendation = a; }
@@ -175,6 +175,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
       return json({ ...buildStockForecast({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: state?.stockNotOnYardModels ?? NOT_ON_YARD }),
         dealerSettingsToken: dealerSettingsToken(sources.forecastDealers),
+        lockedLast: baseLine.dealership?.lockedLast || '', adjustedLockedLast: balanced.status === 'ready' ? balanced.proposal?.basisReplay?.lastFixed || '' : '',
         balanced,
         previewToken: forecastPreviewToken(fingerprint, multiplier, months), expectedPlanId: state?.stockForecastPlan?.id || null,
         canSave: !sourceBlockers(sources).length && Boolean(sources.auCapacity?.size), rolling: { ...rolling, aiConfigured: Boolean(env.OPENAI_API?.trim()) },
@@ -193,7 +194,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (!ctx.state || body.inputToken !== ctx.fingerprint || body.opinionId !== ctx.state.stockForecastPlan?.id || body.expectedId !== (ctx.state.rollingPlan?.id || null)) throw conflict('来源或排产意见已变化，请刷新后重试。');
       if (ctx.balanced.confirmation.status !== 'confirmed' || body.confirmationId !== ctx.balanced.confirmation.id) throw conflict('请先确认已保存的库存调整计划作为排产前提，再重新生成。');
       const proposal = await runBalancedRolling({ plan: ctx.state.stockForecastPlan, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers, capacity: ctx.sources.auCapacity,
-        settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, customerPercent: body.customerPercent, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
+        settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, customerPercent: body.customerPercent, maxStockMonths: body.maxStockMonths, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
       const latest = await currentLine();
       if (latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || latest.balanced.confirmation.status !== 'confirmed' || latest.balanced.confirmation.id !== proposal.confirmationId || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
       ctx.state.rollingPlanHistory = [...(ctx.state.rollingPlanHistory || []), ...(ctx.state.rollingPlan ? [ctx.state.rollingPlan] : [])].slice(-5);

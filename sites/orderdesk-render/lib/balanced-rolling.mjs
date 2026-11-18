@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { isRollingCustomer, isStockCustomer, dealerSlug, leadDays } from './dealership.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
 import { recommendPoolStock } from './stock-rolling.mjs';
+import { replayInventoryBasis, availableRollingSlots } from './inventory-basis-replay.mjs';
 import { confirmedStockPlan } from './stock-plan-confirmation.mjs';
 import { buildRollingReport } from './rolling-report.mjs';
 
@@ -22,19 +23,21 @@ export function rollingCustomerPercent(value = 35) {
   return Number(value);
 }
 
-export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], capacity, settings = {}, orders = {}, quantity, customerPercent = 35, blockers = [], actor = 'Planning' }) {
+export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], capacity, settings = {}, orders = {}, quantity, customerPercent = 35, maxStockMonths = 3, blockers = [], actor = 'Planning' }) {
   quantity = rollingQuantity(quantity); customerPercent = rollingCustomerPercent(customerPercent);
+  maxStockMonths = Number(maxStockMonths);
+  if (!Number.isFinite(maxStockMonths) || maxStockMonths <= 0 || maxStockMonths > 24) throw new Error('Stock覆盖月数须大于0且不超过24 / Invalid Stock cover target');
   const share = customerPercent / 100;
   if (!plan || plan.fingerprint !== fingerprint || blockers.length) throw new Error('请先在库存调整预测中保存当前意见，再生成滚动排产 / Save the current stock opinion first');
   plan = confirmedStockPlan(plan, fingerprint);
   if (!capacity?.size) throw new Error('AU产能尚未准备');
+  const replayed = replayInventoryBasis({ line, report: plan.report, capacity, dealers });
+  line = replayed.line; plan = { ...plan, report: replayed.report };
   const duration = (k, d) => Math.max(0, Number.isFinite(Number(settings[k])) ? Number(settings[k]) : d);
   const today = line.today, lead = duration('cnDays', 20) + duration('seaDays', 50) + duration('auDays', 40);
-  const earliest = plus(today, lead), latest = plan.report.planningEnd, slots = [];
-  for (const [d, c] of [...capacity].sort(([a], [b]) => a.localeCompare(b))) if (d >= today) for (let i = 0; i < c.towable; i++) slots.push(d);
-  const fixed = line.rows.filter(r => fixedGroups.has(r.group) && !r.empty && r.auForecast?.kind === 'towable');
-  const used = fixed.reduce((n, r) => Math.max(n, r.auForecast?.seq || 0), 0);
-  const available = slots.slice(used).filter(d => d >= earliest && d <= latest);
+  const earliest = plus(today, lead), latest = plan.report.planningEnd;
+  const fixed = line.rows.filter(r => fixedGroups.has(r.group) && !r.planningExcluded && !r.empty && r.auForecast?.kind === 'towable');
+  const available = availableRollingSlots(line, capacity, earliest, latest);
   const inactive = new Set(Object.values(orders).filter(o => ['cancelled', 'completed'].includes(o.status)).map(o => norm(o.chassis)));
   const physical = new Set(dealers.flatMap(d => (d.vehicles || []).map(v => norm(v.chassis))));
   const counts = new Map(); for (const r of line.rows) if (!r.empty) counts.set(norm(r.chassis), (counts.get(norm(r.chassis)) || 0) + 1);
@@ -56,7 +59,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     v[isStockCustomer(r.customer) ? 'stock' : String(r.customer || '').trim() ? 'customer' : 'unknown']++; fixedByWeek.set(k, v);
   }
   const admitted = line.rows.filter(r => isStockCustomer(r.customer)).map(r => norm(r.chassis));
-  const stockInput = { plan: { ...plan, admitted }, fingerprint, line, dealers, capacity, settings, orders, blockers, fillToCap: true, horizonEnd: latest, fullTarget: true, allowDrafts: false };
+  const stockInput = { plan: { ...plan, admitted }, fingerprint, line, dealers, capacity, settings, orders, blockers, fillToCap: true, horizonEnd: latest, fullTarget: true, allowDrafts: false, maxStockMonths };
   const probe = recommendPoolStock({ ...stockInput, candidateSlots: available });
   function chooseCustomers(days) {
     const chosen = new Set();
@@ -94,6 +97,9 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     stock.requested = stock.admitted;
     return { byWeek, customerItems, stock, window };
   }
+  function coverCost(p) {
+    return p.stock.inventory.filter(d => d.peakAfterReplenishment != null && d.avgStock > 0).reduce((sum,d) => sum + Math.max(0, d.peakAfterReplenishment / d.avgStock - maxStockMonths) ** 2, 0);
+  }
   function score(p) {
     const real = p.customerItems.length + p.stock.items.length, planned = real + p.stock.requests.filter(a => a.status === 'newOrder').length;
     let deviation = 0;
@@ -101,14 +107,14 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
       const c = p.customerItems.filter(a => a.week === week).length;
       deviation += Math.abs(c - days.length * share);
     }
-    return [real, planned, -deviation, -stamp(p.window.at(-1) || today)];
+    return [real, planned, -coverCost(p), -deviation, -stamp(p.window.at(-1) || today)];
   }
   const better = (a, b) => { const x = score(a), y = score(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
   let current = allocateWindow(available.slice(0, quantity)), best = current;
   let cursor = current.window.length, futureProbe = null;
-  // Replace draft/blocked places with later real orders first. Inspect at most
-  // one candidate per week to keep the background worker bounded.
-  for (let attempt = 0; attempt < 12 && cursor < available.length; attempt++) {
+  // Compare later working weeks when real orders, weekly mix or handover cover
+  // improve. The bounded search covers up to 64 weeks of the saved horizon.
+  for (let attempt = 0; attempt < 64 && cursor < available.length; attempt++) {
     const needed = current.stock.requests.length;
     const unselected = customers.filter(c => !current.customerItems.some(a => a.chassis === norm(c.r.chassis)));
     const after = current.window.at(-1) || earliest;
@@ -117,9 +123,10 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
       futureProbe ??= recommendPoolStock({ ...stockInput, candidateSlots: available, includeRequests: true, preallocatedStock: probe.items });
       next = futureProbe.requests.filter(a => a.status === 'newOrder' && a.auEnd > after).map(a => a.auEnd).sort()[0];
     }
-    if (!next || !needed && score(current)[2] >= -1e-8) break;
+    if (coverCost(current) > 1e-8) next = [next || available[cursor], plus(weekOf(after), 7)].sort().at(-1);
+    if (!next || !needed && coverCost(current) <= 1e-8 && score(current)[3] >= -1e-8) break;
     let at = available.findIndex((d, i) => i >= cursor && d >= next); if (at < 0) break;
-    const firstWeekSize = current.byWeek.values().next().value?.length || 1;
+    const firstWeekSize = Math.max(1, ...[...current.byWeek.values()].map(days => days.length));
     const count = Math.min(Math.max(needed, firstWeekSize), available.length - at, current.window.length);
     const removable = needed ? [...current.stock.requests].sort((a, b) => a.requestedAu.localeCompare(b.requestedAu)).slice(0, count).map(a => a.requestedAu) : current.window.slice(0, count);
     const tally = new Map(); for (const d of removable) tally.set(d, (tally.get(d) || 0) + 1);
@@ -151,7 +158,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   }
   const c = plan.confirmation;
   const adjustmentBasis = { planId: plan.id, confirmationId: c.id, confirmedAt: c.confirmedAt, confirmedBy: c.confirmedBy, summary: c.summary };
-  const result = { confirmationId: c.id, adjustmentBasis, confirmedAdjustments: structuredClone(c.actions), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
+  const result = { algorithmVersion: 4, confirmationId: c.id, adjustmentBasis, basisReplay: replayed.replay, maxStockMonths, confirmedAdjustments: ['own', 'jv', 'independent'].flatMap(g => plan.report[g]?.actions || []).filter(a => a.action === 'cancel' || a.delayed || a.reallocated), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
     deliveryRule: 'requestDate<=auEnd', ratioScope: 'rolling-week', earliest, latest, windowSlots: window.length, availableSlots: available.length,
     scheduled: schedule.length, customerCount: customerItems.length, stockCount: stock.items.length,
     newOrders: requests.filter(a => a.status === 'newOrder').length, inventoryBlocked: requests.filter(a => a.status === 'blocked').length,

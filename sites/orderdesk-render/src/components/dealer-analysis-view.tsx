@@ -6,7 +6,8 @@ import { RefreshCw, AlertTriangle, Store, ArrowDownToLine } from 'lucide-react';
 import DealerLogisticsFlow, { type DealerLogistics } from './dealer-logistics-flow';
 
 type HandoverMonth = { month: string; stock: number; customer: number; second: number };
-export type MonthRow = { month: string; stockIn: number | null; customerIn?: number | null; stockOut: number; endStock: number | null; baselineEndStock?: number; transferOut?: number; unmet?: number };
+export type Arrival = { chassis: string; group: string; auEnd: string; arrival: string; action: string };
+export type MonthRow = { arrivals?: Arrival[]; month: string; stockIn: number | null; customerIn?: number | null; stockOut: number; endStock: number | null; baselineEndStock?: number; transferOut?: number; unmet?: number };
 export type DealerSummary = { slug: string; name: string; target: number; yard: { stock: number; customer: number; second: number; total: number }; transit: { stock: number; customer: number; second: number; total: number; pgiStock?: number; transportStock?: number };
   handover: { months: HandoverMonth[]; thisMonth: HandoverMonth; avgStock: number; avgCustomer: number; avgSecond: number }; months: number; deliveredBy: string; pipeline: Record<string, number>; pipelineStock: number; pipelineCustomer: number;
   travelDays: number | null; lead: number | null; paused?: boolean; arriving: number | null; transitArriving: number | null; sold: number | null; projected: number | null; need: number | null; stockPicked: number; stockAvailable: number; customerPicked: number; monthly: MonthRow[] };
@@ -64,7 +65,7 @@ export function DealerCard({ d, zh }: { d: DealerCardData; zh: boolean }) {
     <table className="da-fc">
       <tbody>
         <tr className="bars"><th><span className="lg"><i className="stock" />{zh ? '到店 stock' : 'Stock in'}</span><span className="lg"><i className="line" />{zh ? (comparison ? '预测月底 stock' : '月底 stock') : 'Month-end stock'}</span>{comparison && <span className="lg"><i className="before" />{zh ? '调整前库存' : 'Before changes'}</span>}<span className="lg"><i className="dash" />{zh ? (d.cap != null ? '库存上限' : '目标') : (d.cap != null ? 'Ceiling' : 'Target')}</span></th>
-          {d.monthly.map(x => <td key={x.month}><div className="da-col" style={{ height: H }}>
+          {d.monthly.map(x => <td key={x.month} title={x.arrivals?.map(a => `${a.chassis} · ${a.group} · AU ${a.auEnd || '—'} → ${a.arrival} · ${a.action}`).join('\n')}><div className="da-col" style={{ height: H }}>
             <div className="da-tgt" style={{ bottom: h(ceiling) }} />
             {x.stockIn != null && <i className="stock" style={{ height: h(x.stockIn) }} />}
             {x.stockIn != null && <span className="da-bar-value" style={{ bottom: `calc(${h(x.stockIn)} + 2px)` }}>{x.stockIn}</span>}
@@ -82,6 +83,7 @@ export function DealerCard({ d, zh }: { d: DealerCardData; zh: boolean }) {
     </table>
     <table className="da-mini"><thead><tr><th>{zh ? '近三月' : 'Last 3 months'}</th>{d.handover.months.map(x => <th key={x.month}>{x.month.slice(5)}{zh ? '月' : ''}</th>)}<th>{zh ? '本月' : 'MTD'}</th><th>{zh ? '月均' : 'Avg'}</th></tr></thead>
       <tbody>{([['stock', zh ? 'Stock 交付' : 'Stock handovers', d.handover.avgStock]] as const).map(([k, l, a]) => <tr key={k}><td>{l}</td>{d.handover.months.map(x => <td key={x.month}>{x[k]}</td>)}<td>{d.handover.thisMonth[k]}</td><td><b>{a}</b></td></tr>)}</tbody></table>
+    {d.monthly.some(x => x.arrivals?.length) && <details className="sf-rules"><summary>{zh ? '到店柱子来源 · 车架号与下线／到店日期' : 'Arrival bar sources · chassis and AU / dealer dates'}</summary><div className="da-table"><table><thead><tr><th>Chassis</th><th>{zh ? '阶段' : 'Stage'}</th><th>AU finish</th><th>{zh ? '到店' : 'Dealer arrival'}</th><th>{zh ? '处理' : 'Action'}</th></tr></thead><tbody>{d.monthly.flatMap(x => (x.arrivals || []).map(a => <tr key={`${x.month}-${a.chassis}`}><td>{a.chassis}</td><td>{a.group}</td><td>{a.auEnd || '—'}</td><td>{a.arrival}</td><td>{a.action}</td></tr>))}</tbody></table></div></details>}
     {comparison && Boolean(d.overCapMonths || d.shortageMonths) && <p className="da-note sf-card-note">{zh ? `超上限 ${d.overCapMonths || 0} 个月 · 缺货 ${d.shortageMonths || 0} 个月` : `${d.overCapMonths || 0} months above ceiling · ${d.shortageMonths || 0} months with shortages`}</p>}
   </article>;
 }
