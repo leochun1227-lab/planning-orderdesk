@@ -222,6 +222,24 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     catch (e) { return json({ error: message(e, '模拟参数无效') }, 400); }
   });
 
+
+  app.post('/api/stock-forecast/report.pdf', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c, 1000000), multiplier = forecastMultiplier(body.multiplier), months = Number(body.months);
+      if (![8, 14].includes(months)) throw new Error('预测月份须为8或14');
+      const ctx = await currentLine();
+      if (!ctx.sources.forecastDealers) throw new Error('Dealer库存数据尚未准备');
+      const report = buildStockSimulation({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, multiplier, months,
+        assumptions: simulationInputs(ctx.sources, ctx.baseLine, ctx.state, body.assumptions, multiplier), displayModels: ctx.state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: ctx.state?.stockNotOnYardModels ?? NOT_ON_YARD });
+      if (body.previewToken !== forecastPreviewToken(ctx.fingerprint, multiplier, months, report.assumptions)) throw conflict('来源或模拟参数已变化，请刷新计算后再下载 / Recalculate before downloading');
+      const { buildSimulationPdf } = await import('./stock-simulation-pdf.mjs');
+      const bytes = await buildSimulationPdf({ ...report, sources: ctx.sources.status });
+      return new Response(bytes, { headers: { ...noStore, 'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="Dealer_Allocations_and_Adjustments_${report.today}.pdf"` } });
+    } catch (e) { return json({ error: message(e, '报告下载失败 / Report download failed') }, e.status || 400); }
+  });
+
   let rollingBusy = false;
   let rollingJob = null;
   const generateRolling = async (c, suppliedBody) => {

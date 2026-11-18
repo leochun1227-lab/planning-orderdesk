@@ -125,7 +125,8 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     const firsts = new Set(), kept = physical.sort((a, b) => yardRank(a) - yardRank(b) || key(a.model).localeCompare(key(b.model)) || id(a.chassis).localeCompare(id(b.chassis)));
     const unique = [], rest = [];
     for (const v of kept) { const k = `${v.modelYear}:${key(v.model)}`; if (!firsts.has(k)) { firsts.add(k); unique.push(v); } else rest.push(v); }
-    for (const v of [...unique, ...rest].slice(0, u.s.currentStock)) { u.initialModels.set(key(v.model), (u.initialModels.get(key(v.model)) || 0) + 1); cover(u, v, 'yard'); }
+    u.keptYard = [...unique, ...rest].slice(0, u.s.currentStock);
+    for (const v of u.keptYard) { u.initialModels.set(key(v.model), (u.initialModels.get(key(v.model)) || 0) + 1); cover(u, v, 'yard'); }
     u.unknownYard = Math.max(0, u.s.currentStock - Math.min(u.s.currentStock, physical.length)) + [...unique, ...rest].slice(0, u.s.currentStock).filter(v => !v.modelYear || !v.model).length;
   }
   function record(r, group = r.group) {
@@ -223,6 +224,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
       return { ...rest, target: s.ideal, cap: s.cap, lead: s.leadDays, paused: false, stopReceiving: !s.receiving,
         yard: { ...u.d.yard, stock: s.currentStock }, transit: { ...u.d.transit, stock: fixed.filter(a => a.from === s.slug && ['pgi', 'transport'].includes(a.group)).length }, actualYardStock: u.d.yard.stock, weeklyStock: s.weeklyStock, assumptions: s,
         settingsNeeded: s.ideal == null || s.leadDays == null || s.cap == null, undatedIncoming: u.undated, unknownYardModels: u.unknownYard,
+        my2027Yard: u.keptYard.filter(year2027).map(v => ({ chassis: id(v.chassis), model: v.model })),
         monthly, stats: summary(list.filter(a => a.from === s.slug)), need: s.ideal == null ? null : Math.max(0, Math.ceil(s.ideal - monthly.at(-1).endStock)),
         coverage: { target: s.models.length, covered: coverageModels.length, models: coverageModels, missing: missingModels, details: u.coverageDetails },
         overCapMonths: s.cap == null ? 0 : monthly.filter(m => m.endStock > s.cap).length, shortageMonths: monthly.filter(m => m.unmet > 0).length };
