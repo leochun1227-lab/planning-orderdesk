@@ -61,7 +61,7 @@ export function replayInventoryBasis({ line, report, capacity, dealers = [], inc
     physical.push(r);
     if (r.group === 'cn' && a?.delayed) { pendingCn.push({ r, a }); continue; }
     if (r.auEnd && !take(r.auEnd, capacityKind(r.model))) throw new Error(`前序产能冲突 / Fixed capacity conflict: ${r.auEnd}`);
-    if (r.group === 'cn' && a?.reallocated && r.auEnd) assign(r, r.auEnd, a);
+    if (a?.reallocated && r.auEnd) assign(r, r.auEnd, a);
   }
   for (const { r, a } of pendingCn.sort((x,y) => (x.a.plannedAu || '').localeCompare(y.a.plannedAu || ''))) book(r, a.plannedAu || r.auEnd || line.today, a);
   const physicalEnd = kind => physical.filter(r => capacityKind(r.model) === kind).reduce((last,r) => r.auEnd > last ? r.auEnd : last, line.today);

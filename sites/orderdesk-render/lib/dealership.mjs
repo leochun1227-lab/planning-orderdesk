@@ -120,7 +120,7 @@ export function configureDealers(dealers, overrides = {}, today) {
     const setting = overrides[d.slug] || {}, configured = { ...d, ...setting };
     return { ...configured, vehicles: (d.vehicles || []).map(v => v.where === 'transit' && v.via !== 'transport'
       ? { ...v, arrive: transitArrival(v.since, configured, today) } : v) };
-  }).filter(d => dealerGroup(d) !== 'independent' || Number.isFinite(d.target) && d.target > 0) ?? null;
+  }) ?? null;
 }
 
 export function validateDealerSettings(entries, known) {
@@ -140,8 +140,9 @@ export function dealerSnapshot(raw, today, { all = false, towableOnly = false } 
   const known = dealerList(raw), resolveDealer = value => dealerSlug(known, value);
   const yards = raw?.yard || {}, pgi = raw?.pgi || {}, assignments = raw?.deliveryTo || {};
   const customerType = new Map(); // Orderlist customer name: "... Stock" = stock, else customer (handover classification)
-  const modelByChassis = new Map();
-  for (const r of listOf(raw?.schedule)) { const c = norm(r?.Chassis), cu = String(r?.Customer ?? '').trim(); if (c && cu) customerType.set(c, isStockCustomer(cu) ? 'stock' : 'customer'); if (c) modelByChassis.set(c, String(r.Model || r.model || r['Model / Range'] || '')); }
+  const modelByChassis = new Map(), yearByChassis = new Map();
+  const modelYearOf = r => String(r?.modelYear ?? r?.ModelYear ?? r?.['Model Year'] ?? r?.['Model year'] ?? r?.['Model year (MY)'] ?? '').trim();
+  for (const r of listOf(raw?.schedule)) { const c = norm(r?.Chassis), cu = String(r?.Customer ?? '').trim(); if (c && cu) customerType.set(c, isStockCustomer(cu) ? 'stock' : 'customer'); if (c) { modelByChassis.set(c, String(r.Model || r.model || r['Model / Range'] || '')); yearByChassis.set(c, modelYearOf(r)); } }
   const modelOf = (c, r) => String(r.model || r.materialCode || r.material || modelByChassis.get(norm(c)) || '');
   const included = (c, r) => !towableOnly || !/^SR[MV]/i.test(norm(c)) && !/^SR[MV]/i.test(modelOf(c, r));
   const inAnyYard = new Set();
@@ -158,13 +159,13 @@ export function dealerSnapshot(raw, today, { all = false, towableOnly = false } 
   return (all ? known : DEALERSHIPS.map(d => ({ ...d, own: true }))).map(d => {
     const useBillTo = SELF_OWNED.has(d.slug); // Admin.tsx: self-owned / price-enabled dealers go by the bill-to name
     const yardRows = Object.entries(yards[d.slug] || {}).filter(([c, r]) => c !== 'dealer-chassis' && r && !r.history && included(c, r))
-      .map(([c, r]) => { const since = dayOf(r.receivedAt ?? r.createdAt ?? r.movementDate); return { chassis: String(r.chassis || r.Chassis || c).trim(), where: 'yard', category: yardCategory(r, useBillTo), model: String(r.model || ''), customer: String(r.customer || ''), since, days: daysBetween(since, today) }; });
+      .map(([c, r]) => { const since = dayOf(r.receivedAt ?? r.createdAt ?? r.movementDate); return { chassis: String(r.chassis || r.Chassis || c).trim(), where: 'yard', category: yardCategory(r, useBillTo), model: modelOf(c, r), modelYear: modelYearOf(r) || yearByChassis.get(norm(c)) || '', customer: String(r.customer || ''), since, days: daysBetween(since, today) }; });
     const handovers = Object.entries(raw?.handover?.[d.slug] || raw?.[`handover_${d.slug}`] || {}).map(([c, r]) => ({ chassis: c, ...(r || {}) }));
     const handedOver = new Set(handovers.map(h => h.chassis.trim().toUpperCase()));
     const transit = (transitBy.get(d.slug) || []).flatMap(([c, r]) => {
       const chassis = c.trim().toUpperCase(), day = dayOf(r.pgidate), days = daysBetween(day, today) ?? 0;
       if (days > TRANSIT_MAX_DAYS || inAnyYard.has(chassis) || handedOver.has(chassis) || !included(c, r)) return [];
-      return [{ chassis: c.trim(), where: 'transit', category: yardCategory(r, Boolean(String(r.wholesaleBillToName ?? r.WholesaleBillToName ?? '').trim())), model: String(r.model || r.materialCode || ''), customer: String(r.customer || ''), since: day, days, arrive: transitArrival(day, d, today) }];
+      return [{ chassis: c.trim(), where: 'transit', category: yardCategory(r, Boolean(String(r.wholesaleBillToName ?? r.WholesaleBillToName ?? '').trim())), model: modelOf(c, r), modelYear: modelYearOf(r) || yearByChassis.get(norm(c)) || '', customer: String(r.customer || ''), since: day, days, arrive: transitArrival(day, d, today) }];
     });
     const monthly = new Map(), stockByModel = {};
     for (const h of handovers) {

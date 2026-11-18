@@ -18,16 +18,16 @@ const sections = report => ['own', 'jv', 'independent'].flatMap(g => report[g] ?
 export const dealerSettingsToken = dealers => hash(sorted((dealers || []).filter(d => dealerGroup(d) === 'independent').map(d => [d.slug, d.target, d.travelDays])));
 
 export function stockInputFingerprint({ line, dealers, capacity, settings, orders = {} }) {
-  return hash({ policyVersion: 'full-quantity-v4-balanced-stock', today: line.today, settings,
+  return hash({ policyVersion: 'dealer-balance-simulator-v1', today: line.today, settings,
     rows: sorted(line.rows.filter(r => !r.empty).map(r => rowFields.map(k => r[k] ?? null))),
     dealers: sorted((dealers || []).map(d => [d.slug, d.target, d.own, d.jv, d.paused, d.travelDays, d.yard, d.handover?.avgStock, d.handover?.avgCustomer,
-      sorted(Object.entries(d.handover?.stockByModel || {})), sorted((d.vehicles || []).map(v => [v.chassis, v.model, v.where, v.category, v.arrive]))])),
+      d.handover?.months, d.applicableModels, sorted(Object.entries(d.handover?.stockByModel || {})), sorted((d.vehicles || []).map(v => [v.chassis, v.model, v.modelYear, v.where, v.category, v.arrive, v.since]))])),
     capacity: sorted([...(capacity || new Map()).entries()]),
     inactive: sorted(Object.values(orders).filter(o => ['cancelled', 'completed'].includes(o.status)).map(o => [chassisKey(o.chassis), o.status])),
   });
 }
 
-export const forecastPreviewToken = (fingerprint, multiplier, months) => hash([fingerprint, multiplier, months]);
+export const forecastPreviewToken = (fingerprint, multiplier, months, assumptions) => hash(assumptions === undefined ? [fingerprint, multiplier, months] : [fingerprint, multiplier, months, assumptions]);
 export const sourceBlockers = sources => Object.entries(sources.status || {}).filter(([k, s]) => ['portal', 'dealers', 'plan', 'longtree', 'prod'].includes(k) && s.configured !== false && s.error).map(([k]) => k);
 
 export function saveStockOpinion({ previous, report, fingerprint, actor, now = new Date().toISOString() }) {
