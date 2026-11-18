@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { isRollingCustomer, isStockCustomer, dealerSlug, leadDays } from './dealership.mjs';
 import { signedPlansDate } from './order-signoff.mjs';
 import { recommendPoolStock } from './stock-rolling.mjs';
+import { confirmedStockPlan } from './stock-plan-confirmation.mjs';
 import { buildRollingReport } from './rolling-report.mjs';
 
 const MS = 86400000, stamp = d => Date.parse(`${d}T00:00:00Z`);
@@ -25,6 +26,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   quantity = rollingQuantity(quantity); customerPercent = rollingCustomerPercent(customerPercent);
   const share = customerPercent / 100;
   if (!plan || plan.fingerprint !== fingerprint || blockers.length) throw new Error('请先在库存调整预测中保存当前意见，再生成滚动排产 / Save the current stock opinion first');
+  plan = confirmedStockPlan(plan, fingerprint);
   if (!capacity?.size) throw new Error('AU产能尚未准备');
   const duration = (k, d) => Math.max(0, Number.isFinite(Number(settings[k])) ? Number(settings[k]) : d);
   const today = line.today, lead = duration('cnDays', 20) + duration('seaDays', 50) + duration('auDays', 40);
@@ -147,7 +149,9 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
     const reason = window.length < quantity ? `当前有效AU产能仅有 ${window.length} 个位置` : `当前可排的已签字Towable真实订单仅 ${schedule.length} 台`;
     throw new Error(`本期必须排满 ${quantity} 台，${reason}，不能保存未排满的方案。请补齐合格订单、交付日期或有效产能后重试。 / Cannot save an incomplete rolling plan (${schedule.length}/${quantity}).`);
   }
-  const result = { fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
+  const c = plan.confirmation;
+  const adjustmentBasis = { planId: plan.id, confirmationId: c.id, confirmedAt: c.confirmedAt, confirmedBy: c.confirmedBy, summary: c.summary };
+  const result = { confirmationId: c.id, adjustmentBasis, confirmedAdjustments: structuredClone(c.actions), fullTarget: true, id: randomUUID(), opinionId: plan.id, fingerprint, createdAt: new Date().toISOString(), createdBy: String(actor).slice(0, 60), quantity, customerPercent,
     deliveryRule: 'requestDate<=auEnd', ratioScope: 'rolling-week', earliest, latest, windowSlots: window.length, availableSlots: available.length,
     scheduled: schedule.length, customerCount: customerItems.length, stockCount: stock.items.length,
     newOrders: requests.filter(a => a.status === 'newOrder').length, inventoryBlocked: requests.filter(a => a.status === 'blocked').length,

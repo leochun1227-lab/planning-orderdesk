@@ -17,6 +17,7 @@ import { buildDealerLogistics } from '../lib/dealer-logistics.mjs';
 import { buildStockForecast, forecastMultiplier, DISPLAY_MODELS, NOT_ON_YARD, validateStockModelLists } from '../lib/stock-forecast.mjs';
 import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay, dealerSettingsToken } from '../lib/stock-rolling.mjs';
 import { configureDealers, validateDealerSettings } from '../lib/dealership.mjs';
+import { stockPlanConfirmation, confirmStockAdjustments } from '../lib/stock-plan-confirmation.mjs';
 import { runBalancedRolling } from './balanced-runner.mjs';
 import { reviewStockWithAI } from '../lib/stock-rolling-ai.mjs';
 import { createPortalSource } from '../lib/portal-source.mjs';
@@ -133,12 +134,14 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     const fingerprint = stockInputFingerprint({ line: baseLine, dealers: sources.forecastDealers, capacity: sources.auCapacity, settings: { ...sources.settings, displayModels: args.displayModels, notOnYardModels: args.notOnYardModels }, orders: args.orders });
     let rolling = recommendPoolStock({ plan: state?.stockForecastPlan, fingerprint, line: baseLine, dealers: sources.forecastDealers,
       capacity: sources.auCapacity, settings: sources.settings, orders: args.orders, blockers: sourceBlockers(sources) });
-    const saved = state?.rollingPlan, active = saved && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && !sourceBlockers(sources).length;
+    const confirmation = stockPlanConfirmation(state?.stockForecastPlan, fingerprint);
+    const saved = state?.rollingPlan, active = saved && saved.fingerprint === fingerprint && saved.opinionId === state?.stockForecastPlan?.id && confirmation.status === 'confirmed' && saved.confirmationId === confirmation.id && !sourceBlockers(sources).length;
     if (active) rolling = { ...saved.stockResult, ai: state.stockForecastPlan.ai || null };
+    rolling.confirmation = confirmation;
     rolling.balanced = Boolean(saved);
     rolling.balancedActive = Boolean(active);
-    const balanced = { customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
-      canGenerate: Boolean(state?.stockForecastPlan?.fingerprint === fingerprint && !sourceBlockers(sources).length && sources.auCapacity?.size),
+    const balanced = { confirmation, customerPercent: saved?.customerPercent ?? 35, status: !saved ? 'empty' : active ? 'ready' : 'stale', quantity: saved?.quantity || 180, inputToken: fingerprint, expectedId: saved?.id || null, opinionId: state?.stockForecastPlan?.id || null,
+      canGenerate: Boolean(confirmation.status === 'confirmed' && !sourceBlockers(sources).length && sources.auCapacity?.size),
       proposal: saved ? { ...saved, stockResult: undefined } : null };
     const line = active ? buildProductionLine({ ...args, rollingSchedule: saved.schedule, rollingSize: saved.quantity })
       : !saved && rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
@@ -188,10 +191,11 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     try {
       const body = suppliedBody || await planningBody(c), ctx = await currentLine();
       if (!ctx.state || body.inputToken !== ctx.fingerprint || body.opinionId !== ctx.state.stockForecastPlan?.id || body.expectedId !== (ctx.state.rollingPlan?.id || null)) throw conflict('来源或排产意见已变化，请刷新后重试。');
+      if (ctx.balanced.confirmation.status !== 'confirmed' || body.confirmationId !== ctx.balanced.confirmation.id) throw conflict('请先确认已保存的库存调整计划作为排产前提，再重新生成。');
       const proposal = await runBalancedRolling({ plan: ctx.state.stockForecastPlan, fingerprint: ctx.fingerprint, line: ctx.baseLine, dealers: ctx.sources.forecastDealers, capacity: ctx.sources.auCapacity,
         settings: ctx.sources.settings, orders: ctx.state.orders, quantity: body.quantity, customerPercent: body.customerPercent, blockers: sourceBlockers(ctx.sources), actor: auth.user(c.req.raw)?.name });
       const latest = await currentLine();
-      if (latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
+      if (latest.fingerprint !== ctx.fingerprint || latest.state?.stockForecastPlan?.id !== ctx.state.stockForecastPlan.id || latest.balanced.confirmation.status !== 'confirmed' || latest.balanced.confirmation.id !== proposal.confirmationId || sourceBlockers(latest.sources).length) throw conflict('计算期间来源或意见已变化，请刷新后重新生成。');
       ctx.state.rollingPlanHistory = [...(ctx.state.rollingPlanHistory || []), ...(ctx.state.rollingPlan ? [ctx.state.rollingPlan] : [])].slice(-5);
       ctx.state.rollingPlan = proposal;
       ctx.state.stockForecastPlan.admitted = [];
@@ -289,6 +293,24 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       await store.writeState(ctx.state, ctx.etag);
       return json({ ok: true, planId: next.id, retained: next.admitted.length, released: (previous?.admitted?.length || 0) - next.admitted.length });
     } catch (e) { return json({ error: message(e, '保存意见失败') }, e.status || 400); }
+  });
+
+  app.post('/api/stock-forecast/confirm', async c => {
+    if (!originOk(c)) return json({ error: '请求来源无效' }, 403);
+    try {
+      const body = await planningBody(c), ctx = await currentLine(), plan = ctx.state?.stockForecastPlan;
+      if (!plan || plan.id !== body.planId || ctx.fingerprint !== body.inputToken || plan.fingerprint !== ctx.fingerprint
+        || (body.multiplier !== undefined && Number(body.multiplier) !== plan.multiplier) || (body.months !== undefined && Number(body.months) !== plan.months)
+        || body.reportToken !== ctx.balanced.confirmation.reportToken || (body.expectedConfirmationId ?? null) !== (plan.confirmation?.id || null))
+        throw conflict('库存调整计划或来源已变化，请刷新、重新保存后确认。');
+      if (sourceBlockers(ctx.sources).length || !ctx.sources.auCapacity?.size) throw conflict('请等待库存、产线和产能数据更新成功后再确认。');
+      if (ctx.balanced.confirmation.status === 'confirmed') return json({ ok: true, confirmationId: plan.confirmation.id });
+      plan.confirmation = confirmStockAdjustments({ plan, fingerprint: ctx.fingerprint, actor: auth.user(c.req.raw)?.name });
+      plan.events = [...(plan.events || []), { type: 'confirm-adjustments', at: plan.confirmation.confirmedAt, by: plan.confirmation.confirmedBy,
+        confirmationId: plan.confirmation.id, summary: plan.confirmation.summary }].slice(-1000);
+      await store.writeState(ctx.state, ctx.etag);
+      return json({ ok: true, confirmationId: plan.confirmation.id, summary: plan.confirmation.summary });
+    } catch (e) { return json({ error: message(e, '库存调整确认失败') }, e.status || 400); }
   });
 
   app.post('/api/stock-forecast/admissions', async c => {

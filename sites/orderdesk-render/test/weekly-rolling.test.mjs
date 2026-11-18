@@ -4,12 +4,14 @@ import { buildBalancedRolling, rollingCustomerPercent, weekOf } from '../lib/bal
 import { buildProductionLine } from '../lib/production-line.mjs';
 import { buildStockForecast } from '../lib/stock-forecast.mjs';
 import { recommendPoolStock, stockInputFingerprint, saveStockOpinion } from '../lib/stock-rolling.mjs';
+import { confirmStockAdjustments } from '../lib/stock-plan-confirmation.mjs';
 import { buildRollingReport } from '../lib/rolling-report.mjs';
 import { today, plus, row, fixture } from './helpers/rolling-fixture.mjs';
 
 function refresh(f) {
   f.input.fingerprint = stockInputFingerprint({ line: f.line, dealers: f.dealers, capacity: f.capacity, settings: f.sources.settings });
   f.input.plan = saveStockOpinion({ report: buildStockForecast({ dealers: f.dealers, rows: f.line.rows, today }), fingerprint: f.input.fingerprint, actor: 'Test' });
+  f.input.plan.confirmation = confirmStockAdjustments({ plan: f.input.plan, fingerprint: f.input.fingerprint, actor: 'Test' });
   return f;
 }
 test('all signed customers remain pooled without consuming capacity until explicitly selected', () => {
@@ -96,6 +98,7 @@ test('pending inbound does not veto a whole dealer: the 83-customer scenario fil
   for (const group of ['own', 'jv', 'independent']) for (const d of f.input.plan.report[group].dealers) {
     f.input.plan.report[group].actions.push({ chassis: `PENDING-${d.slug}`, from: d.slug, model: 'SRC21', group: 'cn', action: 'pending', reason: 'date' });
   }
+  f.input.plan.confirmation = confirmStockAdjustments({ plan: f.input.plan, fingerprint: f.input.fingerprint, actor: 'Test' });
   const legacy = recommendPoolStock(f.input); assert.equal(legacy.items.length, 0);
   const p = buildBalancedRolling({ ...f.input, quantity: 180, customerPercent: 35 });
   assert.equal(p.scheduled, 180); assert.equal(p.customerCount, 63); assert.equal(p.stockCount, 117); assert.equal(p.newOrders, 0);
