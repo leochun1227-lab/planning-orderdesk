@@ -59,6 +59,16 @@ test('future fixed supply is reserved before choosing a receiver, avoiding a tra
   assert.equal(report.totals.reallocated, 1);
 });
 
+test('a receiver’s later committed model prevents a redundant coverage transfer chain', () => {
+  const dealers = [dealer('a', { yard: { stock: 10 } }), dealer('b', { target: 30, yard: { stock: 0 }, vehicles: [] }), dealer('c', { yard: { stock: 10 }, vehicles: [yard('OLD-C', 'SRC19')] })];
+  const report = run(dealers, [row('FIRST', { group: 'au' }), row('B-FUTURE', { dealer: 'b', group: 'cn', auEnd: '2027-01-14' })], {
+    assumptions: { customerPercent: 0, dealers: [{ slug: 'a', cap: 10 }] }
+  });
+  assert.equal(list(report).find(a => a.chassis === 'FIRST').to, 'c', 'B already has this model on its future physical route');
+  assert.equal(list(report).find(a => a.chassis === 'BFUTURE').to, 'b');
+  assert.equal(report.totals.reallocated, 1, 'one necessary transfer satisfies both ceiling pressure and missing-model coverage');
+});
+
 test('a model transfer is retained only where the receiver has no eligible own model and the sender keeps one', () => {
   const dealers = [dealer('a'), dealer('b', { yard: { stock: 0 }, vehicles: [] })];
   const report = run(dealers, [row('EXTRA', { group: 'sea' })]);
