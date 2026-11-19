@@ -6,8 +6,9 @@ const flexible = r => r.group === 'locked' && isStockCustomer(r.customer) && cap
 const sum = values => values.reduce((n, v) => n + v, 0);
 
 /** Source AU quantities include motorhomes. Only remaining Towable slots are
- * available to the Stock simulator; physical supply and named locked customers
- * retain their dates. Editing a month never silently expands that month's plan. */
+ * available to the Stock simulator; physical supply retains its dates and
+ * eligible locked customers use the fixed customer quota. Editing a month never
+ * silently expands that month's plan. */
 export function stockProductionPlan({ capacity, rows, today, monthly = {}, shiftDays = 0, finishDates = {}, managedLocked = null, customers = [], customerPercent = 0 }) {
   if (!monthly || typeof monthly !== 'object' || Array.isArray(monthly)) throw new Error('Invalid monthly AU production');
   const managedCustomers = new Set(customers.filter(r => r.group === 'locked').map(r => r.chassis));
