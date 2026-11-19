@@ -99,6 +99,10 @@ export async function buildSimulationPdf(report, { generatedAt = new Date().toIS
         ['Arrivals', ...d.monthly.map(m => whole(m.stockIn))], ['Sold', ...d.monthly.map(m => whole(m.stockOut))], ['Before', ...d.monthly.map(m => whole(m.baselineEndStock))], ['After', ...d.monthly.map(m => whole(m.endStock))], ['% of Ideal', ...d.monthly.map(m => m.idealMultiple == null ? '-' : `${Math.round(m.idealMultiple * 100)}%`)],
       ], [2, ...d.monthly.map(() => 1)]),
     ];
+    if (d.displayWindow) {
+      const w = d.displayWindow;
+      blocks.push(paragraph(`MY2027 SRC / SRP models on yard (forecast): 31 Mar ${w.atStart}/${w.target}   |   7 Apr ${w.atEnd}/${w.target}   |   30 Apr ${w.inApril}/${w.target}`));
+    }
     const matrixHeaders = ['Model', 'In stock', ...d.distributionMonths.map(month), ...(d.showLater ? ['Later'] : []), 'Total', 'Missing'];
     const matrixRows = d.distribution.map(r => [r.label, sparse(r.yard), ...d.distributionMonths.map(m => sparse(r.arrivals[m])), ...(d.showLater ? [sparse(r.later)] : []), sparse(r.total), sparse(r.missing)]);
     blocks.push(table('MY2027 models and arrival months - locked plan', matrixHeaders, matrixRows, [2.8, ...matrixHeaders.slice(1).map(() => 1)], report.months > 8 ? 8.5 : 9.2));

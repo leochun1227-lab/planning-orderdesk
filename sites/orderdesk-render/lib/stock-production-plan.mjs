@@ -53,7 +53,7 @@ export function stockProductionPlan({ capacity, rows, today, monthly = {}, shift
   // reserved physical work. Do not discard those places behind the old boundary.
   const start = Object.keys(overrides).length ? today : [today, physicalEnd, firstLocked || today].sort().at(-1);
   const slots = [...daily].filter(([d]) => d >= start).flatMap(([d, c]) => Array(Math.max(0, c.towable - (counts.get(d) || 0))).fill(d));
-  const customerPlan = weeklyCustomerPlan({ slots, candidates: customers, percent: customerPercent });
+  const customerPlan = weeklyCustomerPlan({ slots, percent: customerPercent });
   return { months, daily: [...daily], slots: customerPlan.stockSlots, start, overrides, customerPlan };
 }
 
