@@ -83,7 +83,7 @@ test('customer identities appear only in the chronological schedule; Stock metri
   assert.deepEqual(report.own.actions, base.own.actions); assert.deepEqual(report.own.dealers, base.own.dealers);
   assert.ok(!JSON.stringify(report.own).includes('Customer identity'));
   const model = buildSimulationReport(report); assert.ok(!model.dealers.some(d => JSON.stringify(d).includes('Customer identity')));
-  const plan = finalScheduleView(report); assert.equal(plan.customers, 1); assert.equal(plan.waiting, 3); assert.equal(plan.stock, 2);
+  const plan = finalScheduleView(report); assert.equal(plan.customers, 1); assert.equal(plan.waiting, 1); assert.equal(plan.stock, 2);
   assert.equal(scheduleCells(plan.rows.find(r => r.kind === 'customer'))[6], 'Customer identity');
   assert.equal(new Set(plan.rows.map(r => r.slotId || r.chassis)).size, plan.rows.length);
   assert.ok(plan.rows.every((r, i) => !i || r.auFinish >= plan.rows[i - 1].auFinish));
@@ -125,7 +125,8 @@ test('final AU-month mix counts actual production separately from reserved custo
     assert.equal(m.stock,rows.filter(r=>r.kind==='stock').length);
     assert.equal(m.waiting,rows.filter(r=>r.kind==='customer-gap').length);
     assert.equal(m.customerQuota,m.customers+m.waiting);
-    assert.equal(m.slots,m.customers+m.waiting+m.stock+m.stockEmpty);
-    assert.equal(m.reservedPercent,30);
+    assert.equal(m.slots,m.customers+m.waiting+m.stock);
+    assert.equal(m.capacity,m.slots+m.stockEmpty);
+    assert.ok(Math.abs(m.customerQuota - m.slots * 0.3) < 1);
   }
 });

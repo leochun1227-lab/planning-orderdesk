@@ -103,8 +103,10 @@ function replayStockSlots({ line, report, capacity, dealers, includeRolling }) {
     r.auForecast = undefined; r.planOrder = null; r.locked = false;
   };
   const mixed = report.auProduction.customerPlan;
-  const named = new Map((mixed?.rows || []).filter(a => a.kind === 'customer' && a.group === 'locked').map(a => [norm(a.chassis), a]));
-  const managedNamed = new Set([...named.keys(), ...(mixed?.unplanned || []).filter(a => a.group === 'locked').map(a => norm(a.chassis))]);
+  const lockedCustomers = (mixed?.rows || []).filter(a => a.kind === 'customer' && a.group === 'locked');
+  const stockBoundary = report.finalSchedule?.boundary;
+  const named = new Map(lockedCustomers.filter(a => !stockBoundary || mixed.percent === 100 || a.plannedAu <= stockBoundary).map(a => [norm(a.chassis), a]));
+  const managedNamed = new Set([...lockedCustomers.map(a => norm(a.chassis)), ...(mixed?.unplanned || []).filter(a => a.group === 'locked').map(a => norm(a.chassis))]);
   for (const r of line.rows.filter(r => !r.empty)) {
     if (r.group === 'locked' && managedNamed.has(norm(r.chassis))) {
       const customer = named.get(norm(r.chassis));
