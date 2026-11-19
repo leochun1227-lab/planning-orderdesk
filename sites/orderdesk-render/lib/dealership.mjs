@@ -115,8 +115,16 @@ export function dealerList(raw) {
 export const dealerGroup = d => d.own !== false ? 'own' : d.jv ? 'jv' : 'independent';
 export const dealerSlug = (dealers, value) => { const slug = slugify(value); return dealers.find(d => d.slug === slug)?.slug || dealers.find(d => slugify(d.name) === slug)?.slug || slug; };
 
+// Dealers outside the planning scope are neither donors nor recipients.
+const outsidePlanning = new Set(['newcastlecaravansrv', 'auswide', 'caravanandcamperwa', 'caravanandcamper', 'greenshow', 'coasttocountry', 'motorhub']);
+const planningName = value => String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+export const excludedPlanningDealer = value => {
+  const names = typeof value === 'object' && value ? [value.slug, value.name] : [value];
+  return names.some(n => { const k = planningName(n); return outsidePlanning.has(k) || k === 'newcastlecaravansandrv'; });
+};
+
 export function configureDealers(dealers, overrides = {}, today) {
-  return dealers?.map(d => {
+  return dealers?.filter(d => !excludedPlanningDealer(d)).map(d => {
     const setting = overrides[d.slug] || {}, configured = { ...d, ...setting };
     return { ...configured, vehicles: (d.vehicles || []).map(v => v.where === 'transit' && v.via !== 'transport'
       ? { ...v, arrive: transitArrival(v.since, configured, today) } : v) };
