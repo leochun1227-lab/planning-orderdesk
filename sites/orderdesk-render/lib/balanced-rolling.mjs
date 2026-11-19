@@ -1,3 +1,4 @@
+import { excludedPlanningDealer } from './dealership.mjs';
 // Quantity is the first objective. Weekly mix is a soft target; physical capacity,
 // valid signatures and lead times remain hard constraints; inventory is optimised.
 import { randomUUID } from 'node:crypto';
@@ -42,7 +43,7 @@ export function buildBalancedRolling({ plan, fingerprint, line, dealers = [], ca
   const physical = new Set(dealers.flatMap(d => (d.vehicles || []).map(v => norm(v.chassis))));
   const counts = new Map(); for (const r of line.rows) if (!r.empty) counts.set(norm(r.chassis), (counts.get(norm(r.chassis)) || 0) + 1);
   const customers = [], customerHolds = [];
-  for (const r of line.rows.filter(r => ['customers', 'later', 'rolling', 'processing'].includes(r.group) && !r.empty && isRollingCustomer(r))) {
+  for (const r of line.rows.filter(r => ['customers', 'later', 'rolling', 'processing'].includes(r.group) && !r.empty && !excludedPlanningDealer(r.dealer) && isRollingCustomer(r))) {
     const signedAt = signedPlansDate([r.signedAt], today), request = dateOnly(r.requestDate);
     const reason = !norm(r.chassis) || counts.get(norm(r.chassis)) !== 1 || physical.has(norm(r.chassis)) ? 'duplicateOrPhysical'
       : inactive.has(norm(r.chassis)) ? 'inactive' : !signedAt ? 'unsigned'

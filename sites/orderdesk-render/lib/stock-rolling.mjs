@@ -1,3 +1,4 @@
+import { excludedPlanningDealer } from './dealership.mjs';
 // Saved inventory opinions and explicit stock admissions. Never edits CRM orders,
 // cancellations, transport records or the Longtree locked plan.
 import { createHash, randomUUID } from 'node:crypto';
@@ -18,7 +19,7 @@ const sections = report => ['own', 'jv', 'independent'].flatMap(g => report[g] ?
 export const dealerSettingsToken = dealers => hash(sorted((dealers || []).filter(d => dealerGroup(d) === 'independent').map(d => [d.slug, d.target, d.travelDays])));
 
 export function stockInputFingerprint({ line, dealers, capacity, settings, orders = {} }) {
-  return hash({ policyVersion: 'dealer-balance-simulator-v3-slot-exchange', today: line.today, settings,
+  return hash({ policyVersion: 'dealer-balance-simulator-v4-dealer-scope', today: line.today, settings,
     rows: sorted(line.rows.filter(r => !r.empty).map(r => rowFields.map(k => r[k] ?? null))),
     dealers: sorted((dealers || []).map(d => [d.slug, d.target, d.own, d.jv, d.paused, d.travelDays, d.yard, d.handover?.avgStock, d.handover?.avgCustomer,
       d.handover?.months, d.applicableModels, sorted(Object.entries(d.handover?.stockByModel || {})), sorted((d.vehicles || []).map(v => [v.chassis, v.model, v.modelYear, v.where, v.category, v.arrive, v.since]))])),
@@ -47,6 +48,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
     items: [], requests: [], admitted: [], requested: plan?.admitted || [], held: {}, monthly: [], token: '', blockers, ai: plan?.ai || null };
   if (empty.status !== 'ready') return empty;
   if (!capacity?.size) return { ...empty, status: 'capacity' };
+  dealers = dealers.filter(d => !excludedPlanningDealer(d));
   const today = line.today, end = plan.report.planningEnd, N = Math.round((stamp(end) - stamp(today)) / MS) + 1;
   const at = d => Math.round((stamp(d) - stamp(today)) / MS);
   const dates = Array.from({ length: N }, (_, i) => plus(today, i));
@@ -98,7 +100,7 @@ export function recommendPoolStock({ plan, fingerprint, line, dealers = [], capa
   const held = {}, hold = reason => { held[reason] = (held[reason] || 0) + 1; };
   const pool = [];
   const receiving = u => u && u.d.slug !== 'traralgon' && !u.d.paused && u.lead != null && u.cap != null;
-  for (const r of line.rows.filter(r => r.group === 'customers' && isStockCustomer(r.customer))) {
+  for (const r of line.rows.filter(r => r.group === 'customers' && !excludedPlanningDealer(r.dealer) && isStockCustomer(r.customer))) {
     const id = chassisKey(r.chassis), source = units.get(dealerSlug(dealers, r.dealer));
     const policy = modelPolicy(r.model, r.modelYear, plan.report.displayModels ?? DISPLAY_MODELS, plan.report.notOnYardModels ?? NOT_ON_YARD);
     const destinations = [source].filter(receiving); // Dealer is authoritative after the explicitly applied Reallocation plan.

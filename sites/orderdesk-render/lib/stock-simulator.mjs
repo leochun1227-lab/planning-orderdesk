@@ -2,7 +2,7 @@
 import { isCancellationProtected } from './protected-stock.mjs';
 import { stockProductionPlan } from './stock-production-plan.mjs';
 import { dealerStockMetrics, reallocationYears } from './stock-simulation-metrics.mjs';
-import { dealerGroup, dealerSlug, leadDays, isStockCustomer } from './dealership.mjs';
+import { excludedPlanningDealer, dealerGroup, dealerSlug, leadDays, isStockCustomer } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, isTowable, modelPolicy, addCalendarMonth, forecastMultiplier, validateDisplayModels } from './stock-forecast.mjs';
 
 export const SIMULATOR_VERSION = 'dealer-balance-v2-slots';
@@ -66,6 +66,11 @@ export function normalizeSimulationAssumptions(value = {}, dealers, rows, displa
 }
 
 export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1.3, months = 8, assumptions = {}, displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD, capacity = null, protectChassis = isCancellationProtected }) {
+  dealers = dealers?.filter(d => !excludedPlanningDealer(d));
+  if (assumptions && typeof assumptions === 'object' && !Array.isArray(assumptions)) {
+    const omitted = new Set(rows.filter(r => excludedPlanningDealer(r.dealer)).map(r => id(r.chassis)));
+    assumptions = { ...assumptions, ...(Array.isArray(assumptions.dealers) ? { dealers: assumptions.dealers.filter(d => !excludedPlanningDealer(d.slug)) } : {}), ...(assumptions.finishDates ? { finishDates: Object.fromEntries(Object.entries(assumptions.finishDates).filter(([c]) => !omitted.has(id(c)))) } : {}) };
+  }
   if (!valid(today)) fail('Invalid simulation date');
   if (!Array.isArray(dealers)) fail('Dealer stock data is unavailable');
   multiplier = forecastMultiplier(multiplier);
@@ -87,7 +92,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
   }
   const source = [];
   for (const r of [...rows].sort((a, b) => (rank[a.group] ?? 99) - (rank[b.group] ?? 99) || id(a.chassis).localeCompare(id(b.chassis)))) {
-    if (r.empty || !id(r.chassis) || !(r.group in rank) || !isTowable(r) || !isStockCustomer(r.customer)) continue;
+    if (excludedPlanningDealer(r.dealer) || r.empty || !id(r.chassis) || !(r.group in rank) || !isTowable(r) || !isStockCustomer(r.customer)) continue;
     if (seen.has(id(r.chassis))) { warnings.push({ code: 'duplicate', chassis: id(r.chassis) }); continue; }
     seen.add(id(r.chassis));
     const slug = dealerSlug(dealers, r.dealer);
