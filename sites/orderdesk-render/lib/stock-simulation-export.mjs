@@ -1,10 +1,12 @@
+import { buildSimulationReport } from './stock-simulation-report.mjs';
+import { stockActions } from './stock-simulation-metrics.mjs';
 const groups = ['own', 'jv', 'independent'];
 const text = (zh, cn, en) => zh ? cn : en;
 /** Uses the displayed snapshot, with its assumptions and all cross-group reallocations. */
 export function simulationExportSheets(report, zh = true) {
-  const dealers = groups.flatMap(group => report[group].dealers.map(d => ({ ...d, group }))), actions = groups.flatMap(g => report[g].actions);
+  const dealers = groups.flatMap(group => report[group].dealers.map(d => ({ ...d, group }))), actions = stockActions(groups.flatMap(g => report[g].actions));
   const sources = new Map(report.defaults.map(d => [d.slug, d]));
-  return [
+  const sheets = [
     { name: text(zh, '模拟参数', 'Assumptions'), headers: ['Dealer', 'Group', text(zh, '现有Stock', 'Source Stock'), text(zh, '虚拟Stock', 'Virtual Stock'), text(zh, '默认每周交付', 'Default weekly handovers'), text(zh, '虚拟每周交付', 'Virtual weekly handovers'), 'Ideal', text(zh, '上限', 'Ceiling'), 'Transport days', text(zh, '接收新分配', 'Receive allocations'), text(zh, '适用MY2027型号', 'Applicable MY2027 models'), text(zh, '整体下线偏移天数', 'Overall finish shift days')],
       rows: dealers.map(d => { const s = report.assumptions.dealers.find(s => s.slug === d.slug); return [d.name, d.group, sources.get(d.slug)?.currentStock, s.currentStock, sources.get(d.slug)?.weeklyStock, s.weeklyStock, s.ideal, s.cap, s.leadDays, s.receiving ? 'Yes' : 'No', s.models.join(', '), report.assumptions.shiftDays]; }) },
     { name: text(zh, '月度库存', 'Monthly inventory'), headers: ['Dealer', 'Group', text(zh, '月份', 'Month'), text(zh, '到店Stock', 'Stock arrivals'), text(zh, '卖出Stock', 'Stock sold'), text(zh, '调整前月底Stock', 'Closing Stock before'), text(zh, '调整后月底Stock', 'Closing Stock after'), 'Ideal', text(zh, '上限', 'Ceiling'), 'Stock / Ideal', text(zh, '预期交付', 'Expected handovers'), text(zh, '未满足交付', 'Unmet handovers')],
@@ -17,6 +19,15 @@ export function simulationExportSheets(report, zh = true) {
       rows: dealers.flatMap(d => [...d.handover.months.map(m => [d.name, m.month, m.stock, d.handover.avgStock, d.weeklyStock]), [d.name, `${report.today.slice(0, 7)} MTD`, d.handover.thisMonth.stock, d.handover.avgStock, d.weeklyStock]]) },
     { name: text(zh, '虚拟下线日期', 'Virtual AU dates'), headers: ['Chassis', 'Model', 'MY', 'Dealer', text(zh, '阶段', 'Stage'), text(zh, '原AU下线', 'Source AU finish'), text(zh, '虚拟AU下线', 'Virtual AU finish')], rows: report.finishRows.map(r => [r.chassis, r.model, r.modelYear, r.dealer, r.group, r.originalAu, r.simulatedAu]) },
   ];
+  const model = buildSimulationReport(report);
+  sheets.push({ name: text(zh, '年款转配及最晚到店', 'MY transfers and last arrival'), headers: ['Dealer', 'Last MY2026 Stock arrival', 'MY2026 dates unresolved', 'MY2026 Reallocation IN', 'MY2026 Reallocation OUT', 'MY2027 Reallocation IN', 'MY2027 Reallocation OUT', 'Other MY IN', 'Other MY OUT'], rows: model.dealers.map(d => [d.name, d.latestMY2026Arrival || (d.pendingMY2026Arrivals ? 'Review' : 'No inbound'), d.pendingMY2026Arrivals, d.reallocationByMY['2026'].incoming, d.reallocationByMY['2026'].outgoing, d.reallocationByMY['2027'].incoming, d.reallocationByMY['2027'].outgoing, d.reallocationByMY.other.incoming, d.reallocationByMY.other.outgoing]) });
+  for (const year of ['2026', '2027']) sheets.push({ name: `MY${year} Reallocation`, headers: ['Chassis', 'Model', 'MY', 'Original dealer', 'Receiving dealer', 'AU finish', 'Dealer arrival', 'Reason'], rows: actions.filter(a => String(a.modelYear) === year && a.action !== 'cancel' && a.reallocated).map(a => [a.chassis, a.model, a.modelYear, a.originalDealer, a.proposedDealer, a.simulatedAu, a.plannedArrival, a.reason]) });
+  sheets.push({ name: 'MY2027 SRC SRP arrivals', headers: ['Dealer', 'Arrival month', 'SRC Stock', 'SRP Stock'], rows: model.dealers.flatMap(d => d.my2027SrcSrpArrivals.months.map(m => [d.name, m.month, m.src, m.srp])) });
+  if (report.auProduction) {
+    sheets.unshift({ name: text(zh, 'AU月度产量', 'AU monthly production'), headers: ['AU month', 'Source AU total', 'Simulated AU total', 'SRM', 'SRV', 'Towable', 'Elapsed Towable', 'Fixed Towable', 'Stock scheduled', 'Remaining AU slots'], rows: report.auProduction.months.map(m => [m.month, m.sourceTotal, m.total, m.srm, m.srv, m.towable, m.elapsedTowable, m.fixedTowable, m.plannedStock, m.unfilled]) });
+    sheets.push({ name: text(zh, 'Stock排产名额交换', 'Stock slot changes'), headers: ['Chassis', 'Model', 'MY', 'Dealer', 'Source stage', 'Planned stage', 'Source AU finish', 'Planned AU finish', 'Dealer arrival', 'Reallocation', 'Cancellation protected'], rows: actions.filter(a => a.scheduleChanged || a.slotReleased).map(a => [a.chassis, a.model, a.modelYear, a.originalDealer, a.group, a.plannedGroup, a.originalAu, a.plannedAu, a.plannedArrival, a.reallocated ? 'Yes' : 'No', a.cancellationProtected ? 'Yes' : 'No']) });
+  }
+  return sheets;
 }
 export async function buildSimulationWorkbook(report, zh = true) {
   const imported = await import('exceljs'), ExcelJS = imported.default || imported, wb = new ExcelJS.Workbook();
@@ -24,7 +35,7 @@ export async function buildSimulationWorkbook(report, zh = true) {
     const ws = wb.addWorksheet(sheet.name);
     ws.addRow([text(zh, 'Dealer 库存平衡模拟器', 'Dealer inventory balancing simulator')]);
     ws.addRow([`${report.today} · ${text(zh, '同一虚拟假设比较调整前后；MY2027型号覆盖累计一次。', 'Before/after use the same assumptions; MY2027 model coverage is cumulative.')}`]);
-    ws.addRow([text(zh, '仅锁定线不推荐/删除车型可取消；其他正常车型保留。', 'Only locked not-on-yard / deleted models may be cancelled; retained models are preserved.')]);
+    ws.addRow([text(zh, '仅未受保护的锁定线不推荐/删除车型可取消；交换名额回池不算取消。', 'Only unprotected locked not-on-yard / deleted models may be cancelled. Slot releases retain the order in the pool.')]);
     ws.addRow([]); ws.addRow(sheet.headers); sheet.rows.forEach(row => ws.addRow(row));
     ws.getRow(1).font = { bold: true, size: 14 };
     ws.getRow(5).font = { bold: true, color: { argb: 'FFFFFFFF' } }; ws.getRow(5).height = 34;

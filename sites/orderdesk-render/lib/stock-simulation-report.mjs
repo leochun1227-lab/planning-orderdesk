@@ -1,3 +1,4 @@
+import { stockActions, dealerStockMetrics, reallocationYears } from './stock-simulation-metrics.mjs';
 const groups = ['own', 'jv', 'independent'];
 const key = v => String(v || '').trim().toUpperCase().replace(/\s+/g, ' ');
 const chassis = v => key(v).replace(/[-\s]/g, '');
@@ -6,16 +7,16 @@ export const reportModel = v => ['SRC', 'SRP'].includes(modelRange(v)) ? key(v) 
 const unique = rows => [...new Map(rows.map(a => [chassis(a.chassis), a])).values()];
 const sort = rows => [...rows].sort((a, b) => (a.plannedArrival || a.simulatedAu || '9999').localeCompare(b.plannedArrival || b.simulatedAu || '9999') || chassis(a.chassis).localeCompare(chassis(b.chassis)));
 export const reportStage = group => ({ locked: 'Locked', au: 'AU production', cn: 'China production', sea: 'Shipping', rolling: 'Rolling', pgi: 'PGI transit', transport: 'Transport', customers: 'Stock pool', processing: 'Processing', later: 'Unscheduled' })[group] || group;
-export const reportReason = code => ({ coverage: 'MY2027 model gap', balance: 'Month-end Stock / Ideal balance', ceiling: 'Retained model; ceiling conflict', deleted: 'Deleted MY2027 model', notOnYard: 'Not-on-yard model', settings: 'Receiving settings / applicable model review', date: 'AU finish / arrival date needed', horizon: 'Outside planning horizon', fixed: 'Fixed inbound', pool: 'Unscheduled stock pool' })[code] || code || '-';
+export const reportReason = code => ({ coverage: 'MY2027 model gap', balance: 'Month-end Stock / Ideal balance', ceiling: 'Retained model; ceiling conflict', deleted: 'Deleted MY2027 model', notOnYard: 'Not-on-yard model', settings: 'Receiving settings / applicable model review', date: 'AU finish / arrival date needed', horizon: 'Outside planning horizon', fixed: 'Fixed inbound', pool: 'Unscheduled stock pool', ownOrderSlot: 'Own-dealer order uses the AU slot', slotReplacement: 'Locked slot released; order retained in pool' })[code] || code || '-';
 
 /** The report is a projection of one successful simulation, not a new allocation run. */
 export function buildSimulationReport(report) {
   const dealers = groups.flatMap(group => (report[group]?.dealers || []).map(d => ({ ...d, group })));
-  const actions = sort(unique(groups.flatMap(g => report[g]?.actions || [])));
+  const actions = sort(unique(stockActions(groups.flatMap(g => report[g]?.actions || []))));
   const cancellations = actions.filter(a => a.action === 'cancel');
   const reallocations = actions.filter(a => (a.reallocated || a.action === 'reallocate') && a.from && a.to && a.from !== a.to && a.action !== 'cancel');
   return { today: report.today, months: report.months, planningEnd: report.planningEnd, assumptions: report.assumptions,
-    totals: { cancellations: cancellations.length, reallocations: reallocations.length, dealers: dealers.length },
+    totals: { cancellations: cancellations.length, reallocations: reallocations.length, reallocationsByMY: reallocationYears(reallocations), dealers: dealers.length },
     dealers: dealers.map(d => {
       const canceled = cancellations.filter(a => a.from === d.slug), incoming = reallocations.filter(a => a.to === d.slug), outgoing = reallocations.filter(a => a.from === d.slug);
       const related = actions.filter(a => a.from === d.slug || a.to === d.slug);
@@ -41,10 +42,12 @@ export function buildSimulationReport(report) {
         else r.later++;
       }
       const distribution = [...matrix.values()].sort((a, b) => a.label.localeCompare(b.label));
-      return { ...d, distribution, distributionMonths: months,
+      return { ...d, ...dealerStockMetrics(d.slug, actions), distribution, distributionMonths: months,
         showLater: distribution.some(r => r.later), showReview: distribution.some(r => r.review),
         cancellations: canceled, incoming, outgoing,
-        dateChanges: related.filter(a => a.action !== 'cancel' && !reallocations.includes(a) && a.virtualDate && (a.to || a.from) === d.slug),
+        reallocationGroups: ['2026', '2027', 'other'].map(year => ({ year, incoming: incoming.filter(a => (['2026', '2027'].includes(String(a.modelYear)) ? String(a.modelYear) : 'other') === year), outgoing: outgoing.filter(a => (['2026', '2027'].includes(String(a.modelYear)) ? String(a.modelYear) : 'other') === year) })),
+        scheduleChanges: related.filter(a => (a.scheduleChanged || a.slotReleased) && a.from === d.slug),
+        dateChanges: related.filter(a => a.action !== 'cancel' && !reallocations.includes(a) && a.virtualDate && !a.scheduleChanged && !a.slotReleased && (a.to || a.from) === d.slug),
         review: related.filter(a => ['pending', 'blocked'].includes(a.action) && (a.to || a.from) === d.slug),
         summary: { cancellations: canceled.length, reallocationIn: incoming.length, reallocationOut: outgoing.length, reallocations: incoming.length + outgoing.length },
       };

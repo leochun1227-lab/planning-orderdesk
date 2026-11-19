@@ -15,6 +15,7 @@ import { createCampervanPlanSource } from '../lib/campervan-plan.mjs';
 import { createProductionLineSource, buildProductionLine, loadRollingPlan, STAGES, BOARD_GROUPS } from '../lib/production-line.mjs';
 import { buildDealerLogistics } from '../lib/dealer-logistics.mjs';
 import { forecastMultiplier, DISPLAY_MODELS, NOT_ON_YARD, validateStockModelLists } from '../lib/stock-forecast.mjs';
+import { effectiveSimulationCapacity } from '../lib/stock-production-plan.mjs';
 import { buildStockSimulation, normalizeSimulationAssumptions } from '../lib/stock-simulator.mjs';
 import { stockInputFingerprint, forecastPreviewToken, sourceBlockers, saveStockOpinion, recommendPoolStock, productionLineDisplay, dealerSettingsToken } from '../lib/stock-rolling.mjs';
 import { configureDealers, validateDealerSettings } from '../lib/dealership.mjs';
@@ -138,6 +139,8 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     const chosen = state?.productionStockAdjustments;
     const applied = Boolean(chosen?.enabled && chosen.planId === state?.stockForecastPlan?.id && chosen.fingerprint === fingerprint
       && confirmation.status === 'confirmed' && chosen.confirmationId === confirmation.id && !sourceBlockers(sources).length && sources.auCapacity?.size);
+    const sourceCapacity = sources.auCapacity;
+    if (applied) { sources.auCapacity = effectiveSimulationCapacity(state.stockForecastPlan.confirmation.report, sourceCapacity); }
     const adjusted = applied ? replayInventoryBasis({ line: baseLine, report: state.stockForecastPlan.confirmation.report, capacity: sources.auCapacity, dealers: sources.forecastDealers }) : null;
     const effectivePlan = adjusted ? { ...state.stockForecastPlan, report: adjusted.report } : state?.stockForecastPlan;
     let rolling = recommendPoolStock({ plan: effectivePlan, fingerprint, line: adjusted?.line || baseLine, dealers: sources.forecastDealers,
@@ -161,7 +164,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       : !chosen && !saved && rolling.admitted.length ? buildProductionLine({ ...args, rollingAdmissions: rolling.items.filter(a => a.admitted) }) : baseLine;
     const recommendations = new Map(rolling.items.map(a => [a.chassis, a]));
     for (const row of line.rows) { const a = recommendations.get(String(row.chassis).replace(/[-\s]/g, '').toUpperCase()); if (a) row.stockRecommendation = a; }
-    return { sources, line, baseLine, state, etag, fingerprint, rolling, balanced, stockAdjustments };
+    return { sources, sourceCapacity, line, baseLine, state, etag, fingerprint, rolling, balanced, stockAdjustments };
   }
   app.get('/api/production-line', async c => {
     try {
@@ -182,7 +185,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
     const saved = state?.stockForecastPlan?.report;
     if (!saved?.assumptions) return {};
     const known = new Set(sources.forecastDealers.map(d => d.slug));
-    const chassis = new Set(baseLine.rows.filter(r => ['au', 'sea', 'cn', 'locked', 'rolling'].includes(r.group)).map(r => String(r.chassis).toUpperCase().replace(/[-\s]/g, '')));
+    const chassis = new Set(baseLine.rows.filter(r => ['au', 'sea', 'cn', 'locked', 'rolling', 'customers'].includes(r.group)).map(r => String(r.chassis).toUpperCase().replace(/[-\s]/g, '')));
     const { defaults } = normalizeSimulationAssumptions({}, sources.forecastDealers, baseLine.rows, state?.stockDisplayModels ?? DISPLAY_MODELS, state?.stockNotOnYardModels ?? NOT_ON_YARD, multiplier);
     const current = new Map(defaults.map(d => [d.slug, d])), previous = new Map((saved.defaults || []).map(d => [d.slug, d]));
     return { ...saved.assumptions, dealers: saved.assumptions.dealers.filter(d => known.has(d.slug)).map(d => {
@@ -191,7 +194,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (old) for (const field of ['currentStock', 'weeklyStock', 'ideal', 'cap', 'leadDays', 'receiving', 'models'])
         if (JSON.stringify(d[field]) === JSON.stringify(old[field])) result[field] = next[field];
       return result;
-    }), finishDates: Object.fromEntries(Object.entries(saved.assumptions.finishDates || {}).filter(([c]) => chassis.has(c))) };
+    }), auMonthlyProduction: Object.fromEntries(Object.entries(saved.assumptions.auMonthlyProduction || {}).filter(([m]) => m >= baseLine.today.slice(0, 7) && [...sources.auCapacity.keys()].some(d => d.startsWith(m)))), finishDates: Object.fromEntries(Object.entries(saved.assumptions.finishDates || {}).filter(([c]) => chassis.has(c))) };
   }
   async function simulationResponse(c, supplied) {
     let multiplier, months;
@@ -201,10 +204,10 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (![8, 14].includes(months)) throw new Error('预测月份须为8或14 / Forecast months must be 8 or 14');
     } catch (e) { return json({ error: message(e, 'Invalid forecast settings') }, 400); }
     try {
-      const { sources, baseLine, fingerprint, rolling, state, balanced, stockAdjustments } = await currentLine(supplied?.refresh === true || c.req.query('refresh') === '1');
+      const { sources, sourceCapacity, baseLine, fingerprint, rolling, state, balanced, stockAdjustments } = await currentLine(supplied?.refresh === true || c.req.query('refresh') === '1');
       if (!sources.forecastDealers) return json({ error: 'Dealer Portal 库存数据尚未读取，不能生成调整建议 / Dealer stock data is not available' }, 503);
       const assumptions = simulationInputs(sources, baseLine, state, supplied?.assumptions, multiplier);
-      const report = buildStockSimulation({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, multiplier, months, assumptions, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: state?.stockNotOnYardModels ?? NOT_ON_YARD });
+      const report = buildStockSimulation({ dealers: sources.forecastDealers, rows: baseLine.rows, today: baseLine.today, capacity: sourceCapacity, multiplier, months, assumptions, displayModels: state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: state?.stockNotOnYardModels ?? NOT_ON_YARD });
       return json({ ...report,
         dealerSettingsToken: dealerSettingsToken(sources.forecastDealers),
         lockedLast: baseLine.dealership?.lockedLast || '', adjustedLockedLast: stockAdjustments.basis?.rollingBoundary || '',
@@ -230,7 +233,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       if (![8, 14].includes(months)) throw new Error('预测月份须为8或14');
       const ctx = await currentLine();
       if (!ctx.sources.forecastDealers) throw new Error('Dealer库存数据尚未准备');
-      const report = buildStockSimulation({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, multiplier, months,
+      const report = buildStockSimulation({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, capacity: ctx.sourceCapacity, multiplier, months,
         assumptions: simulationInputs(ctx.sources, ctx.baseLine, ctx.state, body.assumptions, multiplier), displayModels: ctx.state?.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: ctx.state?.stockNotOnYardModels ?? NOT_ON_YARD });
       if (body.previewToken !== forecastPreviewToken(ctx.fingerprint, multiplier, months, report.assumptions)) throw conflict('来源或模拟参数已变化，请刷新计算后再下载 / Recalculate before downloading');
       const { buildSimulationPdf } = await import('./stock-simulation-pdf.mjs');
@@ -362,7 +365,7 @@ export function createApp({ store, auth, env = process.env, firebase = null, pro
       const ctx = await currentLine();
       if (!ctx.state || !ctx.sources.forecastDealers || !ctx.sources.auCapacity?.size || sourceBlockers(ctx.sources).length) throw new Error('请等待库存、产线和产能数据更新成功后再保存意见。');
       const previous = ctx.state.stockForecastPlan;
-      const report = buildStockSimulation({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, multiplier, months, assumptions: simulationInputs(ctx.sources, ctx.baseLine, ctx.state, body.assumptions, multiplier), displayModels: ctx.state.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: ctx.state.stockNotOnYardModels ?? NOT_ON_YARD });
+      const report = buildStockSimulation({ dealers: ctx.sources.forecastDealers, rows: ctx.baseLine.rows, today: ctx.baseLine.today, capacity: ctx.sourceCapacity, multiplier, months, assumptions: simulationInputs(ctx.sources, ctx.baseLine, ctx.state, body.assumptions, multiplier), displayModels: ctx.state.stockDisplayModels ?? DISPLAY_MODELS, notOnYardModels: ctx.state.stockNotOnYardModels ?? NOT_ON_YARD });
       if (body.expectedPlanId !== (previous?.id || null) || body.previewToken !== forecastPreviewToken(ctx.fingerprint, multiplier, months, report.assumptions)) throw conflict('数据、模拟参数或保存意见已变化，请重新计算后保存。');
       const next = saveStockOpinion({ previous, report, fingerprint: ctx.fingerprint, actor: auth.user(c.req.raw)?.name });
       // Previously admitted vehicles are explicitly rechecked when saving a new opinion.

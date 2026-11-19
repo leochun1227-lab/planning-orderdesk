@@ -35,7 +35,7 @@ test('SRC and SRP retain exact models; other prefixes aggregate and monthly dist
 test('incoming and outgoing reallocations appear on both relevant dealer pages but global totals count each chassis once', () => {
   const report = reportFixture(); report.independent.actions.push(report.own.actions[1]);
   const result = buildSimulationReport(report), [a, b] = result.dealers;
-  assert.deepEqual(result.totals, { cancellations: 1, reallocations: 3, dealers: 2 });
+  assert.deepEqual(result.totals, { cancellations: 1, reallocations: 3, reallocationsByMY: { '2026': 0, '2027': 3, other: 0 }, dealers: 2 });
   assert.equal(a.summary.reallocationIn, 1); assert.equal(a.summary.reallocationOut, 2); assert.equal(a.summary.cancellations, 1);
   assert.equal(b.summary.reallocationIn, 2); assert.equal(b.summary.reallocationOut, 1); assert.equal(b.summary.cancellations, 0);
   assert.equal(result.dealers.reduce((n, d) => n + d.summary.reallocationIn, 0), result.totals.reallocations);
