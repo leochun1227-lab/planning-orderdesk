@@ -11,24 +11,19 @@ const capacity = days => new Map(days.map(day => [day, { towable: 1, srm: 0, srv
 const list = r => ['own', 'jv', 'independent'].flatMap(g => r[g].actions);
 const run = (dealers, rows, extra = {}) => buildStockSimulation({ today, dealers, rows, displayModels: ['SRC21'], assumptions: { customerPercent: 0 }, ...extra });
 
-test('an editable Stock job waits for its own feasible date rather than transferring to a less full dealer', () => {
-  const dealers = [dealer('a', { yard: { stock: 10 } }), dealer('b')], rows = [row('S1')];
-  const report = run(dealers, rows, { capacity: capacity([today, '2026-12-17']), assumptions: { customerPercent: 0, dealers: [{ slug: 'a', cap: 10, weeklyStock: 1 }] } });
-  const a = list(report)[0];
-  assert.equal(a.to, 'a'); assert.equal(a.plannedAu, '2026-12-17'); assert.equal(a.action, 'reschedule');
-  assert.equal(report.totals.reallocated, 0);
-  assert.doesNotThrow(() => replayInventoryBasis({ line: { today, rows }, report, dealers }));
+test('inventory balance wins over waiting months solely to keep the original dealer', () => {
+  const report = run([dealer('a', { yard: { stock: 10 } }), dealer('b')], [row('S1')], { capacity: capacity([today, '2026-12-17']), assumptions: { customerPercent: 0, dealers: [{ slug: 'a', cap: 10, weeklyStock: 1 }] } });
+  assert.equal(list(report)[0].to, 'b'); assert.equal(list(report)[0].plannedAu, today);
 });
 
-test('a later own-dealer model replaces a surplus selected job before considering a model transfer', () => {
+test('an own pool vehicle at the same slot avoids a transfer without changing balanced inventory', () => {
   const dealers = [dealer('a'), dealer('b', { yard: { stock: 0 }, vehicles: [] })];
   const rows = [row('SURPLUS'), row('OWN-MODEL', { group: 'customers', dealer: 'b', auEnd: '' })];
-  const report = run(dealers, rows, { capacity: capacity([today, '2027-02-17']), assumptions: { customerPercent: 0, finishDates: { 'OWN-MODEL': '2027-02-17' } } });
-  assert.equal(report.totals.reallocated, 0);
-  const own = list(report).find(a => a.chassis === 'OWNMODEL'), surplus = list(report).find(a => a.chassis === 'SURPLUS');
-  assert.equal(own.to, 'b'); assert.equal(own.plannedAu, '2027-02-17'); assert.equal(own.slotScheduled, true);
-  assert.equal(surplus.action, 'pool'); assert.equal(surplus.slotReleased, true);
-  assert.equal(report.coverage.missing, 0);
+  const exchanged = run(dealers, rows, { capacity: capacity([today]) });
+  const transferred = run(dealers, rows, { capacity: capacity([today]), assumptions: { exchangeSlots: false, customerPercent: 0 } });
+  assert.equal(exchanged.totals.reallocated, 0); assert.equal(transferred.totals.reallocated, 1);
+  assert.equal(list(exchanged).find(a => a.chassis === 'OWNMODEL').to, 'b');
+  assert.deepEqual(exchanged.own.dealers.map(d => d.monthly.map(m => [m.stockIn,m.endStock,m.idealMultiple])), transferred.own.dealers.map(d => d.monthly.map(m => [m.stockIn,m.endStock,m.idealMultiple])));
 });
 
 test('disabling slot exchange does not silently admit a later pool order during coverage repair', () => {
@@ -36,7 +31,7 @@ test('disabling slot exchange does not silently admit a later pool order during 
     capacity: capacity([today, '2027-02-17']), assumptions: { customerPercent: 0, exchangeSlots: false, finishDates: { 'OWN-MODEL': '2027-02-17' } }
   });
   assert.equal(list(report).find(a => a.chassis === 'OWNMODEL').slotScheduled, undefined);
-  assert.equal(report.totals.reallocated, 0, 'a known own model is not a reason to transfer another dealer’s vehicle');
+  assert.equal(report.totals.reallocated, 1, 'an unavailable own job must not prevent balancing');
 });
 
 test('a fixed-stage transfer requires ceiling pressure, keeps the sender’s model, and records the reason', () => {
@@ -45,7 +40,7 @@ test('a fixed-stage transfer requires ceiling pressure, keeps the sender’s mod
   });
   const a = list(report)[0];
   assert.equal(a.to, 'b'); assert.equal(a.plannedAu, today);
-  assert.equal(a.reallocationCheck.required, true); assert.equal(a.reallocationCheck.reason, 'fixedCeiling');
+  assert.equal(a.reallocationCheck.required, true); assert.equal(a.reallocationCheck.reason, 'inventoryBalance');
   assert.equal(a.reallocationCheck.dateEditable, false); assert.equal(report.reallocationReview.unverified, 0);
 });
 
@@ -55,8 +50,7 @@ test('future fixed supply is reserved before choosing a receiver, avoiding a tra
     assumptions: { customerPercent: 0, dealers: [{ slug: 'a', cap: 10 }, { slug: 'b', cap: 2 }] }
   });
   assert.equal(list(report).find(a => a.chassis === 'FIRST').to, 'c');
-  assert.equal(list(report).find(a => a.chassis === 'BFUTURE').to, 'b');
-  assert.equal(report.totals.reallocated, 1);
+  assert.ok(list(report).every(a => !a.limitConflict));
 });
 
 test('a receiver’s later committed model prevents a redundant coverage transfer chain', () => {
@@ -73,9 +67,9 @@ test('a model transfer is retained only where the receiver has no eligible own m
   const dealers = [dealer('a'), dealer('b', { yard: { stock: 0 }, vehicles: [] })];
   const report = run(dealers, [row('EXTRA', { group: 'sea' })]);
   assert.equal(report.totals.reallocated, 1);
-  const a = list(report)[0]; assert.equal(a.to, 'b'); assert.equal(a.reallocationCheck.reason, 'modelNoOwnOrder');
+  const a = list(report)[0]; assert.equal(a.to, 'b'); assert.equal(a.reallocationCheck.reason, 'inventoryBalance');
   const withOwn = run(dealers, [row('EXTRA', { group: 'sea' }), row('OWN', { dealer: 'b', group: 'customers', auEnd: '', signedAt: today })]);
-  assert.equal(withOwn.totals.reallocated, 0); assert.equal(list(withOwn).find(a => a.chassis === 'EXTRA').to, 'a');
+  assert.equal(withOwn.totals.reallocated, 1, 'future own orders alone do not justify leaving the inventory imbalance');
 });
 
 test('the final audit rejects ratio-only or SRH MY2026 transfers and validates each retained reason', () => {
@@ -83,8 +77,15 @@ test('the final audit rejects ratio-only or SRH MY2026 transfers and validates e
   const report = run(dealers, [row('EXTRA', { group: 'au' }), row('SRH-OLD', { group: 'cn', model: 'SRH19', modelYear: '2026' }), row('LATER', { auEnd: '2027-01-14' })], { capacity: new Map([[today, { towable: 2, srm: 0, srv: 0 }], ['2027-01-14', { towable: 1, srm: 0, srv: 0 }]]) });
   assert.equal(list(report).find(a => a.chassis === 'SRHOLD').to, 'a');
   for (const a of list(report).filter(a => a.reallocated)) {
-    assert.ok(['fixedCeiling', 'modelNoOwnOrder'].includes(a.reallocationCheck.reason));
-    assert.equal(a.reallocationCheck.required, true); assert.equal(a.reallocationCheck.balanceOnly, false);
+    assert.ok(['inventoryBalance', 'inventoryBalance'].includes(a.reallocationCheck.reason));
+    assert.equal(a.reallocationCheck.required, true); assert.equal(a.reallocationCheck.balanceOnly, true);
   }
   assert.equal(report.reallocationReview.checked, report.totals.reallocated); assert.equal(report.reallocationReview.unverified, 0);
+});
+
+
+test('one undated incoming order does not exclude a low-inventory dealer from balancing', () => {
+ const report=run([dealer('a',{yard:{stock:8}}),dealer('b',{yard:{stock:0},vehicles:[]})],[row('GIVE',{group:'au'}),row('UNKNOWN',{dealer:'b',group:'cn',auEnd:''})]);
+ assert.equal(list(report).find(a=>a.chassis==='GIVE').to,'b');
+ assert.equal(report.own.dealers.find(d=>d.slug==='b').undatedIncoming,1);
 });

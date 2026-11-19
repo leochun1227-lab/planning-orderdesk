@@ -8,7 +8,7 @@ import { dealerStockMetrics, reallocationYears, isSRH2026 } from './stock-simula
 import { excludedPlanningDealer, dealerGroup, dealerSlug, leadDays, isStockCustomer } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, isTowable, modelPolicy, addCalendarMonth, forecastMultiplier, validateDisplayModels } from './stock-forecast.mjs';
 
-export const SIMULATOR_VERSION = 'dealer-balance-v3.2-required-transfers';
+export const SIMULATOR_VERSION = 'dealer-balance-v4-inventory-first';
 const MS = 86400000;
 const stamp = d => Date.parse(`${d}T00:00:00Z`);
 const valid = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(stamp(d)) && new Date(stamp(d)).toISOString().slice(0, 10) === d;
@@ -206,7 +206,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     const original = units.get(a.from), choices = [], model = key(a.model);
     for (const u of a.srh2026 || onlyOriginal ? [original] : units.values()) {
       const committed = committedOriginal && u === original;
-      if (u.s.leadDays == null || u.s.cap == null || !committed && (!u.s.receiving || u.s.ideal == null || u.undated)) continue;
+      if (u.s.leadDays == null || u.s.cap == null || !committed && (!u.s.receiving || u.s.ideal == null)) continue;
       if (!u.s.models.includes(model) && u !== original) continue;
       if (!committed && a.policy === 'display' && !u.s.models.includes(model)) continue;
       const cacheKey = `${u.s.slug}:${day}`;
@@ -265,7 +265,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     && (a.group === 'locked' && !a.slotReleased || signedPlansDate([sourceByChassis.get(a.chassis)?.signedAt], today));
   const ownModelSupply = (slug, model) => units.get(slug).keptYard.some(v => year2027(v) && key(v.model) === key(model))
     || actions.some(a => a.from === slug && year2027(a) && key(a.model) === key(model) && (a.receive && a.to === slug || eligibleOwnOrder(a)));
-  const audit = (a, reason, checkedDates = 1) => ({ required: true, reason, checkedDates, dateEditable: a.group === 'locked' || a.group === 'customers', ownOrderChecked: true, balanceOnly: false });
+  const audit = (a, reason, checkedDates = 1) => ({ required: true, reason, checkedDates, dateEditable: a.group === 'locked' || a.group === 'customers', ownOrderChecked: true, balanceOnly: reason === 'inventoryBalance' });
   let avoidedTransfers = 0, ownOrderReplacements = 0;
   // Fixed production dates can require a transfer for genuine marginal ceiling
   // pressure. A stock/Ideal score alone never changes dealer ownership.
@@ -275,14 +275,9 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     if (reserved) { event(original, reserved, a.model, -1); refresh(original); }
     if (!a.simulatedAu || a.simulatedAu > maxEnd) { a.receive = false; a.to = ''; a.action = 'pending'; a.reason = a.simulatedAu ? 'horizon' : 'date'; original.undated++; continue; }
     const choices = choicesFor(a, a.simulatedAu, new Map(), false, true), own = choices.find(c => c.original);
-    let best = own;
-    const arrival = original.s.leadDays == null ? '' : plus(a.simulatedAu, original.s.leadDays), t = arrival ? Math.max(0, at(arrival)) : N;
-    const pressure = t < N && original.s.cap != null && original.routes.ownOver[t] > 1e-8;
     const keepsModel = !year2027(a) || !original.s.models.includes(key(a.model)) || modelCount(a.from, a.model, a.chassis) > 0;
-    if (['au', 'sea', 'cn'].includes(a.group) && pressure && keepsModel && !a.srh2026) {
-      const target = choices.filter(c => !c.original && c.over < 1e-8).sort((a, b) => compare(a, b))[0];
-      if (target) { best = target; a.reallocationCheck = audit(a, 'fixedCeiling'); }
-    }
+    const alternatives = choices.filter(c => c.original || keepsModel).sort((a, b) => compare(a, b, true));
+    let best = alternatives[0] || own;
     if (!best) {
       a.reason = 'settings'; a.action = 'pending'; a.receive = false; original.undated++;
       if (a.baselineArrival && a.baselineArrival <= end) { Object.assign(a, { to: a.from, proposedDealer: a.originalDealer, plannedArrival: a.baselineArrival < today ? today : a.baselineArrival, receive: true }); event(original, a.plannedArrival, a.model); refresh(original); }
@@ -308,7 +303,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
         if (!old || readyOrder(a, old) < 0) buckets.set(k, a);
       }
       let best;
-      for (const a of buckets.values()) for (const choice of choicesFor(a, day, cache, true).filter(c => c.over < 1e-8)) if (!best || compare(choice, best, true) < 0) best = choice;
+      for (const a of buckets.values()) for (const choice of choicesFor(a, day, cache).filter(c => c.over < 1e-8)) if (!best || compare(choice, best, true) < 0) best = choice;
       if (!best) continue;
       candidates.delete(best.a); allocate(best.a, best, day, true); best.a.slotOrder = auProduction.customerPlan.stockPlaces[slotIndex]?.slotOrder; booked++;
     }
@@ -333,7 +328,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
   // A later own-dealer order can replace an already selected surplus order.
   // Search all remaining Stock dates before considering a model transfer.
   function repairOwnModel(u, model) {
-    if (!auProduction || !u.s.receiving || u.s.leadDays == null || u.s.cap == null || u.s.ideal == null || u.undated) return false;
+    if (!auProduction || !u.s.receiving || u.s.leadDays == null || u.s.cap == null || u.s.ideal == null) return false;
     const candidates = actions.filter(a => !a.receive && a.from === u.s.slug && year2027(a) && key(a.model) === model && eligibleOwnOrder(a) && (assumptions.exchangeSlots || a.group === 'locked'));
     const donors = actions.filter(a => a.receive && a.slotScheduled && (!year2027(a) || !units.get(a.to).s.models.includes(key(a.model)) || modelCount(a.to, a.model, a.chassis) > 0));
     // Removing another dealer's surplus does not alter this receiver's curve.
@@ -382,71 +377,35 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
       a.reallocationCheck = audit(a, 'modelNoOwnOrder', checkedDates); a.reason = 'coverage'; break;
     }
   }
-  // Re-test ownership after all replacements. Restore any transfer whose own
-  // route now fits and whose receiving model can be retained or supplied locally.
-  for (let reviewPass = 0; reviewPass <= actions.length; reviewPass++) {
-    const previousChanges = avoidedTransfers + ownOrderReplacements;
-    for (let pass = 0; pass < actions.length; pass++) {
-      let restored = false;
-      for (const a of actions.filter(a => a.reallocated)) {
-        const target = units.get(a.to), canRestoreCoverage = !year2027(a) || !target.s.models.includes(key(a.model)) || modelCount(a.to, a.model, a.chassis) > 0 || ownModelSupply(a.to, a.model);
-        if (!canRestoreCoverage) { a.reallocationCheck = audit(a, 'modelNoOwnOrder', a.reallocationCheck?.checkedDates || 1); continue; }
-        const oldArrival = a.plannedArrival; event(target, oldArrival, a.model, -1); refresh(target);
-        const own = choicesFor(a, a.plannedAu, new Map(), true, true).find(c => c.over < 1e-8);
-        if (!own) {
-          const original = units.get(a.from);
-          const movable = actions.filter(b => b !== a && b.receive && b.slotScheduled && b.to === a.from);
-          const snapshots = movable.map(b => ({ b, day: b.plannedAu, arrival: b.plannedArrival, slotOrder: b.slotOrder }));
-          for (const item of snapshots) event(original, item.arrival, item.b.model, -1);
-          refresh(original);
-          const fixedOnly = choicesFor(a, a.plannedAu, new Map(), true, true).find(c => c.over < 1e-8);
-          if (!fixedOnly) {
-            for (const item of snapshots) event(original, item.arrival, item.b.model);
-            refresh(original); event(target, oldArrival, a.model); refresh(target); continue;
-          }
-          // Fixed supply fits at home: move its editable Stock around it. Any
-          // order that cannot fit this horizon stays in the pool, never becomes
-          // justification for an otherwise avoidable physical transfer.
-          event(original, fixedOnly.arrival, a.model); refresh(original);
-          const occupied = new Set(actions.filter(b => b.receive && b.slotScheduled && !movable.includes(b)).map(b => b.slotOrder));
-          for (const item of snapshots.sort((x, y) => (assumptions.finishDates[x.b.chassis] || today).localeCompare(assumptions.finishDates[y.b.chassis] || today))) {
-            let fit;
-            for (const place of auProduction?.customerPlan.stockPlaces || [{ day: item.day, slotOrder: item.slotOrder }]) {
-              if (occupied.has(place.slotOrder) || assumptions.finishDates[item.b.chassis] && place.day < assumptions.finishDates[item.b.chassis]) continue;
-              const route = choicesFor(item.b, place.day).find(c => c.u === original && c.over < 1e-8);
-              if (route) { fit = { place, route }; break; }
-            }
-            original.assigned = Math.max(0, original.assigned - 1);
-            if (!fit) { release(item.b); continue; }
-            allocate(item.b, fit.route, fit.place.day, true); item.b.slotOrder = fit.place.slotOrder; occupied.add(fit.place.slotOrder);
-          }
-          event(original, fixedOnly.arrival, a.model, -1); refresh(original);
-          target.assigned = Math.max(0, target.assigned - 1); allocate(a, fixedOnly, a.plannedAu, a.slotScheduled); delete a.reallocationCheck; a.reason = 'ownOrderSlot'; avoidedTransfers++; restored = true; continue;
-        }
-        target.assigned = Math.max(0, target.assigned - 1); allocate(a, own, a.plannedAu, a.slotScheduled); delete a.reallocationCheck; a.reason = 'ownOrderSlot'; avoidedTransfers++; restored = true;
-      }
-      if (!restored) break;
-    }
-    for (const u of units.values()) for (const model of u.s.models) if (!modelCount(u.s.slug, model)) repairOwnModel(u, model);
-    if (previousChanges === avoidedTransfers + ownOrderReplacements) break;
+  // Transfer minimisation is a tie-break AFTER inventory/model outcomes.
+  // Replacing a transferred locked job with the receiver's identical own pool
+  // job preserves every arrival and monthly inventory exactly.
+  if (assumptions.exchangeSlots) for (const a of actions.filter(a => a.reallocated && a.slotScheduled)) {
+    const replacement = actions.find(b => !b.receive && b !== a && b.from === a.to && b.modelYear === a.modelYear && key(b.model) === key(a.model)
+      && eligibleOwnOrder(b) && (!assumptions.finishDates[b.chassis] || assumptions.finishDates[b.chassis] <= a.plannedAu));
+    if (!replacement) continue;
+    const u = units.get(a.to), day = a.plannedAu, slotOrder = a.slotOrder;
+    event(u, a.plannedArrival, a.model, -1); refresh(u);
+    const route = choicesFor(replacement, day, new Map(), true).find(c => c.over < 1e-8);
+    if (!route) { event(u, a.plannedArrival, a.model); refresh(u); continue; }
+    u.assigned = Math.max(0, u.assigned - 1); release(a); allocate(replacement, route, day, true); replacement.slotOrder = slotOrder;
+    avoidedTransfers++; ownOrderReplacements++;
   }
-  // Independently certify the final state, including changes made by the last
-  // repair. A self-assigned reason is insufficient evidence for a transfer.
-  for (const a of actions.filter(a => a.reallocated)) {
-    const target = units.get(a.to), original = units.get(a.from);
-    const keepsModel = !year2027(a) || !original.s.models.includes(key(a.model)) || modelCount(a.from, a.model, a.chassis) > 0;
-    const missingOwnModel = year2027(a) && target.s.models.includes(key(a.model)) && !modelCount(a.to, a.model, a.chassis) && !ownModelSupply(a.to, a.model);
-    if (a.srh2026 || !keepsModel) fail('Reallocation failed the final ownership check');
-    if (missingOwnModel) { a.reallocationCheck = audit(a, 'modelNoOwnOrder', a.reallocationCheck?.checkedDates || 1); continue; }
-    const movable = actions.filter(b => b !== a && b.receive && b.slotScheduled && b.to === a.from);
-    for (const b of movable) event(original, b.plannedArrival, b.model, -1);
-    refresh(original);
-    const fitsAtHome = choicesFor(a, a.plannedAu, new Map(), true, true).some(c => c.over < 1e-8);
-    for (const b of movable) event(original, b.plannedArrival, b.model);
-    refresh(original);
-    if (!['au', 'sea', 'cn'].includes(a.group) || fitsAtHome) fail('Avoidable Reallocation rejected by the final date and own-order check');
-    a.reallocationCheck = audit(a, 'fixedCeiling');
+  // Reciprocal identical models can exchange their AU dates and retain their
+  // original dealers, preserving both stores' complete arrival curves.
+  for (const a of actions.filter(a => a.reallocated && a.slotScheduled)) {
+    const b = actions.find(b => b !== a && b.reallocated && b.slotScheduled && b.from === a.to && b.to === a.from && b.modelYear === a.modelYear && key(b.model) === key(a.model)
+      && (!assumptions.finishDates[a.chassis] || assumptions.finishDates[a.chassis] <= b.plannedAu)
+      && (!assumptions.finishDates[b.chassis] || assumptions.finishDates[b.chassis] <= a.plannedAu));
+    if (!b) continue;
+    const ad = a.plannedAu, ai = a.slotOrder, bd = b.plannedAu, bi = b.slotOrder;
+    const ua = units.get(a.to), ub = units.get(b.to);
+    event(ua, a.plannedArrival, a.model, -1); event(ub, b.plannedArrival, b.model, -1); refresh(ua); refresh(ub);
+    const ar = choicesFor(a, bd, new Map(), true).find(c => c.over < 1e-8), br = choicesFor(b, ad, new Map(), true).find(c => c.over < 1e-8);
+    if (!ar || !br) { event(ua, a.plannedArrival, a.model); event(ub, b.plannedArrival, b.model); refresh(ua); refresh(ub); continue; }
+    ua.assigned--; ub.assigned--; allocate(a, ar, bd, true); allocate(b, br, ad, true); a.slotOrder = bi; b.slotOrder = ai; avoidedTransfers += 2;
   }
+  for (const a of actions.filter(a => a.reallocated)) a.reallocationCheck = audit(a, 'inventoryBalance');
   rebuildCoverage();
   if (auProduction) for (const m of auProduction.months) { m.plannedStock = actions.filter(a => a.slotScheduled && a.receive && a.plannedAu.startsWith(m.month)).length; m.unfilled = auProduction.slots.filter(d => d.startsWith(m.month)).length - m.plannedStock; }
   const monthKeys = Array.from({ length: months }, (_, n) => addCalendarMonth(firstMonth, n).slice(0, 7));
@@ -454,18 +413,19 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     rollingCanceled: 0, delayed: 0, cnDelayed: 0, cnCompletionDelayed: 0, poolNotBuilt: list.filter(a => a.action === 'pool').length,
     reallocated: list.filter(a => a.reallocated).length, reallocatedByMY: reallocationYears(list), scheduledFromPool: list.filter(a => a.slotScheduled && a.group === 'customers').length, returnedToPool: list.filter(a => a.slotReleased).length, rescheduled: list.filter(a => a.scheduleChanged).length, protected: list.filter(a => a.cancellationProtected).length, pending: list.filter(a => a.action === 'pending').length, changes: list.filter(a => ['cancel', 'reallocate', 'schedule', 'reschedule'].includes(a.action) || a.slotReleased).length,
     allocated: list.filter(a => a.receive).length, coverageAdded: list.filter(a => a.coverageAdded).length, limitConflicts: list.filter(a => a.limitConflict).length });
+  let forecastActions = actions;
   function section(group) {
     const all = [...units.values()].filter(u => dealerGroup(u.d) === group), slugs = new Set(all.map(u => u.s.slug)), list = actions.filter(a => slugs.has(a.from));
     return { actions: list, summary: summary(list), dealers: all.map(u => {
       const s = u.s, monthly = monthKeys.map(month => {
         const ids = dates.flatMap((d, t) => d.startsWith(month) ? [t] : []), last = ids.at(-1), sum = series => round(ids.reduce((n, t) => n + series[t], 0));
-        const arrivals = actions.filter(a => a.receive && a.to === s.slug && a.plannedArrival.startsWith(month)).map(a => ({ chassis: a.chassis, model: a.model, group: a.group, modelYear: a.modelYear, srh2026: a.srh2026, auEnd: a.plannedAu, arrival: a.plannedArrival, action: a.action }));
+        const arrivals = forecastActions.filter(a => a.receive && a.to === s.slug && a.plannedArrival.startsWith(month)).map(a => ({ chassis: a.chassis, model: a.model, group: a.group, modelYear: a.modelYear, srh2026: a.srh2026, auEnd: a.plannedAu, arrival: a.plannedArrival, action: a.action }));
         return { month, arrivals, stockIn: sum(u.events), stockOut: sum(u.sold), plannedSales: round(ids.length * s.weeklyStock / 7), unmet: sum(u.missed), endStock: round(u.balance[last]),
           baselineEndStock: round(u.before.balance[last]), baselineIn: sum(u.beforeEvents), idealMultiple: s.ideal == null ? null : round(u.balance[last] / s.ideal), transferOut: 0 };
       });
       const { vehicles: ignored, ...rest } = u.d;
       const coverageModels = s.models.filter(m => u.coverage.has(m)), missingModels = s.models.filter(m => !u.coverage.has(m));
-      return { ...rest, srh2026Count: u.keptYard.filter(isSRH2026).length + actions.filter(a => isSRH2026(a) && a.action !== 'cancel' && (a.to || a.from) === s.slug).length, ...dealerStockMetrics(s.slug, actions), target: s.ideal, cap: s.cap, lead: s.leadDays, paused: false, stopReceiving: !s.receiving,
+      return { ...rest, srh2026Count: u.keptYard.filter(isSRH2026).length + actions.filter(a => isSRH2026(a) && a.action !== 'cancel' && (a.to || a.from) === s.slug).length, ...dealerStockMetrics(s.slug, forecastActions), target: s.ideal, cap: s.cap, lead: s.leadDays, paused: false, stopReceiving: !s.receiving,
         yard: { ...u.d.yard, stock: s.currentStock }, transit: { ...u.d.transit, stock: fixed.filter(a => a.from === s.slug && ['pgi', 'transport'].includes(a.group)).length }, actualYardStock: u.d.yard.stock, weeklyStock: s.weeklyStock, assumptions: s,
         settingsNeeded: s.ideal == null || s.leadDays == null || s.cap == null, undatedIncoming: u.undated, unknownYardModels: u.unknownYard,
         srh2026Yard: u.keptYard.filter(isSRH2026).map(v => ({ chassis: id(v.chassis), model: v.model, modelYear: '2026', from: s.slug, to: s.slug, originalDealer: u.d.name, proposedDealer: u.d.name, group: 'yard' })),
@@ -508,19 +468,23 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
       let best; const cache = new Map();
       for (const a of candidates) {
         if (assumptions.finishDates[a.chassis] && day < assumptions.finishDates[a.chassis]) continue;
-        for (const c of choicesFor(a, day, cache, true).filter(c => c.over < 1e-8)) if (!best || compare(c, best, true) < 0) best = c;
+        for (const c of choicesFor(a, day, cache).filter(c => c.over < 1e-8)) if (!best || compare(c, best, true) < 0) best = c;
       }
       if (!best) continue;
       const a = best.a, u = best.u;
       const place = auProduction.customerPlan.stockPlaces.find(p => p.day === day && !usedOrders.has(p.slotOrder));
       if (place) usedOrders.add(place.slotOrder);
-      following.push({ ...a, slotOrder: place?.slotOrder, to: a.from, proposedDealer: a.originalDealer, plannedAu: day, simulatedAu: day,
-        plannedArrival: best.arrival, receive: true, action: 'schedule', reallocated: false, plannedGroup: 'rolling', continuation: true });
+      following.push({ ...a, slotOrder: place?.slotOrder, to: u.s.slug, proposedDealer: u.d.name, plannedAu: day, simulatedAu: day,
+        plannedArrival: best.arrival, receive: true, action: best.original ? 'schedule' : 'reallocate', reallocated: !best.original, reallocationCheck: !best.original ? audit(a, 'inventoryBalance') : undefined, plannedGroup: 'rolling', continuation: true });
       candidates.delete(a); event(u, best.arrival, a.model); u.assigned++;
-      if (year2027(a)) { const model = key(a.model), count = modelCount(a.from, model); u.coverage.add(model); modelCountCache.set(`${a.from}:${model}`, count + 1); }
+      if (year2027(a)) { const model = key(a.model), count = modelCount(u.s.slug, model); cover(u, a, 'following'); modelCountCache.set(`${u.s.slug}:${model}`, count + 1); }
       refresh(u);
     }
   }
+  const previewIds = new Set(following.map(a => a.chassis));
+  forecastActions = [...actions.filter(a => !previewIds.has(a.chassis)), ...following];
+  for (const g of groups) result[g] = section(g);
+  result.coverage = { target: groups.flatMap(g => result[g].dealers).reduce((n,d) => n+d.coverage.target,0), covered: groups.flatMap(g => result[g].dealers).reduce((n,d) => n+d.coverage.covered,0), missing: groups.flatMap(g => result[g].dealers).reduce((n,d) => n+d.coverage.missing.length,0) };
   const mixedCustomers = (auProduction?.customerPlan.rows || []).map(a => ({ ...a, schedulePart: a.plannedAu <= boundary || a.group === 'locked' ? 'locked' : 'following' }));
   const finalRows = [...mixedCustomers, ...lockedRows.map(a => ({ ...a, schedulePart: 'locked' })), ...following.map(a => ({ ...a, schedulePart: 'following' }))]
     .sort((a, b) => a.plannedAu.localeCompare(b.plannedAu) || (a.slotOrder ?? Infinity) - (b.slotOrder ?? Infinity) || a.chassis.localeCompare(b.chassis));
@@ -530,5 +494,14 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     srh2026: [...new Map(srh.map(a => [a.chassis, a])).values()],
     unplanned: actions.filter(a => ['locked', 'customers'].includes(a.group) && !scheduledIds.has(a.chassis) && !a.receive && a.action !== 'cancel'),
     monthly: (auProduction?.months || []).map(m => ({ month: m.month, quantity: finalRows.filter(a => (!a.kind || a.kind === 'stock') && a.plannedAu.startsWith(m.month)).length })) };
+  result.finalSchedule.auMonthlyMix = (auProduction?.months || []).map(m => {
+    const quota = result.finalSchedule.quotaMonths.find(q => q.month === m.month);
+    const selected = finalRows.filter(a => a.plannedAu.startsWith(m.month));
+    const customers = selected.filter(a => a.kind === 'customer').length, stock = selected.filter(a => a.kind === 'stock').length;
+    const waiting = selected.filter(a => a.kind === 'customer-gap').length, actual = customers + stock;
+    return { month: m.month, slots: quota?.slots || 0, customerQuota: quota?.customerSlots || 0, customers, waiting, stock,
+      stockEmpty: Math.max(0, (quota?.stockSlots || 0) - stock), reservedPercent: quota?.slots ? round(quota.customerSlots / quota.slots * 100) : null,
+      actualCustomerPercent: actual ? round(customers / actual * 100) : null, actualStockPercent: actual ? round(stock / actual * 100) : null };
+  });
   return result;
 }

@@ -22,7 +22,7 @@ const actions = report => ['own', 'jv', 'independent'].flatMap(g => report[g].ac
 test('an own-dealer pool order replaces a locked slot before a cross-dealer transfer; released orders are retained, not cancelled', () => {
   const input = fixture(), before = structuredClone(input);
   const old = buildStockSimulation({ ...input, assumptions: { exchangeSlots: false } });
-  assert.equal(old.totals.reallocated, 0, 'a known own-dealer order prevents an unproven transfer even when exchange is disabled');
+  assert.equal(old.totals.reallocated, 1, 'balancing still transfers when own-pool exchanges are disabled');
   const report = buildStockSimulation(input), by = new Map(actions(report).map(a => [a.chassis, a]));
   assert.equal(report.totals.reallocated, 0); assert.equal(report.totals.canceled, 0);
   assert.equal(by.get('SRC000002').action, 'schedule'); assert.equal(by.get('SRC000002').from, 'b'); assert.equal(by.get('SRC000002').to, 'b');
