@@ -19,7 +19,11 @@ export function dealerStockMetrics(slug, actions, calendarYear = 2027) {
   }));
   const srcSrp = inbound.filter(a => String(a.modelYear) === '2027' && ['SRC', 'SRP'].includes(key(a.model).slice(0, 3)));
   const months = Array.from({ length: 12 }, (_, i) => { const month = `${year}-${String(i + 1).padStart(2, '0')}`, arr = srcSrp.filter(a => a.plannedArrival?.startsWith(month)); return { month, src: arr.filter(a => key(a.model).startsWith('SRC')).length, srp: arr.filter(a => key(a.model).startsWith('SRP')).length }; });
-  return { latestMY2026Arrival, pendingMY2026Arrivals, reallocationByMY,
+  const firstRecommended = Object.fromEntries(['SRC','SRP'].map(range => {
+    const units = srcSrp.filter(a => a.policy === 'display' && key(a.model).startsWith(range));
+    return [range, units.map(a => a.plannedArrival).filter(Boolean).sort()[0] || (units.length ? 'pending' : '')];
+  }));
+  return { firstRecommended, latestMY2026Arrival, pendingMY2026Arrivals, reallocationByMY,
     my2027SrcSrpArrivals: { calendarYear, months, outsideYear: srcSrp.filter(a => a.plannedArrival && !a.plannedArrival.startsWith(`${year}-`)).length,
-      unresolved: rows.filter(a => String(a.modelYear) === '2027' && ['SRC', 'SRP'].includes(key(a.model).slice(0, 3)) && (a.to || a.from) === slug && !a.receive && !['cancel', 'pool'].includes(a.action)).length } };
+      unresolved: rows.filter(a => String(a.modelYear) === '2027' && ['SRC', 'SRP'].includes(key(a.model).slice(0, 3)) && (a.to || a.from) === slug && (!a.receive || !a.plannedArrival) && !['cancel', 'pool'].includes(a.action)).length } };
 }
