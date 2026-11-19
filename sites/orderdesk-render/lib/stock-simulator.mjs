@@ -1,7 +1,9 @@
+import { customerCandidates } from './weekly-customer-plan.mjs';
 // A deterministic, read-only simulation. Existing snapshots/legacy calculations remain readable.
 import { isCancellationProtected } from './protected-stock.mjs';
+import { signedPlansDate } from './order-signoff.mjs';
 import { stockProductionPlan } from './stock-production-plan.mjs';
-import { dealerStockMetrics, reallocationYears } from './stock-simulation-metrics.mjs';
+import { dealerStockMetrics, reallocationYears, isSRH2026 } from './stock-simulation-metrics.mjs';
 import { excludedPlanningDealer, dealerGroup, dealerSlug, leadDays, isStockCustomer } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, isTowable, modelPolicy, addCalendarMonth, forecastMultiplier, validateDisplayModels } from './stock-forecast.mjs';
 
@@ -62,10 +64,10 @@ export function normalizeSimulationAssumptions(value = {}, dealers, rows, displa
     if (!editable.has(id(chassis)) || !valid(day)) fail(`虚拟下线日期无效 / Invalid AU finish: ${chassis}`);
     dates[id(chassis)] = day;
   }
-  return { assumptions: { dealers: normalized.sort((a, b) => a.slug.localeCompare(b.slug)), shiftDays, finishDates: dates, auMonthlyProduction: value.auMonthlyProduction ?? {}, exchangeSlots: value.exchangeSlots ?? true }, defaults };
+  return { assumptions: { dealers: normalized.sort((a, b) => a.slug.localeCompare(b.slug)), shiftDays, finishDates: dates, auMonthlyProduction: value.auMonthlyProduction ?? {}, exchangeSlots: value.exchangeSlots ?? true, customerPercent: number(value.customerPercent ?? 35, 'customer percentage', { max: 100 }) }, defaults };
 }
 
-export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1.3, months = 8, assumptions = {}, displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD, capacity = null, protectChassis = isCancellationProtected }) {
+export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1.3, months = 8, assumptions = {}, displayModels = DISPLAY_MODELS, notOnYardModels = NOT_ON_YARD, capacity = null, settings = {}, protectChassis = isCancellationProtected }) {
   dealers = dealers?.filter(d => !excludedPlanningDealer(d));
   if (assumptions && typeof assumptions === 'object' && !Array.isArray(assumptions)) {
     const omitted = new Set(rows.filter(r => excludedPlanningDealer(r.dealer)).map(r => id(r.chassis)));
@@ -99,7 +101,8 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     if (!bySlug.has(slug)) { warnings.push({ code: 'dealer', chassis: id(r.chassis), dealer: r.dealer }); continue; }
     source.push({ ...r, slug, chassis: id(r.chassis) });
   }
-  const auProduction = stockProductionPlan({ capacity, rows, today, monthly: assumptions.auMonthlyProduction, shiftDays: assumptions.shiftDays, finishDates: assumptions.finishDates, managedLocked: new Set(source.filter(r => r.group === 'locked').map(r => r.chassis)) });
+  const customerOrders = customerCandidates({ rows, dealers, today, settings });
+  const auProduction = stockProductionPlan({ customers: customerOrders, customerPercent: assumptions.customerPercent, capacity, rows, today, monthly: assumptions.auMonthlyProduction, shiftDays: assumptions.shiftDays, finishDates: assumptions.finishDates, managedLocked: new Set(source.filter(r => r.group === 'locked').map(r => r.chassis)) });
   if (auProduction) assumptions.auMonthlyProduction = auProduction.overrides;
   const firstMonth = `${today.slice(0, 7)}-01`, maxEnd = addCalendarMonth(today, 36);
   const finish = r => assumptions.finishDates[id(r.chassis)] || (valid(r.auEnd) ? plus(r.auEnd, assumptions.shiftDays) : '');
@@ -150,7 +153,8 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
       from: r.slug, to: '', originalDealer: u.d.name, proposedDealer: '', originalAu, simulatedAu, plannedAu: simulatedAu, originalArrival, baselineArrival,
       plannedArrival: '', depart: '', action: 'keep', reason: '', policy: modelPolicy(r.model, r.modelYear, displayModels, notOnYardModels),
       receive: false, delayed: false, reallocated: false, delayDays: 0, arrivalDelayDays: null, virtualDate: simulatedAu !== originalAu, limitConflict: false, coverageAdded: false };
-    a.cancellationProtected = protectChassis(a.chassis);
+    a.srh2026 = isSRH2026(a);
+    a.cancellationProtected = protectChassis(a.chassis) || a.srh2026;
     actions.push(a); return a;
   }
   const scheduled = [], fixed = [];
@@ -187,9 +191,10 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     u.modelCache.set(cacheKey, stock); return stock;
   }
   const readyOrder = (a, b) => (a.simulatedAu || '9999').localeCompare(b.simulatedAu || '9999') || (rank[a.group] - rank[b.group]) || a.chassis.localeCompare(b.chassis);
-  function choicesFor(a, day, routeCache = new Map()) {
+  function choicesFor(a, day, routeCache = new Map(), onlyOriginal = false) {
     const original = units.get(a.from), choices = [];
     for (const u of units.values()) {
+      if ((a.srh2026 || onlyOriginal) && u !== original) continue;
       if (!u.s.receiving || u.s.ideal == null || u.s.leadDays == null || u.s.cap == null || u.undated) continue;
       if (!u.s.models.includes(key(a.model)) && u !== original) continue;
       if (a.policy === 'display' && !u.s.models.includes(key(a.model))) continue;
@@ -244,7 +249,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     // Swap the existing locked Stock places; leave later AU capacity available
     // to the separate rolling planner and its named customer / Stock mix.
     const slots = auProduction.slots.slice(0, flexible.length);
-    for (const day of slots) {
+    for (const [slotIndex, day] of slots.entries()) {
       if (!candidates.size) break;
       const cache = new Map(), buckets = new Map();
       for (const a of candidates) {
@@ -258,7 +263,7 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
       let best;
       for (const a of buckets.values()) for (const choice of choicesFor(a, day, cache)) if (!best || compare(choice, best, true) < 0) best = choice;
       if (!best) continue;
-      candidates.delete(best.a); allocate(best.a, best, day, true);
+      candidates.delete(best.a); allocate(best.a, best, day, true); best.a.slotOrder = auProduction.customerPlan.stockPlaces[slotIndex]?.slotOrder;
     }
     for (const a of flexible.filter(a => !a.slotScheduled)) Object.assign(a, { action: 'pool', reason: 'slotReplacement', slotReleased: true, plannedGroup: 'customers', simulatedAu: '', plannedAu: '', plannedArrival: '', to: '', receive: false });
     for (const m of auProduction.months) {
@@ -276,15 +281,16 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     return { actions: list, summary: summary(list), dealers: all.map(u => {
       const s = u.s, monthly = monthKeys.map(month => {
         const ids = dates.flatMap((d, t) => d.startsWith(month) ? [t] : []), last = ids.at(-1), sum = series => round(ids.reduce((n, t) => n + series[t], 0));
-        const arrivals = actions.filter(a => a.receive && a.to === s.slug && a.plannedArrival.startsWith(month)).map(a => ({ chassis: a.chassis, model: a.model, group: a.group, auEnd: a.plannedAu, arrival: a.plannedArrival, action: a.action }));
+        const arrivals = actions.filter(a => a.receive && a.to === s.slug && a.plannedArrival.startsWith(month)).map(a => ({ chassis: a.chassis, model: a.model, group: a.group, modelYear: a.modelYear, srh2026: a.srh2026, auEnd: a.plannedAu, arrival: a.plannedArrival, action: a.action }));
         return { month, arrivals, stockIn: sum(u.events), stockOut: sum(u.sold), plannedSales: round(ids.length * s.weeklyStock / 7), unmet: sum(u.missed), endStock: round(u.balance[last]),
           baselineEndStock: round(u.before.balance[last]), baselineIn: sum(u.beforeEvents), idealMultiple: s.ideal == null ? null : round(u.balance[last] / s.ideal), transferOut: 0 };
       });
       const { vehicles: ignored, ...rest } = u.d;
       const coverageModels = s.models.filter(m => u.coverage.has(m)), missingModels = s.models.filter(m => !u.coverage.has(m));
-      return { ...rest, ...dealerStockMetrics(s.slug, actions), target: s.ideal, cap: s.cap, lead: s.leadDays, paused: false, stopReceiving: !s.receiving,
+      return { ...rest, srh2026Count: u.keptYard.filter(isSRH2026).length + actions.filter(a => isSRH2026(a) && a.action !== 'cancel' && (a.to || a.from) === s.slug).length, ...dealerStockMetrics(s.slug, actions), target: s.ideal, cap: s.cap, lead: s.leadDays, paused: false, stopReceiving: !s.receiving,
         yard: { ...u.d.yard, stock: s.currentStock }, transit: { ...u.d.transit, stock: fixed.filter(a => a.from === s.slug && ['pgi', 'transport'].includes(a.group)).length }, actualYardStock: u.d.yard.stock, weeklyStock: s.weeklyStock, assumptions: s,
         settingsNeeded: s.ideal == null || s.leadDays == null || s.cap == null, undatedIncoming: u.undated, unknownYardModels: u.unknownYard,
+        srh2026Yard: u.keptYard.filter(isSRH2026).map(v => ({ chassis: id(v.chassis), model: v.model, modelYear: '2026', from: s.slug, to: s.slug, originalDealer: u.d.name, proposedDealer: u.d.name, group: 'yard' })),
         my2027Yard: u.keptYard.filter(year2027).map(v => ({ chassis: id(v.chassis), model: v.model })),
         monthly, stats: summary(list.filter(a => a.from === s.slug)), need: s.ideal == null ? null : Math.max(0, Math.ceil(s.ideal - monthly.at(-1).endStock)),
         coverage: { target: s.models.length, covered: coverageModels.length, models: coverageModels, missing: missingModels, details: u.coverageDetails },
@@ -297,5 +303,52 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     finishRows: source.filter(r => adjustable.has(r.group) || ['rolling', 'customers'].includes(r.group)).map(r => ({ chassis: r.chassis, model: r.model, modelYear: r.modelYear, dealer: r.dealer, group: r.group, originalAu: valid(r.auEnd) ? r.auEnd : '', simulatedAu: actions.find(a => a.chassis === r.chassis)?.simulatedAu ?? finish(r) })).sort((a, b) => (a.simulatedAu || '9999').localeCompare(b.simulatedAu || '9999') || a.chassis.localeCompare(b.chassis)) };
   const allDealers = groups.flatMap(g => result[g].dealers);
   result.coverage = { target: allDealers.reduce((n, d) => n + d.coverage.target, 0), covered: allDealers.reduce((n, d) => n + d.coverage.covered, 0), missing: allDealers.reduce((n, d) => n + d.coverage.missing.length, 0) };
+  // Read-only continuation: consume actual spare AU places after the adjusted
+  // locked boundary. Keep the original dealer for pool replenishment. This
+  // preview is separate from the confirmed locked adjustment basis.
+  const byAction = new Map(actions.map(a => [a.chassis, a]));
+  const lockedDates = rows.filter(r => r.group === 'locked' && !r.empty && isTowable(r)).flatMap(r => {
+    const a = byAction.get(id(r.chassis));
+    if (!isStockCustomer(r.customer) && customerOrders.some(c => c.chassis === id(r.chassis))) return auProduction?.customerPlan.rows.filter(c => c.kind === 'customer' && c.group === 'locked' && c.chassis === id(r.chassis)).map(c => c.plannedAu) || [];
+    return a ? (a.slotScheduled || !auProduction && a.receive) && a.plannedAu ? [a.plannedAu] : [] : r.auEnd ? [r.auEnd] : [];
+  });
+  for (const a of actions) if (a.slotScheduled && a.group === 'customers') lockedDates.push(a.plannedAu);
+  const boundary = lockedDates.sort().at(-1) || auProduction?.start || today;
+  const lockedRows = actions.filter(a => a.action !== 'cancel' && a.receive && (a.slotScheduled || !auProduction && a.group === 'locked'));
+  const following = [];
+  if (auProduction) {
+    const duration = (k, fallback) => Math.max(0, Number.isFinite(Number(settings[k])) ? Number(settings[k]) : fallback);
+    const earliest = [boundary, plus(today, duration('cnDays', 20) + duration('seaDays', 50) + duration('auDays', 40))].sort().at(-1);
+    const sourceById = new Map(source.map(r => [r.chassis, r]));
+    const candidates = new Set(actions.filter(a => a.action === 'pool' && ['customers', 'locked'].includes(a.group)
+      && signedPlansDate([sourceById.get(a.chassis)?.signedAt], today) && (a.policy === 'display' || a.cancellationProtected)));
+    const used = new Map(); for (const a of lockedRows) used.set(a.plannedAu, (used.get(a.plannedAu) || 0) + 1);
+    const slots = auProduction.slots.filter(day => { if (used.get(day)) { used.set(day, used.get(day) - 1); return false; } return day >= earliest; });
+    const usedOrders = new Set(lockedRows.map(a => a.slotOrder));
+    for (const day of slots) {
+      if (!candidates.size) break;
+      let best; const cache = new Map();
+      for (const a of candidates) {
+        if (assumptions.finishDates[a.chassis] && day < assumptions.finishDates[a.chassis]) continue;
+        for (const c of choicesFor(a, day, cache, true).filter(c => c.over < 1e-8)) if (!best || compare(c, best, true) < 0) best = c;
+      }
+      if (!best) continue;
+      const a = best.a, u = best.u;
+      const place = auProduction.customerPlan.stockPlaces.find(p => p.day === day && !usedOrders.has(p.slotOrder));
+      if (place) usedOrders.add(place.slotOrder);
+      following.push({ ...a, slotOrder: place?.slotOrder, to: a.from, proposedDealer: a.originalDealer, plannedAu: day, simulatedAu: day,
+        plannedArrival: best.arrival, receive: true, action: 'schedule', reallocated: false, plannedGroup: 'rolling', continuation: true });
+      candidates.delete(a); event(u, best.arrival, a.model); u.assigned++; if (year2027(a)) u.coverage.add(key(a.model)); refresh(u);
+    }
+  }
+  const mixedCustomers = (auProduction?.customerPlan.rows || []).map(a => ({ ...a, schedulePart: a.plannedAu <= boundary || a.group === 'locked' ? 'locked' : 'following' }));
+  const finalRows = [...mixedCustomers, ...lockedRows.map(a => ({ ...a, schedulePart: 'locked' })), ...following.map(a => ({ ...a, schedulePart: 'following' }))]
+    .sort((a, b) => a.plannedAu.localeCompare(b.plannedAu) || (a.slotOrder ?? Infinity) - (b.slotOrder ?? Infinity) || a.chassis.localeCompare(b.chassis));
+  const srh = [...actions.filter(a => isSRH2026(a) && a.action !== 'cancel'), ...allDealers.flatMap(d => d.srh2026Yard)];
+  const scheduledIds = new Set(finalRows.map(a => a.chassis));
+  result.finalSchedule = { customerPercent: assumptions.customerPercent, customerRows: mixedCustomers, weeks: auProduction?.customerPlan.weeks || [], customerUnplanned: auProduction?.customerPlan.unplanned || [], boundary, rows: finalRows, following, locked: lockedRows.length, later: following.length,
+    srh2026: [...new Map(srh.map(a => [a.chassis, a])).values()],
+    unplanned: actions.filter(a => ['locked', 'customers'].includes(a.group) && !scheduledIds.has(a.chassis) && !a.receive && a.action !== 'cancel'),
+    monthly: (auProduction?.months || []).map(m => ({ month: m.month, quantity: finalRows.filter(a => (!a.kind || a.kind === 'stock') && a.plannedAu.startsWith(m.month)).length })) };
   return result;
 }

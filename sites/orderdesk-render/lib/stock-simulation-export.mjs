@@ -1,3 +1,4 @@
+import { finalScheduleView, scheduleHeaders, scheduleCells } from './stock-schedule-view.mjs';
 import { buildSimulationReport } from './stock-simulation-report.mjs';
 import { stockActions } from './stock-simulation-metrics.mjs';
 const groups = ['own', 'jv', 'independent'];
@@ -20,13 +21,16 @@ export function simulationExportSheets(report, zh = true) {
     { name: text(zh, '虚拟下线日期', 'Virtual AU dates'), headers: ['Chassis', 'Model', 'MY', 'Dealer', text(zh, '阶段', 'Stage'), text(zh, '原AU下线', 'Source AU finish'), text(zh, '虚拟AU下线', 'Virtual AU finish')], rows: report.finishRows.map(r => [r.chassis, r.model, r.modelYear, r.dealer, r.group, r.originalAu, r.simulatedAu]) },
   ];
   const model = buildSimulationReport(report);
-  sheets.push({ name: text(zh, '年款转配及最晚到店', 'MY transfers and last arrival'), headers: ['Dealer', 'Last MY2026 Stock arrival', 'MY2026 dates unresolved', 'MY2026 Reallocation IN', 'MY2026 Reallocation OUT', 'MY2027 Reallocation IN', 'MY2027 Reallocation OUT', 'Other MY IN', 'Other MY OUT'], rows: model.dealers.map(d => [d.name, d.latestMY2026Arrival || (d.pendingMY2026Arrivals ? 'Review' : 'No inbound'), d.pendingMY2026Arrivals, d.reallocationByMY['2026'].incoming, d.reallocationByMY['2026'].outgoing, d.reallocationByMY['2027'].incoming, d.reallocationByMY['2027'].outgoing, d.reallocationByMY.other.incoming, d.reallocationByMY.other.outgoing]) });
+  sheets.push({ name: text(zh, '年款转配及最晚到店', 'MY transfers and last arrival'), headers: ['Dealer', 'Last MY2026 Stock arrival', 'MY2026 Reallocation IN', 'MY2026 Reallocation OUT', 'MY2027 Reallocation IN', 'MY2027 Reallocation OUT', 'Other MY IN', 'Other MY OUT'], rows: model.dealers.map(d => [d.name, d.latestMY2026Arrival || '', d.reallocationByMY['2026'].incoming, d.reallocationByMY['2026'].outgoing, d.reallocationByMY['2027'].incoming, d.reallocationByMY['2027'].outgoing, d.reallocationByMY.other.incoming, d.reallocationByMY.other.outgoing]) });
   for (const year of ['2026', '2027']) sheets.push({ name: `MY${year} Reallocation`, headers: ['Chassis', 'Model', 'MY', 'Original dealer', 'Receiving dealer', 'AU finish', 'Dealer arrival', 'Reason'], rows: actions.filter(a => String(a.modelYear) === year && a.action !== 'cancel' && a.reallocated).map(a => [a.chassis, a.model, a.modelYear, a.originalDealer, a.proposedDealer, a.simulatedAu, a.plannedArrival, a.reason]) });
   sheets.push({ name: 'MY2027 SRC SRP arrivals', headers: ['Dealer', 'Arrival month', 'SRC Stock', 'SRP Stock'], rows: model.dealers.flatMap(d => d.my2027SrcSrpArrivals.months.map(m => [d.name, m.month, m.src, m.srp])) });
   if (report.auProduction) {
     sheets.unshift({ name: text(zh, 'AU月度产量', 'AU monthly production'), headers: ['AU month', 'Source AU total', 'Simulated AU total', 'SRM', 'SRV', 'Towable', 'Elapsed Towable', 'Fixed Towable', 'Stock scheduled', 'Remaining AU slots'], rows: report.auProduction.months.map(m => [m.month, m.sourceTotal, m.total, m.srm, m.srv, m.towable, m.elapsedTowable, m.fixedTowable, m.plannedStock, m.unfilled]) });
     sheets.push({ name: text(zh, 'Stock排产名额交换', 'Stock slot changes'), headers: ['Chassis', 'Model', 'MY', 'Dealer', 'Source stage', 'Planned stage', 'Source AU finish', 'Planned AU finish', 'Dealer arrival', 'Reallocation', 'Cancellation protected'], rows: actions.filter(a => a.scheduleChanged || a.slotReleased).map(a => [a.chassis, a.model, a.modelYear, a.originalDealer, a.group, a.plannedGroup, a.originalAu, a.plannedAu, a.plannedArrival, a.reallocated ? 'Yes' : 'No', a.cancellationProtected ? 'Yes' : 'No']) });
   }
+  const finalPlan = finalScheduleView(report);
+  sheets.unshift({ name: text(zh, '最终AU排产', 'Final AU schedule'), headers: scheduleHeaders, rows: finalPlan.rows.map(scheduleCells) });
+  sheets.push({ name: 'SRH MY2026', headers: scheduleHeaders, rows: finalPlan.srh2026.map(scheduleCells) });
   return sheets;
 }
 export async function buildSimulationWorkbook(report, zh = true) {
@@ -36,7 +40,7 @@ export async function buildSimulationWorkbook(report, zh = true) {
     ws.addRow([text(zh, 'Dealer 库存平衡模拟器', 'Dealer inventory balancing simulator')]);
     ws.addRow([`${report.today} · ${text(zh, '同一虚拟假设比较调整前后；MY2027型号覆盖累计一次。', 'Before/after use the same assumptions; MY2027 model coverage is cumulative.')}`]);
     ws.addRow([text(zh, '仅未受保护的锁定线不推荐/删除车型可取消；交换名额回池不算取消。', 'Only unprotected locked not-on-yard / deleted models may be cancelled. Slot releases retain the order in the pool.')]);
-    ws.addRow([]); ws.addRow(sheet.headers); sheet.rows.forEach(row => ws.addRow(row));
+    ws.addRow([]); ws.addRow(sheet.headers); sheet.rows.forEach(row => { const r = ws.addRow(row); const mi = sheet.headers.indexOf('Model'), yi = sheet.headers.indexOf('MY'); if (mi >= 0 && yi >= 0 && /^SRH/i.test(String(row[mi])) && String(row[yi]) === '2026') { r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE6E6' } }; r.font = { color: { argb: 'FFB42318' }, bold: true }; } });
     ws.getRow(1).font = { bold: true, size: 14 };
     ws.getRow(5).font = { bold: true, color: { argb: 'FFFFFFFF' } }; ws.getRow(5).height = 34;
     ws.getRow(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3352' } }; ws.getRow(5).alignment = { wrapText: true, vertical: 'middle' };

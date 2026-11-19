@@ -1,6 +1,7 @@
 import { capacityKind } from './build-plan.mjs';
 import { dealerSlug, leadDays } from './dealership.mjs';
 import { effectiveSimulationCapacity } from './stock-production-plan.mjs';
+import { isSRH2026 } from './stock-simulation-metrics.mjs';
 import { isCancellationProtected } from './protected-stock.mjs';
 const norm = v => String(v || '').toUpperCase().replace(/[-\s]/g, '');
 const plus = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -13,6 +14,7 @@ export function replayInventoryBasis({ line, report, capacity, dealers = [], inc
   line = structuredClone(line); report = structuredClone(report);
   const actions = ['own', 'jv', 'independent'].flatMap(g => report[g]?.actions || []);
   const by = new Map(actions.map(a => [norm(a.chassis), a]));
+  for (const r of line.rows) if (by.get(norm(r.chassis))?.reallocated && isSRH2026(r)) throw new Error('SRH MY2026 must retain its dealer');
   const used = new Map(), take = (day, kind) => {
     const k = `${day}:${kind}`, n = used.get(k) || 0;
     if (n >= (capacity.get(day)?.[kind] || 0)) return false;
@@ -100,9 +102,19 @@ function replayStockSlots({ line, report, capacity, dealers, includeRolling }) {
     for (const key of ['auEnd', 'auStart', 'auPlanStart', 'auPlanEnd', 'cnStart', 'cnPlanStart', 'cnPlanEnd', 'cnPlanMonth', 'planStart', 'planEnd', 'expectedEnd', 'planRef', 'planWeld', 'planAssembly', 'rollingNotBefore']) r[key] = '';
     r.auForecast = undefined; r.planOrder = null; r.locked = false;
   };
+  const mixed = report.auProduction.customerPlan;
+  const named = new Map((mixed?.rows || []).filter(a => a.kind === 'customer' && a.group === 'locked').map(a => [norm(a.chassis), a]));
+  const managedNamed = new Set([...named.keys(), ...(mixed?.unplanned || []).filter(a => a.group === 'locked').map(a => norm(a.chassis))]);
   for (const r of line.rows.filter(r => !r.empty)) {
+    if (r.group === 'locked' && managedNamed.has(norm(r.chassis))) {
+      const customer = named.get(norm(r.chassis));
+      if (customer) { r.auEnd = customer.plannedAu; r.inventoryAdjustment = 'customerMix'; r.auForecast = { kind: 'towable', perDay: capacity.get(r.auEnd)?.towable || 0 }; }
+      else { r.group = 'customers'; r.returnedToPool = true; clearDates(r); }
+      continue;
+    }
     const a = by.get(norm(r.chassis));
     if (!a) continue;
+    if (a.reallocated && isSRH2026(r)) throw new Error('SRH MY2026 must retain its dealer');
     if (a.action === 'cancel' && isCancellationProtected(r.chassis)) throw new Error('Protected Stock cannot be cancelled');
     if (a.slotReleased || a.action === 'cancel' && r.group === 'locked') {
       r.group = 'customers'; r.returnedToPool = true; r.inventoryAdjustment = a.slotReleased ? 'slotReplacement' : 'returnToPool';

@@ -1,3 +1,4 @@
+import { weeklyCustomerPlan } from './weekly-customer-plan.mjs';
 import { capacityKind } from './build-plan.mjs';
 import { isStockCustomer } from './dealership.mjs';
 const physical = new Set(['au', 'sea', 'cn']);
@@ -7,9 +8,10 @@ const sum = values => values.reduce((n, v) => n + v, 0);
 /** Source AU quantities include motorhomes. Only remaining Towable slots are
  * available to the Stock simulator; physical supply and named locked customers
  * retain their dates. Editing a month never silently expands that month's plan. */
-export function stockProductionPlan({ capacity, rows, today, monthly = {}, shiftDays = 0, finishDates = {}, managedLocked = null }) {
+export function stockProductionPlan({ capacity, rows, today, monthly = {}, shiftDays = 0, finishDates = {}, managedLocked = null, customers = [], customerPercent = 0 }) {
   if (!monthly || typeof monthly !== 'object' || Array.isArray(monthly)) throw new Error('Invalid monthly AU production');
-  const mayExchange = r => flexible(r) && (!managedLocked || managedLocked.has(String(r.chassis).toUpperCase().replace(/[-\s]/g, '')));
+  const managedCustomers = new Set(customers.filter(r => r.group === 'locked').map(r => r.chassis));
+  const mayExchange = r => managedCustomers.has(String(r.chassis).toUpperCase().replace(/[-\s]/g, '')) || flexible(r) && (!managedLocked || managedLocked.has(String(r.chassis).toUpperCase().replace(/[-\s]/g, '')));
   const source = [...(capacity || new Map())].sort(([a], [b]) => a.localeCompare(b));
   const keys = [...new Set(source.map(([d]) => d.slice(0, 7)))].filter(m => m >= today.slice(0, 7));
   for (const [m, n] of Object.entries(monthly)) if (!keys.includes(m) || !Number.isInteger(n) || n < 0 || n > 10000) throw new Error(`AU月度产量无效 / Invalid AU monthly production: ${m}`);
@@ -50,7 +52,8 @@ export function stockProductionPlan({ capacity, rows, today, monthly = {}, shift
   // reserved physical work. Do not discard those places behind the old boundary.
   const start = Object.keys(overrides).length ? today : [today, physicalEnd, firstLocked || today].sort().at(-1);
   const slots = [...daily].filter(([d]) => d >= start).flatMap(([d, c]) => Array(Math.max(0, c.towable - (counts.get(d) || 0))).fill(d));
-  return { months, daily: [...daily], slots, start, overrides };
+  const customerPlan = weeklyCustomerPlan({ slots, candidates: customers, percent: customerPercent });
+  return { months, daily: [...daily], slots: customerPlan.stockSlots, start, overrides, customerPlan };
 }
 
 export const effectiveSimulationCapacity = (report, fallback) => report?.auProduction?.daily ? new Map(report.auProduction.daily) : fallback;
