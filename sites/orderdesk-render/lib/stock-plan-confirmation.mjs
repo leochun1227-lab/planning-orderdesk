@@ -2,7 +2,7 @@
 // confirmation. Pool "do not build" rows are neither cancellations nor exclusions.
 import { createHash, randomUUID } from 'node:crypto';
 const groups = ['own', 'jv', 'independent'];
-const pool = a => a.action === 'pool' || ['customers', 'processing', 'later'].includes(a.group);
+const pool = a => !a.slotScheduled && !a.slotReleased && (a.action === 'pool' || ['customers', 'processing', 'later'].includes(a.group));
 const chassis = a => String(a.chassis || '').toUpperCase().replace(/[-\s]/g, '');
 const allActions = report => groups.flatMap(g => report?.[g]?.actions || []);
 const canonical = v => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
@@ -10,12 +10,13 @@ const canonical = v => Array.isArray(v) ? v.map(canonical) : v && typeof v === '
 const hash = v => createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
 
 export function stockAdjustmentActions(report) {
-  return allActions(report).filter(a => !pool(a) && (a.action === 'cancel' || a.delayed || a.reallocated));
+  return allActions(report).filter(a => !pool(a) && (a.action === 'cancel' || a.delayed || a.reallocated || a.scheduleChanged || a.slotReleased));
 }
 export function stockAdjustmentSummary(report) {
   const actions = stockAdjustmentActions(report), count = test => new Set(actions.filter(test).map(chassis)).size;
   return { total: count(() => true), cancellations: count(a => a.action === 'cancel'),
     delays: count(a => a.action !== 'cancel' && a.delayed), reallocations: count(a => a.action !== 'cancel' && a.reallocated),
+    ...(report?.auProduction ? { slotChanges: count(a => a.scheduleChanged || a.slotReleased) } : {}),
     poolExcluded: new Set(allActions(report).filter(pool).map(chassis)).size };
 }
 export function stockAdjustmentReport(report) {

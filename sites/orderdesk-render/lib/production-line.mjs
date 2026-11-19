@@ -5,6 +5,7 @@
 //   SAP           GR / GI per chassis, pushed by an in-network computer (sap-grgi.mjs)
 // Vehicle SAP GR takes precedence. A displayed Shipment record without vehicle GR means shipping.
 // Otherwise retain the Portal stage rules and AU production API facts; missing GR remains flagged.
+import { effectiveSimulationCapacity } from './stock-production-plan.mjs';
 import { normalizeChassis, toDay } from './order-engine.mjs';
 import { loadPortalBoard } from './campervan-plan.mjs';
 import { readFileSync } from 'node:fs';
@@ -350,6 +351,7 @@ export function buildProductionLine({ board, orders, longtree, prod, portal, tod
   for (const r of rows) if (r.group === 'rolling') r.group = 'customers';
   let dealership = null, dealersAll = null, shown = null, lockedLast = today, rollingEnd = today;
   const preparedBasis = auCapacity ? forecastAuFinish(rows, auCapacity, today, inventoryBasis, dealers || []).basisReplay || null : null;
+  auCapacity = effectiveSimulationCapacity(inventoryBasis, auCapacity);
   if (dealers) {
     dealersAll = dealers; shown = dealers.filter(d => d.own !== false); // Dealership tab: self-owned yard + transit
     dealers = withTransport(shown, rows, today); // analysis still combines Transport and transit
@@ -549,6 +551,9 @@ async function feishuRecords(env, fetcher, retryDelayMs = 1500) {
     }
     throw new Error(`Longtree ${path.split('/').slice(0, 4).join('/')} failed (${last})`);
   };
+  // LONGTREE_WIKI_TOKEN is a wiki node/resource ID, not an access credential.
+  // Requests are separately authenticated with the tenant token obtained above
+  // using LONGTREE_APP_ID / LONGTREE_APP_SECRET from the environment.
   const app = (await call('/wiki/v2/spaces/get_node', { token: env.LONGTREE_WIKI_TOKEN || 'D8AmwXGMxieF9Ek3mPIcigYLnIg' })).node.obj_token;
   const table = env.LONGTREE_TABLE_ID || (await call(`/bitable/v1/apps/${app}/tables`, { page_size: 100 })).items?.[0]?.table_id;
   if (!table) throw new Error('Longtree table not found');

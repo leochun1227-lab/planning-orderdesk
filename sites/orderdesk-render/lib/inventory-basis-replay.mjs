@@ -1,5 +1,7 @@
 import { capacityKind } from './build-plan.mjs';
 import { dealerSlug, leadDays } from './dealership.mjs';
+import { effectiveSimulationCapacity } from './stock-production-plan.mjs';
+import { isCancellationProtected } from './protected-stock.mjs';
 const norm = v => String(v || '').toUpperCase().replace(/[-\s]/g, '');
 const plus = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const fixed = new Set(['au', 'sea', 'cn', 'locked']);
@@ -7,6 +9,7 @@ const fixed = new Set(['au', 'sea', 'cn', 'locked']);
  * their dates unless explicitly postponed. Repack surviving locked orders after
  * physical production, reserving confirmed delays and updating arrival curves. */
 export function replayInventoryBasis({ line, report, capacity, dealers = [], includeRolling = false }) {
+  if (report?.auProduction) return replayStockSlots({ line, report, capacity, dealers, includeRolling });
   line = structuredClone(line); report = structuredClone(report);
   const actions = ['own', 'jv', 'independent'].flatMap(g => report[g]?.actions || []);
   const by = new Map(actions.map(a => [norm(a.chassis), a]));
@@ -84,6 +87,51 @@ export function replayInventoryBasis({ line, report, capacity, dealers = [], inc
     lastFixed: lastOf(r => fixed.has(r.group)) };
   line.basisReplay = replay;
   return { line, report, used, replay };
+}
+
+/** Slot exchanges retain commercial dealer ownership. Apply the exact reviewed
+ * dates and pool/locked membership instead of repacking them back into old order. */
+function replayStockSlots({ line, report, capacity, dealers, includeRolling }) {
+  line = structuredClone(line); report = structuredClone(report);
+  capacity = effectiveSimulationCapacity(report, capacity);
+  const actions = ['own', 'jv', 'independent'].flatMap(g => report[g]?.actions || []), by = new Map(actions.map(a => [norm(a.chassis), a]));
+  const used = new Map(), cancelled = [], released = [], admitted = [], changed = [];
+  const clearDates = r => {
+    for (const key of ['auEnd', 'auStart', 'auPlanStart', 'auPlanEnd', 'cnStart', 'cnPlanStart', 'cnPlanEnd', 'cnPlanMonth', 'planStart', 'planEnd', 'expectedEnd', 'planRef', 'planWeld', 'planAssembly', 'rollingNotBefore']) r[key] = '';
+    r.auForecast = undefined; r.planOrder = null; r.locked = false;
+  };
+  for (const r of line.rows.filter(r => !r.empty)) {
+    const a = by.get(norm(r.chassis));
+    if (!a) continue;
+    if (a.action === 'cancel' && isCancellationProtected(r.chassis)) throw new Error('Protected Stock cannot be cancelled');
+    if (a.slotReleased || a.action === 'cancel' && r.group === 'locked') {
+      r.group = 'customers'; r.returnedToPool = true; r.inventoryAdjustment = a.slotReleased ? 'slotReplacement' : 'returnToPool';
+      clearDates(r); (a.slotReleased ? released : cancelled).push(r.chassis); continue;
+    }
+    if (a.slotScheduled) {
+      if (!['locked', 'customers'].includes(r.group)) throw new Error('Stock slot exchange source stage has changed');
+      if (r.group === 'customers' && !r.signedAt) throw new Error('Unsigned Stock cannot enter a production slot');
+      if (r.group === 'customers') admitted.push(r.chassis);
+      const old = r.auEnd; r.group = 'locked'; r.locked = true; r.auEnd = a.plannedAu;
+      r.inventoryDateChanged = old !== r.auEnd; r.inventoryAdjustment = a.action;
+      r.auForecast = { kind: capacityKind(r.model), perDay: capacity.get(r.auEnd)?.[capacityKind(r.model)] || 0 };
+    }
+    if (a.reallocated) { r.originalDealer ||= r.dealer; r.dealer = a.proposedDealer || dealers.find(d => d.slug === a.to)?.name || r.dealer; r.plannedReallocation = true; changed.push(r.chassis); }
+  }
+  const dated = line.rows.filter(r => !r.empty && !r.planningExcluded && (fixed.has(r.group) || includeRolling && r.group === 'rolling'));
+  const lastLocked = dated.filter(r => r.group === 'locked' && capacityKind(r.model) === 'towable').map(r => r.auEnd).filter(Boolean).sort().at(-1) || '';
+  const physicalEnd = dated.filter(r => ['au', 'sea', 'cn'].includes(r.group) && capacityKind(r.model) === 'towable').map(r => r.auEnd).filter(Boolean).sort().at(-1) || line.today;
+  const boundary = lastLocked || physicalEnd;
+  for (const r of dated) {
+    if (!r.auEnd) throw new Error('Fixed or locked production date is unresolved');
+    const kind = capacityKind(r.model), key = `${r.auEnd}:${kind}`, n = (used.get(key) || 0) + 1;
+    if (n > (capacity.get(r.auEnd)?.[kind] || 0) || includeRolling && r.group === 'rolling' && r.auEnd < boundary) throw new Error(`已确认排产超过模拟AU产能 / Confirmed slot capacity conflict: ${r.auEnd} ${kind} ${n}/${capacity.get(r.auEnd)?.[kind] || 0}`);
+    used.set(key, n);
+  }
+  const replay = { cancelled: cancelled.length, shifted: 0, reallocated: changed.length, scheduledFromPool: admitted.length, returnedToPool: released.length,
+    rescheduledLocked: dated.filter(r => r.group === 'locked' && r.inventoryDateChanged).length, cancelledChassis: cancelled, lastLocked, rollingBoundary: boundary,
+    lastFixed: dated.filter(r => fixed.has(r.group)).map(r => r.auEnd).sort().at(-1) || '' };
+  line.basisReplay = replay; return { line, report, used, replay };
 }
 export function availableRollingSlots(line, capacity, earliest, latest) {
   const occupied = new Map();

@@ -1,3 +1,4 @@
+import { isCancellationProtected } from '../lib/protected-stock.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildBalancedRolling, rollingQuantity, weekOf } from '../lib/balanced-rolling.mjs';
@@ -322,7 +323,7 @@ test('previous non-contiguous scheduling versions are held until regenerated usi
 });
 
 test('checkbox applies all changes before generation, rebuilds the cancelled pool, and restores the source when unticked', async () => {
-  const ids = loadRollingPlan().rows.slice(0,7).map(r => r.chassis);
+  const ids = loadRollingPlan().rows.filter(r => !isCancellationProtected(r.chassis)).slice(0,7).map(r => r.chassis);
   const f = await apiFixture({ customerCount: 30, stockCount: 0, extraRows: ids.map((chassis,i) => row(chassis, { group: 'locked', signedAt: i === 6 ? '' : today })) });
   const own = f.dealers.find(d => d.slug === 'frankston');
   own.vehicles.push({ chassis: 'SRCYARD', model: 'SRC21', category: 'stock', where: 'yard', since: today }); own.yard.stock++;
@@ -331,6 +332,7 @@ test('checkbox applies all changes before generation, rebuilds the cancelled poo
   const saved = await f.store.readState(), plan = saved.state.stockForecastPlan;
   const original = await f.get('/api/production-line'), fixed = original.rows.filter(r => r.group === 'locked');
   const cancel = fixed[0], move = fixed[1], delay = fixed[5], unsigned = fixed.find(r => r.chassis === ids[6]);
+  delete plan.report.auProduction; // This fixture explicitly verifies legacy Delay / yard-transfer replay.
   plan.report.own.actions = [
     { chassis: cancel.chassis, group: 'locked', action: 'cancel', from: 'frankston', receive: false },
     { chassis: unsigned.chassis, group: 'locked', action: 'cancel', from: 'frankston', receive: false },
