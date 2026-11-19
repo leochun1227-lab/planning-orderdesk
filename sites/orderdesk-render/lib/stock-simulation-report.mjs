@@ -1,3 +1,4 @@
+import { finalScheduleView, scheduleRow, scheduleOrder } from './stock-schedule-view.mjs';
 import { stockActions, dealerStockMetrics, reallocationYears } from './stock-simulation-metrics.mjs';
 const groups = ['own', 'jv', 'independent'];
 const key = v => String(v || '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -13,9 +14,11 @@ export const reportReason = code => ({ coverage: 'MY2027 model gap', balance: 'M
 export function buildSimulationReport(report) {
   const dealers = groups.flatMap(group => (report[group]?.dealers || []).map(d => ({ ...d, group })));
   const actions = sort(unique(stockActions(groups.flatMap(g => report[g]?.actions || []))));
+  const finalPlan = finalScheduleView(report);
+  const planRows = [...new Map([...actions.filter(a => a.receive && a.action !== 'cancel'), ...finalPlan.srh2026, ...finalPlan.rows.filter(a => !a.kind || a.kind === 'stock')].map(a => [chassis(a.chassis), scheduleRow(a)])).values()].sort(scheduleOrder);
   const cancellations = actions.filter(a => a.action === 'cancel');
   const reallocations = actions.filter(a => (a.reallocated || a.action === 'reallocate') && a.from && a.to && a.from !== a.to && a.action !== 'cancel');
-  return { today: report.today, months: report.months, planningEnd: report.planningEnd, assumptions: report.assumptions,
+  return { finalPlan, srh2026Count: finalPlan.srh2026.length, today: report.today, months: report.months, planningEnd: report.planningEnd, assumptions: report.assumptions,
     totals: { cancellations: cancellations.length, reallocations: reallocations.length, reallocationsByMY: reallocationYears(reallocations), dealers: dealers.length },
     dealers: dealers.map(d => {
       const canceled = cancellations.filter(a => a.from === d.slug), incoming = reallocations.filter(a => a.to === d.slug), outgoing = reallocations.filter(a => a.from === d.slug);
@@ -42,7 +45,7 @@ export function buildSimulationReport(report) {
         else r.later++;
       }
       const distribution = [...matrix.values()].sort((a, b) => a.label.localeCompare(b.label));
-      return { ...d, ...dealerStockMetrics(d.slug, actions), distribution, distributionMonths: months,
+      return { ...d, planRows: planRows.filter(a => a.from === d.slug || a.to === d.slug), srh2026Count: finalPlan.srh2026.filter(a => (a.to || a.from) === d.slug).length, ...dealerStockMetrics(d.slug, actions), distribution, distributionMonths: months,
         showLater: distribution.some(r => r.later), showReview: distribution.some(r => r.review),
         cancellations: canceled, incoming, outgoing,
         reallocationGroups: ['2026', '2027', 'other'].map(year => ({ year, incoming: incoming.filter(a => (['2026', '2027'].includes(String(a.modelYear)) ? String(a.modelYear) : 'other') === year), outgoing: outgoing.filter(a => (['2026', '2027'].includes(String(a.modelYear)) ? String(a.modelYear) : 'other') === year) })),

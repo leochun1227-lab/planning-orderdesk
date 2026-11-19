@@ -1,0 +1,28 @@
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDownToLine, Search } from 'lucide-react';
+import { finalScheduleView, scheduleRow, scheduleOrder } from '../../lib/stock-schedule-view.mjs';
+import type { Simulation, ScheduleRow } from './stock-simulation-types';
+const day = (value: string) => value ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : '—';
+
+export default function FinalStockSchedule({ data, zh, disabled, onPdf, onDealerPdf }: { data: Simulation; zh: boolean; disabled: boolean; onPdf: () => void; onDealerPdf: () => void }) {
+  const [query, setQuery] = useState(''), [view, setView] = useState('all'), [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [data, query, view]);
+  const plan = useMemo(() => finalScheduleView(data) as { rows: ScheduleRow[]; srh2026: ScheduleRow[]; locked: number; following: number; stock: number; customers: number; waiting: number; boundary: string }, [data]);
+  const transfers = useMemo(() => ['own', 'jv', 'independent'].flatMap(g => data[g as 'own'].actions).map(scheduleRow).filter(a => a.reallocation).sort(scheduleOrder) as ScheduleRow[], [data]);
+  const rows = (view === 'srh' ? plan.srh2026 : view === 'transfer' ? transfers : plan.rows.filter(a => view === 'customer' ? a.kind === 'customer' : view === 'waiting' ? a.kind === 'customer-gap' : view === 'all' || (view === 'next' ? a.schedulePart === 'following' : a.schedulePart !== 'following')))
+    .filter(a => `${a.chassis} ${a.model} ${a.dealer} ${a.outDealer} ${a.inDealer} ${a.customer || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+  return <section className="sim-final-plan"><div className="sim-toolbar"><h3>{zh ? '最终排产 · 按 AU 下线时间' : 'Final production plan · AU finish order'}</h3>
+    <button className="pl-export" disabled={disabled} onClick={onPdf}><ArrowDownToLine size={14} />{zh ? '下载排产 PDF' : 'Schedule PDF'}</button>
+    <button className="pl-export" disabled={disabled} onClick={onDealerPdf}><ArrowDownToLine size={14} />{zh ? '下载 Dealer 简表 PDF' : 'Dealer PDF'}</button></div>
+    <div className="sim-plan-summary"><span>Stock <b>{plan.stock}</b></span><span>{zh ? '客户单' : 'Customers'} <b>{plan.customers}</b></span><span>{zh ? '等待客户单' : 'Waiting for customers'} <b>{plan.waiting}</b></span><span>{zh ? '锁定排产' : 'Locked'} <b>{plan.locked}</b></span><span>{zh ? '后续排产' : 'Next'} <b>{plan.following}</b></span><span className="sim-srh-count">SRH MY2026 <b>{plan.srh2026.length}</b></span><span>{zh ? '锁定线最后下线' : 'Last locked AU finish'} <b>{day(plan.boundary)}</b></span></div>
+    <p className="da-note">{zh ? '客户单按每周比例穿插，黄色空位等待客户订单。后续排产为模拟计划。红色 SRH MY2026 保留原 Dealer；OUT 为转出店，IN 为接收店。' : 'Customers follow the weekly percentage; yellow places await customer orders. Later dates are a planning preview. Red SRH MY2026 keeps its dealer. OUT is the sending dealer; IN is the receiving dealer.'}</p>
+    <div className="sim-toolbar"><select aria-label={zh ? '排产范围' : 'Plan scope'} value={view} onChange={e => setView(e.target.value)}>
+      <option value="all">{zh ? '全部排产' : 'Full schedule'}</option><option value="locked">{zh ? '锁定排产' : 'Locked'}</option><option value="next">{zh ? '后续排产' : 'Next'}</option><option value="customer">{zh ? '客户订单' : 'Customer orders'}</option><option value="waiting">{zh ? '等待客户单' : 'Waiting for customers'}</option><option value="transfer">Reallocation</option><option value="srh">SRH MY2026 · {plan.srh2026.length}</option>
+    </select><label className="sf-search"><Search size={14} /><input aria-label="Search final production plan" value={query} onChange={e => setQuery(e.target.value)} placeholder="Chassis / Model / Dealer" /></label></div>
+    <div className="da-table sim-action-table"><table><thead><tr>{[zh ? 'AU 下线时间' : 'AU finish', 'Chassis', 'Model', 'MY', 'Dealer', zh ? '订单' : 'Order', zh ? '客户' : 'Customer', 'Reallocation', 'OUT · ' + (zh ? '转出店' : 'from'), 'IN · ' + (zh ? '接收店' : 'to')].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>
+      {rows.slice(page * 60, page * 60 + 60).map(a => <tr key={a.slotId || a.chassis} className={a.srh2026 ? 'sim-srh-row' : a.kind === 'customer-gap' ? 'sim-customer-gap' : a.kind === 'customer' ? 'sim-customer-row' : ''}><td><b>{day(a.auFinish)}</b></td><td>{a.chassis}</td><td>{a.model}</td><td>{a.modelYear}</td><td>{a.dealer}</td><td>{a.kind === 'customer-gap' ? (zh ? '等待客户单' : 'Waiting for customer') : a.kind === 'customer' ? (zh ? '客户订单' : 'Customer') : a.schedulePart === 'following' ? (zh ? '后续' : 'Next') : a.group === 'yard' ? (zh ? '店内' : 'In yard') : a.receive ? (zh ? '已排' : 'Scheduled') : (zh ? '未排期' : 'Not scheduled')}</td><td>{a.kind === 'customer' ? a.customer : ''}</td><td>{a.reallocation ? 'Reallocation' : ''}</td><td>{a.outDealer}</td><td>{a.inDealer}</td></tr>)}
+      {!rows.length && <tr><td colSpan={10} className="sf-empty">{zh ? '没有符合条件的车辆' : 'No matching vehicles'}</td></tr>}
+    </tbody></table></div>
+    <div className="sf-pager"><span>{rows.length} {zh ? '台' : 'vehicles'}</span><button disabled={!page} onClick={() => setPage(n => n - 1)}>{zh ? '上一页' : 'Previous'}</button><span>{page + 1} / {Math.max(1, Math.ceil(rows.length / 60))}</span><button disabled={(page + 1) * 60 >= rows.length} onClick={() => setPage(n => n + 1)}>{zh ? '下一页' : 'Next'}</button></div>
+  </section>;
+}

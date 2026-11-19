@@ -16,8 +16,8 @@ export default function StockArrivalOverview({ dealers, zh, pending }: { dealers
           {[0, .5, 1].map(f => <g key={f}><line x1={left - 5} x2={369} y1={y(maximum * f)} y2={y(maximum * f)} stroke="#dce5ef" /><text x={left - 9} y={y(maximum * f) + 4} textAnchor="end" fontSize="10" fill="#64748b">{Math.round(maximum * f * 10) / 10}</text></g>)}
           {values.map((m, i) => <g key={m.month}><rect x={x(i)} y={y(m.src)} width="9" height={bottom - y(m.src)} fill="#1966b3"><title>{m.month} · SRC {m.src}</title></rect><rect x={x(i) + 10} y={y(m.srp)} width="9" height={bottom - y(m.srp)} fill="#dd8b38"><title>{m.month} · SRP {m.srp}</title></rect>{m.src > 0 && <text x={x(i) + 4.5} y={y(m.src) - 4} textAnchor="middle" fontSize="9" fill="#1966b3">{m.src}</text>}{m.srp > 0 && <text x={x(i) + 14.5} y={y(m.srp) - 4} textAnchor="middle" fontSize="9" fill="#a75d16">{m.srp}</text>}<text x={x(i) + 10} y={174} textAnchor="middle" fontSize="10" fill="#64748b">{m.month.slice(5)}</text></g>)}
         </svg><div className="sim-arrival-legend"><span><i />SRC</span><span><i />SRP</span><small>2027 · {zh ? '到店月份' : 'arrival month'}</small></div>
-        <p>{zh ? 'MY2026 最晚到店：' : 'Last MY2026 arrival: '}{d.latestMY2026Arrival || (d.pendingMY2026Arrivals ? (zh ? '待核对' : 'Review') : (zh ? '无待到店车辆' : 'No inbound'))}{d.pendingMY2026Arrivals > 0 && ` · ${d.pendingMY2026Arrivals} ${zh ? '台日期待核对' : 'dates unresolved'}`}</p>
-        {(s.outsideYear > 0 || s.unresolved > 0) && <small className="sim-arrival-note">{zh ? `另有 ${s.outsideYear} 台在其他年份到店；${s.unresolved} 台日期或去向待核对` : `${s.outsideYear} arrivals outside 2027; ${s.unresolved} dates / destinations unresolved`}</small>}
+        <p>{zh ? 'MY2026 最晚到店：' : 'Last MY2026 arrival: '}{d.latestMY2026Arrival || (d.pendingMY2026Arrivals ? (zh ? '待核对' : 'Review') : (zh ? '无待到店车辆' : 'No inbound'))}</p>
+        {s.outsideYear > 0 && <small className="sim-arrival-note">{zh ? `另有 ${s.outsideYear} 台在其他年份到店` : `${s.outsideYear} arrivals outside 2027`}</small>}
       </article>;
     })}</div>{!list.length && <p className="sf-empty">{zh ? '没有符合条件的Dealer' : 'No matching dealers'}</p>}
   </section>;

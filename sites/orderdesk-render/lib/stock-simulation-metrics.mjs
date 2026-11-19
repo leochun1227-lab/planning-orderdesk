@@ -1,3 +1,4 @@
+export const isSRH2026 = v => String(v.modelYear || '').trim() === '2026' && /^SRH/i.test(String(v.model || '').trim());
 const stock = a => a.kind ? a.kind === 'stock' : a.customer == null || /stock$/i.test(String(a.customer).trim());
 const key = value => String(value || '').trim().toUpperCase();
 export const stockActions = actions => actions.filter(stock);

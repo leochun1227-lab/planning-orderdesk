@@ -115,7 +115,7 @@ test('rejects malformed or unknown assumptions rather than silently losing edits
 
 test('exports the displayed assumptions, cross-group allocations, coverage, actual handovers and month-end ratios', async () => {
   const r = run([dealer('a'), dealer('b', { own: true })], [row('SRC1'), row('SRC2')]);
-  const sheets = simulationExportSheets(r, false); assert.equal(sheets.length, 10); assert.ok(sheets.some(s => s.name === 'MY2026 Reallocation')); assert.ok(sheets.some(s => s.name === 'MY2027 Reallocation')); assert.equal(sheets.find(s => s.name === 'Vehicle allocations').rows.length, 2);
+  const sheets = simulationExportSheets(r, false); assert.equal(sheets.length, 12); assert.ok(sheets.some(s => s.name === 'MY2026 Reallocation')); assert.ok(sheets.some(s => s.name === 'MY2027 Reallocation')); assert.equal(sheets.find(s => s.name === 'Vehicle allocations').rows.length, 2);
   assert.equal(sheets.find(s => s.name === 'Monthly inventory').rows.length, 16);
   const wb = await buildSimulationWorkbook(r, false), buffer = await wb.xlsx.writeBuffer(); assert.ok(buffer.byteLength > 8000);
   const ExcelJS = (await import('exceljs')).default, loaded = new ExcelJS.Workbook(); await loaded.xlsx.load(buffer);
