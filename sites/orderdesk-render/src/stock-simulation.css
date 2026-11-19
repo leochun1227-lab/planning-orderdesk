@@ -8,3 +8,5 @@
 .sim-final-plan{margin:20px 0 26px;padding:18px;border:1px solid #dbe5f0;border-radius:10px;background:white}.sim-final-plan h3{margin:0}.sim-plan-summary{display:flex;flex-wrap:wrap;gap:12px 24px;margin:12px 0;font-size:14px}.sim-plan-summary b{margin-left:6px}.sim-srh-count{color:#b42318}.sim-srh-row td{background:#fff0f0!important;color:#b42318!important}.sim-srh-row td:first-child{box-shadow:inset 3px 0 #d92d20}.sim-final-plan th:first-child,.sim-final-plan td:first-child{white-space:nowrap}
 
 .sim-customer-ratio{display:flex;gap:10px;align-items:center;font-weight:600;margin:14px 0}.sim-customer-ratio input{width:90px;padding:8px;border:1px solid #b8c9dc;border-radius:6px;font:inherit}.sim-customer-gap td{background:#fff7dc!important;color:#8c640c}.sim-customer-row td{background:#edf5ff}
+
+.sim-quota-audit{margin:14px 0;padding:12px;background:#f5f8fc;border:1px solid #dee6f0;border-radius:7px}.sim-quota-audit summary{font-weight:600;cursor:pointer}

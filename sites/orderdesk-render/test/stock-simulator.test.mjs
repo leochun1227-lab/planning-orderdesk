@@ -36,22 +36,20 @@ test('MY2027 coverage precedes ratio balancing, uses yard and future transit, an
   assert.ok(allActions(r).some(a => a.from === 'a' && a.to === 'b' && a.reallocated));
 });
 
-test('balances normalized projected inventory for every group after model coverage, without favouring a larger store', () => {
+test('does not transfer stock merely to make projected Ideal ratios look equal', () => {
   const dealers = [dealer('a', { own: true, target: 10, yard: { stock: 1 }, vehicles: [yard('YA')] }), dealer('b', { jv: true, target: 20, yard: { stock: 1 }, vehicles: [yard('YB')] }), dealer('c', { target: 30, yard: { stock: 1 }, vehicles: [yard('YC')] })];
-  const rows = Array.from({ length: 30 }, (_, i) => row(`SRC${String(i).padStart(4, '0')}`));
+  const rows = Array.from({ length: 20 }, (_, i) => row(`SRC${String(i).padStart(4, '0')}`));
   const r = run(dealers, rows, { displayModels: ['SRC21'], multiplier: 3 });
-  const ratios = allDealers(r).map(d => d.monthly.find(m => m.month === '2027-01').endStock / d.target);
-  assert.ok(Math.max(...ratios) - Math.min(...ratios) <= .1, JSON.stringify(ratios));
-  assert.ok(allDealers(r).every(d => d.monthly.find(m => m.month === '2027-01').stockIn > 0));
+  assert.equal(r.totals.reallocated, 0); assert.ok(allActions(r).every(a => a.to === a.from));
   assert.deepEqual(allActions(run(dealers, rows, { displayModels: ['SRC21'], multiplier: 3, months: 14 })), allActions(r), 'chart range cannot change allocations');
 });
 
 test('uses future depletion and fixed arrivals instead of ranking today-only yard stock', () => {
   const dealers = [dealer('a', { target: 10, yard: { stock: 10 }, vehicles: [yard('YA')] }), dealer('b', { target: 10, yard: { stock: 1 }, vehicles: [yard('YB')] })];
-  const r = run(dealers, [row('SRC1')], { displayModels: ['SRC21'], assumptions: { dealers: [{ slug: 'a', weeklyStock: 7 }] } });
+  const r = run(dealers, [row('SRC1', { group: 'au' })], { displayModels: ['SRC21'], assumptions: { dealers: [{ slug: 'a', weeklyStock: 7 }] } });
   assert.equal(allActions(r)[0].to, 'a', 'high current inventory is consumed before this supply arrives');
   const future = structuredClone(dealers); future[0].vehicles.push(...Array.from({ length: 10 }, (_, i) => yard(`PGI${i}`, { where: 'transit', since: '2027-01-01', arrive: '2027-01-01' })));
-  const reserved = run(future, [row('SRC1')], { displayModels: ['SRC21'] });
+  const reserved = run(future, [row('SRC1', { group: 'au' })], { displayModels: ['SRC21'] });
   assert.equal(allActions(reserved).find(a => a.chassis === 'SRC1').to, 'b', 'already committed future arrivals are reserved before allocation');
 });
 
@@ -147,7 +145,7 @@ test('applying reallocations updates AU and sea dealers while preserving physica
   const rows = ['au', 'sea'].map((group, i) => row(`SRC${i}`, { group, auEnd: `2027-01-${15 + i}` }));
   const dealers = [dealer('a', { yard: { stock: 20 }, target: 1 }), dealer('b')];
   const report = run(dealers, rows), capacity = new Map(rows.map(r => [r.auEnd, { towable: 1, srm: 0, srv: 0 }]));
-  assert.ok(allActions(report).every(a => a.reallocated));
+  assert.equal(allActions(report).filter(a => a.reallocated).length, 1, 'retain the sender’s last MY2027 model instead of transferring it twice');
   const applied = replayInventoryBasis({ line: { today, rows }, report, capacity, dealers });
-  assert.ok(applied.line.rows.every((r, i) => r.dealer === 'b' && r.auEnd === rows[i].auEnd));
+  assert.ok(applied.line.rows.every((r, i) => r.dealer === allActions(report).find(a => a.chassis === r.chassis).proposedDealer && r.auEnd === rows[i].auEnd));
 });

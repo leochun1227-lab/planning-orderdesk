@@ -19,7 +19,7 @@ test('weekly quotas use cumulative whole-unit rounding and interleave customer p
   assert.deepEqual(mix.weeks.map(w => [w.slots, w.customerSlots, w.stockSlots, w.waiting]), [[10, 5, 5, 5], [10, 5, 5, 5]]);
   assert.equal(mix.stockSlots.length, 10); assert.equal(mix.rows.length, 10);
   assert.ok(mix.rows.every(r => r.kind === 'customer-gap' && !r.chassis));
-  assert.deepEqual(mix.rows.map(r => r.slotOrder), [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
+  assert.deepEqual(mix.rows.map(r => r.slotOrder), [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
   const rounded = weeklyCustomerPlan({ slots, percent: 35 });
   assert.equal(rounded.weeks.reduce((n, w) => n + w.customerSlots, 0), 7);
   for (const percent of [-1, 101, NaN, '35', null]) assert.throws(() => weeklyCustomerPlan({ slots, percent }));
@@ -44,6 +44,26 @@ test('customer shortfalls remain empty when Stock is available, and an arriving 
   assert.deepEqual(filled.stockPlaces, empty.stockPlaces); assert.equal(filled.rows.filter(r => r.kind === 'customer').length, 1);
   assert.equal(filled.rows.filter(r => r.kind === 'customer-gap').length, 3);
   assert.equal(filled.rows[0].slotId, empty.rows[0].slotId);
+});
+
+test('cross-month weeks keep both weekly and monthly reservations within one vehicle of the fixed percentage', () => {
+  const slots = Array.from({ length: 520 }, (_, i) => {
+    const day = new Date(Date.UTC(2026, 10, 19 + i));
+    return day.getUTCDay() === 0 || day.getUTCDay() === 6 ? [] : Array(1 + i % 13).fill(day.toISOString().slice(0, 10));
+  }).flat();
+  for (const percent of [0, 17.5, 35, 60, 100]) {
+    const empty = weeklyCustomerPlan({ slots, percent });
+    const candidates = Array.from({ length: 18 }, (_, i) => ({ ...row(`C${i}`), customer: `Customer ${i}`, slug: 'a', ready: '2026-11-19' }));
+    const filled = weeklyCustomerPlan({ slots, percent, candidates });
+    for (const quota of [...filled.weeks, ...filled.months]) {
+      assert.ok(Math.abs(quota.customerSlots - quota.slots * percent / 100) < 1 + 1e-10);
+      assert.equal(quota.customerSlots, quota.customerOrders + quota.waiting);
+      assert.equal(quota.slots, quota.customerSlots + quota.stockSlots);
+    }
+    assert.deepEqual(filled.stockPlaces, empty.stockPlaces);
+    assert.deepEqual(filled.rows.map(r => r.slotOrder), empty.rows.map(r => r.slotOrder));
+    assert.equal(filled.rows.length, Math.round(slots.length * percent / 100));
+  }
 });
 
 test('zero and full customer percentages preserve orders and do not turn customer gaps into cancellation or Stock slots', () => {

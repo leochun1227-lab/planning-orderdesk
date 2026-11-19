@@ -26,22 +26,22 @@ export function customerCandidates({ rows, dealers = [], today, settings = {} })
   }).sort((a, b) => Number(a.group !== 'locked') - Number(b.group !== 'locked') || a.signedAt.localeCompare(b.signedAt) || (a.orderRow ?? 1e9) - (b.orderRow ?? 1e9) || a.chassis.localeCompare(b.chassis));
 }
 
-/** Carry whole-unit rounding between weeks and spread each week's customer
- * places across its working slots. Missing customers leave visible empty places;
- * they never become Stock places. */
+/** Carry rounding through individual places, bounding both weekly and monthly
+ * reservation error below one vehicle. Missing customers leave visible empty
+ * places; they never become Stock places. */
 export function weeklyCustomerPlan({ slots, candidates = [], percent = 35 }) {
   if (typeof percent !== 'number' || !Number.isFinite(percent) || percent < 0 || percent > 100) throw new Error('客户比例须为0–100 / Customer percentage must be 0–100');
   const grouped = new Map();
   for (const day of [...slots].sort()) { const week = mondayOf(day); if (!grouped.has(week)) grouped.set(week, []); grouped.get(week).push(day); }
   const stockSlots = [], stockPlaces = [], customerRows = [], weeks = [], used = new Set();
-  let cumulative = 0, previousTarget = 0, sequence = 0;
+  let sequence = 0;
   for (const [week, days] of grouped) {
-    cumulative += days.length;
-    const target = Math.round(cumulative * percent / 100), customerSlots = target - previousTarget; previousTarget = target;
+    const start = sequence;
+    const customerSlots = Math.round((start + days.length) * percent / 100) - Math.round(start * percent / 100);
     let customerOrders = 0, waiting = 0;
-    days.forEach((day, i) => {
+    days.forEach(day => {
       sequence++;
-      const customerPlace = Math.floor((i + 1) * customerSlots / days.length) > Math.floor(i * customerSlots / days.length);
+      const customerPlace = Math.round(sequence * percent / 100) > Math.round((sequence - 1) * percent / 100);
       if (!customerPlace) { stockSlots.push(day); stockPlaces.push({ day, slotOrder: sequence }); return; }
       const r = candidates.find(r => !used.has(r.chassis) && r.ready <= day);
       if (!r) {
@@ -57,5 +57,10 @@ export function weeklyCustomerPlan({ slots, candidates = [], percent = 35 }) {
     });
     weeks.push({ week, slots: days.length, customerSlots, stockSlots: days.length - customerSlots, customerOrders, waiting });
   }
-  return { percent, stockSlots, stockPlaces, rows: customerRows, weeks, unplanned: candidates.filter(r => !used.has(r.chassis)).map(r => ({ chassis: r.chassis, group: r.group, customer: r.customer })) };
+  const monthKeys = [...new Set(slots.map(day => day.slice(0, 7)))].sort();
+  const months = monthKeys.map(month => {
+    const total = slots.filter(day => day.startsWith(month)).length, selected = customerRows.filter(r => r.plannedAu.startsWith(month));
+    return { month, slots: total, customerSlots: selected.length, stockSlots: total - selected.length, customerOrders: selected.filter(r => r.kind === 'customer').length, waiting: selected.filter(r => r.kind === 'customer-gap').length };
+  });
+  return { percent, months, stockSlots, stockPlaces, rows: customerRows, weeks, unplanned: candidates.filter(r => !used.has(r.chassis)).map(r => ({ chassis: r.chassis, group: r.group, customer: r.customer })) };
 }

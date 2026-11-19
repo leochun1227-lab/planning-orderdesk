@@ -19,7 +19,7 @@ const sections = report => ['own', 'jv', 'independent'].flatMap(g => report[g] ?
 export const dealerSettingsToken = dealers => hash(sorted((dealers || []).filter(d => dealerGroup(d) === 'independent').map(d => [d.slug, d.target, d.travelDays])));
 
 export function stockInputFingerprint({ line, dealers, capacity, settings, orders = {} }) {
-  return hash({ policyVersion: 'dealer-balance-simulator-v6-weekly-customers', today: line.today, settings,
+  return hash({ policyVersion: 'dealer-balance-simulator-v7-required-transfers', today: line.today, settings,
     rows: sorted(line.rows.filter(r => !r.empty).map(r => rowFields.map(k => r[k] ?? null))),
     dealers: sorted((dealers || []).map(d => [d.slug, d.target, d.own, d.jv, d.paused, d.travelDays, d.yard, d.handover?.avgStock, d.handover?.avgCustomer,
       d.handover?.months, d.applicableModels, sorted(Object.entries(d.handover?.stockByModel || {})), sorted((d.vehicles || []).map(v => [v.chassis, v.model, v.modelYear, v.where, v.category, v.arrive, v.since]))])),

@@ -31,7 +31,7 @@ test('following Stock dates start at the last adjusted locked Towable place, con
   const capacity = new Map([['2027-03-15', { towable: 2, srm: 0, srv: 0 }], ['2027-03-16', { towable: 1, srm: 0, srv: 0 }], ['2027-04-01', { towable: 1, srm: 0, srv: 0 }]]);
   const rows = [row('LOCK'), row('CUSTOMER_LOCK', { customer: 'Alice', auEnd: '2027-03-16' }), row('POOL1', { group: 'customers', auEnd: '' }), row('POOL2', { group: 'customers', auEnd: '' }), row('UNSIGNED', { group: 'customers', auEnd: '', signedAt: '' }), row('CLIENT', { group: 'customers', customer: 'Bob', auEnd: '' })];
   const before = structuredClone(rows), report = buildStockSimulation({ today, rows, capacity, dealers: [dealer('a')], displayModels: ['SRC21'] });
-  const plan = finalScheduleView(report); assert.equal(plan.boundary, '2027-03-16'); assert.equal(plan.following, 1);
+  const plan = finalScheduleView(report); assert.equal(plan.boundary, '2027-03-15'); assert.equal(plan.following, 2);
   assert.equal(plan.rows.at(-1).auFinish, '2027-04-01');
   assert.ok(plan.rows.every(a => a.from === a.to));
   assert.deepEqual(plan.rows.map(a => a.auFinish), plan.rows.map(a => a.auFinish).sort());
@@ -43,7 +43,7 @@ test('following Stock dates start at the last adjusted locked Towable place, con
 });
 
 test('OUT and IN occupy the final two columns of the same row and refer to the same unique transfer', () => {
-  const report = buildStockSimulation({ today, dealers: [dealer('a', { target: 1, yard: { stock: 30 } }), dealer('b')], rows: [row('TRANSFER')], displayModels: ['SRC21'] });
+  const report = buildStockSimulation({ today, dealers: [dealer('a', { target: 1, yard: { stock: 30 }, vehicles: [{ chassis: 'OWN', model: 'SRC21', modelYear: '2027', category: 'stock', where: 'yard' }] }), dealer('b')], rows: [row('TRANSFER', { group: 'au' })], displayModels: ['SRC21'] });
   const model = buildSimulationReport(report), a = model.dealers[0].planRows[0], b = model.dealers[1].planRows[0];
   assert.equal(a.chassis, b.chassis); assert.equal(a.reallocation, true);
   assert.deepEqual(scheduleCells(a).slice(-2), ['a', 'b']);

@@ -23,7 +23,7 @@ export async function buildFinalSchedulePdf(report) {
   function page(title) {
     titleNow = title; doc.addPage(); y = 24;
     doc.font('Helvetica-Bold').fontSize(18).fillColor('#19394f').text(title, left, y, { width: usable }); y += 28;
-    text(`${report.today}  |  Customer ${report.assumptions.customerPercent ?? 35}%  |  Stock ${plan.stock}  |  Customers ${plan.customers}  |  Waiting ${plan.waiting}  |  SRH MY2026 ${plan.srh2026.length}`, left, y, usable); y += 20;
+    text(`${report.today}  |  Customer quota ${report.assumptions.customerPercent ?? 35}%  |  Stock ${plan.stock}  |  Customers ${plan.customers}  |  Waiting ${plan.waiting}  |  SRH MY2026 ${plan.srh2026.length}`, left, y, usable); y += 20;
     row(scheduleHeaders, true);
   }
   page('FINAL AU PRODUCTION SCHEDULE');
