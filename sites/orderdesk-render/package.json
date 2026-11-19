@@ -10,7 +10,7 @@
     "dev": "node --watch server/index.mjs & vite",
     "dev:server": "node --watch server/index.mjs",
     "dev:client": "vite",
-    "build": "vite build",
+    "build": "sh scripts/setup-solver.sh && vite build",
     "start": "node server/index.mjs",
     "test": "node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",

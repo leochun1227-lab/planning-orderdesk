@@ -9,3 +9,6 @@ orderdesk-backup-*.json
 planning-pc/agent-settings.json
 planning-pc/last-run.json
 planning-pc/.runs/
+
+.solver/
+__pycache__/

@@ -1,3 +1,4 @@
+import { firstRangeStock, planFirstArrivals } from './first-arrivals.mjs';
 import { dealerDisplayWindow, displayWindow } from './my2027-display-window.mjs';
 import { mixCustomersWithStock } from './stock-customer-mix.mjs';
 import { customerCandidates } from './weekly-customer-plan.mjs';
@@ -10,7 +11,7 @@ import { dealerStockMetrics, reallocationYears, isSRH2026 } from './stock-simula
 import { excludedPlanningDealer, dealerGroup, dealerSlug, leadDays, isStockCustomer } from './dealership.mjs';
 import { DISPLAY_MODELS, NOT_ON_YARD, isTowable, modelPolicy, addCalendarMonth, forecastMultiplier, validateDisplayModels } from './stock-forecast.mjs';
 
-export const SIMULATOR_VERSION = 'dealer-balance-v5-my2027-changeover';
+export const SIMULATOR_VERSION = 'dealer-balance-v6-first-arrivals';
 const MS = 86400000;
 const stamp = d => Date.parse(`${d}T00:00:00Z`);
 const valid = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(stamp(d)) && new Date(stamp(d)).toISOString().slice(0, 10) === d;
@@ -315,7 +316,10 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
     if (!a.simulatedAu || a.simulatedAu > maxEnd) { a.receive = false; a.to = ''; a.action = 'pending'; a.reason = a.simulatedAu ? 'horizon' : 'date'; original.undated++; continue; }
     const choices = choicesFor(a, a.simulatedAu, new Map(), false, true), own = choices.find(c => c.original);
     const keepsModel = !year2027(a) || !original.s.models.includes(key(a.model)) || modelCount(a.from, a.model, a.chassis) > 0;
-    const alternatives = choices.filter(c => c.original || keepsModel).sort((a, b) => compare(a, b, true));
+    const protectedPhysical = firstRangeStock(a) && original.s.receiving && original.s.slug !== 'traralgon' && original.s.models.includes(key(a.model))
+      && !original.keptYard.some(v => year2027(v) && original.s.models.includes(key(v.model)) && key(v.model).slice(0,3) === key(a.model).slice(0,3))
+      && ![...fixed, ...scheduled.filter(v => v !== a && !physicalReservations.has(v.chassis))].some(v => v.receive && v.to === a.from && firstRangeStock(v) && key(v.model).slice(0,3) === key(a.model).slice(0,3) && v.plannedArrival && v.plannedArrival <= (reserved || a.baselineArrival) && !['locked','customers','rolling'].includes(v.group));
+    const alternatives = choices.filter(c => c.original || keepsModel && !protectedPhysical).sort((a, b) => compare(a, b, true));
     let best = alternatives[0] || own;
     if (!best) {
       a.reason = 'settings'; a.action = 'pending'; a.receive = false; original.undated++;
@@ -473,8 +477,8 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
   });
   for (const a of actions) if (a.slotScheduled && a.group === 'customers') lockedDates.push(a.plannedAu);
   const boundary = lockedDates.sort().at(-1) || auProduction?.start || today;
-  const lockedRows = actions.filter(a => a.action !== 'cancel' && a.receive && (a.slotScheduled || !auProduction && a.group === 'locked'));
-  const following = [];
+  let lockedRows = actions.filter(a => a.action !== 'cancel' && a.receive && (a.slotScheduled || !auProduction && a.group === 'locked'));
+  let following = [];
   if (auProduction) {
     const duration = (k, fallback) => Math.max(0, Number.isFinite(Number(settings[k])) ? Number(settings[k]) : fallback);
     const earliest = [boundary, plus(today, duration('cnDays', 20) + duration('seaDays', 50) + duration('auDays', 40))].sort().at(-1);
@@ -504,6 +508,44 @@ export function buildStockSimulation({ dealers, rows = [], today, multiplier = 1
       candidates.delete(a); event(u, best.arrival, a); u.assigned++;
       if (year2027(a)) { const model = key(a.model), count = modelCount(u.s.slug, model); cover(u, a, 'following'); modelCountCache.set(`${u.s.slug}:${model}`, count + 1); }
       refresh(u);
+    }
+  }
+  if (auProduction) {
+    const placements = planFirstArrivals({today, end, dealers:allDealers, locked:lockedRows, following, actions, assumptions,
+      signed:a => Boolean(signedPlansDate([sourceByChassis.get(a.chassis)?.signedAt], today))});
+    if (placements.length) {
+      const places = new Map([...lockedRows, ...following].map(a => [a.slotOrder, {day:a.plannedAu, later:Boolean(a.continuation)}]));
+      const touched = new Set(placements.map(p => p[1]));
+      const incoming = [...lockedRows, ...following].filter(a => touched.has(a.chassis));
+      for (const a of incoming) event(units.get(a.to), a.plannedArrival, a, -1);
+      lockedRows = lockedRows.filter(a => !touched.has(a.chassis));
+      following = following.filter(a => !touched.has(a.chassis));
+      for (const [order,chassis,slug,first] of placements) {
+        const original = byAction.get(chassis), {day,later} = places.get(order), u = units.get(slug);
+        const a = later ? {...original} : original, transferred = slug !== a.from;
+        const arrival = u.s.leadDays == null ? '' : plus(day,u.s.leadDays);
+        if (later) Object.assign(original, {action:'pool',reason:'slotReplacement',receive:false,slotScheduled:false,slotReleased:original.group==='locked',
+          to:'',proposedDealer:'',reallocated:false,plannedAu:'',simulatedAu:'',plannedArrival:'',coverageAdded:false,scheduleChanged:false,limitConflict:false,reallocationCheck:undefined,plannedGroup:'customers'});
+        Object.assign(a,{slotOrder:order,slotScheduled:!later,continuation:later,plannedGroup:later?'rolling':'locked',slotReleased:false,
+          simulatedAu:day,plannedAu:day,plannedArrival:arrival,receive:true,to:slug,proposedDealer:u.d.name,virtualDate:day!==a.originalAu,
+          arrivalDelayDays:arrival && a.originalArrival ? (stamp(arrival)-stamp(a.originalArrival))/MS : null,
+          scheduleChanged:day!==a.originalAu || a.group==='customers',reallocated:transferred,firstArrival:first,
+          reason:first?'springDisplay':'balance',action:transferred?'reallocate':later || a.group==='customers'?'schedule':day!==a.originalAu?'reschedule':'keep',
+          reallocationCheck:transferred?audit(a,first?'springDisplay':'inventoryBalance'):undefined});
+        (later?following:lockedRows).push(a);
+        event(u,arrival,a);
+      }
+      lockedRows.sort((a,b)=>a.slotOrder-b.slotOrder); following.sort((a,b)=>a.slotOrder-b.slotOrder);
+      for (const u of units.values()) refresh(u);
+      for (const a of [...lockedRows, ...following].filter(a => touched.has(a.chassis))) {
+        const u = units.get(a.to);
+        if (!a.plannedArrival) u.undated++;
+        a.limitConflict = Boolean(a.plannedArrival && u.s.cap != null && u.balance[Math.max(0, at(a.plannedArrival))] > u.s.cap);
+      }
+      rebuildCoverage();
+      for (const a of following) cover(units.get(a.to),a,'following');
+      result.totals = summary(actions);
+      result.reallocationReview.checked = actions.filter(a => a.reallocated).length;
     }
   }
   const previewIds = new Set(following.map(a => a.chassis));
