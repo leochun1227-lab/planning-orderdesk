@@ -114,3 +114,18 @@ test('customer percentage persists in saved assumptions and is bound to preview 
   assert.equal((await (await app.request('/api/stock-forecast')).json()).assumptions.customerPercent, 60);
   assert.equal((await post('/api/stock-forecast/simulate', { assumptions: { customerPercent: 101 } })).status, 400);
 });
+
+
+test('final AU-month mix counts actual production separately from reserved customer gaps', () => {
+  const cap = new Map([['2027-03-15', {towable: 10,srm:0,srv:0}],['2027-04-15',{towable:10,srm:0,srv:0}]]);
+  const report = buildStockSimulation({today,dealers:[dealer('a')],rows:[row('S1'),row('C1',{customer:'Alice'})],capacity:cap,assumptions:{customerPercent:30}});
+  for (const m of report.finalSchedule.auMonthlyMix) {
+    const rows=report.finalSchedule.rows.filter(r=>r.plannedAu.startsWith(m.month));
+    assert.equal(m.customers,rows.filter(r=>r.kind==='customer').length);
+    assert.equal(m.stock,rows.filter(r=>r.kind==='stock').length);
+    assert.equal(m.waiting,rows.filter(r=>r.kind==='customer-gap').length);
+    assert.equal(m.customerQuota,m.customers+m.waiting);
+    assert.equal(m.slots,m.customers+m.waiting+m.stock+m.stockEmpty);
+    assert.equal(m.reservedPercent,30);
+  }
+});

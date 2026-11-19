@@ -36,11 +36,13 @@ test('MY2027 coverage precedes ratio balancing, uses yard and future transit, an
   assert.ok(allActions(r).some(a => a.from === 'a' && a.to === 'b' && a.reallocated));
 });
 
-test('does not transfer stock merely to make projected Ideal ratios look equal', () => {
+test('balances projected Ideal ratios even when all stores are below their ceilings', () => {
   const dealers = [dealer('a', { own: true, target: 10, yard: { stock: 1 }, vehicles: [yard('YA')] }), dealer('b', { jv: true, target: 20, yard: { stock: 1 }, vehicles: [yard('YB')] }), dealer('c', { target: 30, yard: { stock: 1 }, vehicles: [yard('YC')] })];
   const rows = Array.from({ length: 20 }, (_, i) => row(`SRC${String(i).padStart(4, '0')}`));
   const r = run(dealers, rows, { displayModels: ['SRC21'], multiplier: 3 });
-  assert.equal(r.totals.reallocated, 0); assert.ok(allActions(r).every(a => a.to === a.from));
+  assert.ok(r.totals.reallocated > 0);
+  const ratios = allDealers(r).map(d => d.monthly.find(m => m.month === '2027-01').idealMultiple);
+  assert.ok(Math.max(...ratios) - Math.min(...ratios) <= .1, JSON.stringify(ratios));
   assert.deepEqual(allActions(run(dealers, rows, { displayModels: ['SRC21'], multiplier: 3, months: 14 })), allActions(r), 'chart range cannot change allocations');
 });
 

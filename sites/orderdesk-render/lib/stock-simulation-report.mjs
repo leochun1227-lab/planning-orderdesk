@@ -13,7 +13,7 @@ export const reportReason = code => ({ coverage: 'MY2027 model gap', balance: 'M
 /** The report is a projection of one successful simulation, not a new allocation run. */
 export function buildSimulationReport(report) {
   const dealers = groups.flatMap(group => (report[group]?.dealers || []).map(d => ({ ...d, group })));
-  const actions = sort(unique(stockActions(groups.flatMap(g => report[g]?.actions || []))));
+  const actions = sort(unique(stockActions([...groups.flatMap(g => report[g]?.actions || []), ...(report.finalSchedule?.following || [])])));
   const finalPlan = finalScheduleView(report);
   const planRows = [...new Map([...actions.filter(a => a.receive && a.action !== 'cancel'), ...finalPlan.srh2026, ...finalPlan.rows.filter(a => !a.kind || a.kind === 'stock')].map(a => [chassis(a.chassis), scheduleRow(a)])).values()].sort(scheduleOrder);
   const cancellations = actions.filter(a => a.action === 'cancel');
